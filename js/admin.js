@@ -227,7 +227,12 @@
       btnViewMasterMonth: document.getElementById('btn-view-master-month'),
       adminSingleWeekControls: document.getElementById('admin-single-week-controls'),
       adminSingleWeekWrapper: document.getElementById('admin-single-week-wrapper'),
+      adminMasterMonthWrapper: document.getElementById('admin-master-month-wrapper'),
       adminMasterMonthContainer: document.getElementById('admin-master-month-container'),
+      btnMasterScrollLeft: document.getElementById('btn-master-scroll-left'),
+      btnMasterScrollRight: document.getElementById('btn-master-scroll-right'),
+      btnLayoutHorizontal: document.getElementById('btn-layout-horizontal'),
+      btnLayoutVertical: document.getElementById('btn-layout-vertical'),
 
       // Import Excel / CSV Modal Elements (Task 18)
       importModal: document.getElementById('import-excel-modal'),
@@ -1518,6 +1523,96 @@
     elements.btnViewMasterMonth?.addEventListener('click', () => {
       switchViewMode('master');
     });
+
+    // Nút cuộn trái / phải
+    elements.btnMasterScrollLeft?.addEventListener('click', () => {
+      elements.adminMasterMonthContainer?.scrollBy({ left: -900, behavior: 'smooth' });
+    });
+    elements.btnMasterScrollRight?.addEventListener('click', () => {
+      elements.adminMasterMonthContainer?.scrollBy({ left: 900, behavior: 'smooth' });
+    });
+
+    // Chuyển kiểu hiển thị: Cuộn Ngang ↔ Xếp Dọc
+    elements.btnLayoutHorizontal?.addEventListener('click', () => {
+      elements.btnLayoutHorizontal.classList.add('active');
+      elements.btnLayoutVertical?.classList.remove('active');
+      elements.adminMasterMonthContainer?.classList.remove('layout-vertical');
+      elements.adminMasterMonthContainer?.classList.add('layout-horizontal');
+    });
+    elements.btnLayoutVertical?.addEventListener('click', () => {
+      elements.btnLayoutVertical.classList.add('active');
+      elements.btnLayoutHorizontal?.classList.remove('active');
+      elements.adminMasterMonthContainer?.classList.remove('layout-horizontal');
+      elements.adminMasterMonthContainer?.classList.add('layout-vertical');
+    });
+
+    // Chip chuyển nhanh Tuần 1 -> Tuần 4
+    document.getElementById('master-nav-chips')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.master-chip-btn');
+      if (!btn) return;
+      const weekNum = parseInt(btn.dataset.jumpWeek, 10);
+      const targetSec = document.getElementById(`master-week-section-${weekNum}`);
+      if (targetSec && elements.adminMasterMonthContainer) {
+        if (elements.adminMasterMonthContainer.classList.contains('layout-horizontal')) {
+          const offsetLeft = targetSec.offsetLeft - elements.adminMasterMonthContainer.offsetLeft;
+          elements.adminMasterMonthContainer.scrollTo({ left: offsetLeft, behavior: 'smooth' });
+        } else {
+          targetSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+      document.querySelectorAll('.master-chip-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+
+    // Kéo trượt chuột (Mouse Drag to Scroll) & Lăn chuột ngang (Mouse Wheel)
+    const container = elements.adminMasterMonthContainer;
+    if (container) {
+      let isDown = false;
+      let startX = 0;
+      let scrollLeft = 0;
+
+      container.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.modal-content')) return;
+        isDown = true;
+        startX = e.pageX - container.offsetLeft;
+        scrollLeft = container.scrollLeft;
+      });
+
+      window.addEventListener('mouseup', () => { isDown = false; });
+      container.addEventListener('mouseleave', () => { isDown = false; });
+
+      container.addEventListener('mousemove', (e) => {
+        if (!isDown || !container.classList.contains('layout-horizontal')) return;
+        e.preventDefault();
+        const x = e.pageX - container.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        container.scrollLeft = scrollLeft - walk;
+      });
+
+      // Lăn chuột dọc chuyển thành cuộn ngang tự nhiên khi rê chuột trong bảng
+      container.addEventListener('wheel', (e) => {
+        if (container.classList.contains('layout-horizontal') && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          container.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+
+      // Tự động kích hoạt chip tuần tương ứng khi cuộn tới
+      container.addEventListener('scroll', () => {
+        if (!container.classList.contains('layout-horizontal')) return;
+        const sections = container.querySelectorAll('.master-week-section');
+        let currentWeek = 1;
+        sections.forEach((sec, idx) => {
+          const offset = sec.offsetLeft - container.offsetLeft;
+          if (container.scrollLeft >= offset - 150) {
+            currentWeek = idx + 1;
+          }
+        });
+        document.querySelectorAll('.master-chip-btn').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.jumpWeek, 10) === currentWeek);
+        });
+      }, { passive: true });
+    }
   }
 
   function switchViewMode(mode) {
@@ -1532,12 +1627,12 @@
     if (mode === 'single') {
       if (elements.adminSingleWeekControls) elements.adminSingleWeekControls.style.display = 'flex';
       if (elements.adminSingleWeekWrapper) elements.adminSingleWeekWrapper.style.display = 'block';
-      if (elements.adminMasterMonthContainer) elements.adminMasterMonthContainer.style.display = 'none';
+      if (elements.adminMasterMonthWrapper) elements.adminMasterMonthWrapper.style.display = 'none';
       renderTimetable();
     } else {
       if (elements.adminSingleWeekControls) elements.adminSingleWeekControls.style.display = 'none';
       if (elements.adminSingleWeekWrapper) elements.adminSingleWeekWrapper.style.display = 'none';
-      if (elements.adminMasterMonthContainer) elements.adminMasterMonthContainer.style.display = 'flex';
+      if (elements.adminMasterMonthWrapper) elements.adminMasterMonthWrapper.style.display = 'block';
       renderMasterMonthGrid();
     }
   }
@@ -1547,7 +1642,7 @@
 
     if (!state.monthSchedule || !state.monthSchedule.weeks || state.monthSchedule.weeks.length === 0) {
       elements.adminMasterMonthContainer.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+        <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md); width: 100%;">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
           <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công 1 Tháng</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
@@ -1614,7 +1709,7 @@
       });
 
       html += `
-        <div class="master-week-section">
+        <div class="master-week-section" id="master-week-section-${weekNum}">
           <div class="master-week-header">
             <div class="master-week-title">
               <span>🗓️ Tuần ${weekNum} (10 Ca Trực)</span>

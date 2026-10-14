@@ -2671,11 +2671,157 @@ body {
   border-color: #263554;
 }
 
+/* ==========================================================================
+   Full-Month Master Grid View Navigation & Scrolling
+   ========================================================================== */
+.master-month-wrapper {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.master-month-nav-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+}
+
+[data-theme="dark"] .master-month-nav-bar {
+  background: #172138;
+  border-color: #263554;
+}
+
+.master-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.master-nav-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.master-nav-chips {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.master-chip-btn {
+  padding: 0.32rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.master-chip-btn:hover {
+  color: var(--text-main);
+  border-color: var(--primary);
+}
+
+.master-chip-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 6px var(--primary-glow);
+}
+
+.master-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.master-scroll-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.master-arrow-btns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.master-arrow-btn {
+  padding: 0.4rem 0.85rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Master Month Container: Horizontal mode vs Vertical mode */
 .master-month-container {
+  width: 100%;
+}
+
+.master-month-container.layout-horizontal {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1.25rem;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  user-select: none;
+}
+
+.master-month-container.layout-horizontal:active {
+  cursor: grabbing;
+}
+
+.master-month-container.layout-horizontal .master-week-section {
+  flex: 0 0 980px;
+  max-width: 980px;
+  min-width: 980px;
+}
+
+.master-month-container.layout-vertical {
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  margin-top: 1.5rem;
+  overflow-x: visible;
+  padding-bottom: 1rem;
+}
+
+.master-month-container.layout-vertical .master-week-section {
+  width: 100%;
+}
+
+/* Custom Horizontal Scrollbar for Master View */
+.master-month-container.layout-horizontal::-webkit-scrollbar {
+  height: 12px;
+}
+
+.master-month-container.layout-horizontal::-webkit-scrollbar-track {
+  background: var(--bg-card-hover);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+}
+
+.master-month-container.layout-horizontal::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #4f46e5, #06b6d4);
+  border-radius: var(--radius-full);
+}
+
+.master-month-container.layout-horizontal::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #4338ca, #0891b2);
 }
 
 .master-week-section {

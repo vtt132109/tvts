@@ -505,8 +505,46 @@
           </div>
 
           <!-- Chế độ Xem Toàn Cảnh Cả Tháng (Render 4 tuần cùng lúc - Task 16) -->
-          <div id="admin-master-month-container" class="master-month-container" style="display: none;">
-            <!-- Render 4 tuần liên tiếp tại đây -->
+          <div id="admin-master-month-wrapper" class="master-month-wrapper" style="display: none;">
+            <!-- Thanh điều hướng & Kéo trượt 1 Tháng -->
+            <div class="master-month-nav-bar">
+              <div class="master-nav-left">
+                <span class="master-nav-label">🗓️ Chuyển nhanh tuần:</span>
+                <div class="master-nav-chips" id="master-nav-chips">
+                  <button type="button" class="master-chip-btn active" data-jump-week="1">Tuần 1</button>
+                  <button type="button" class="master-chip-btn" data-jump-week="2">Tuần 2</button>
+                  <button type="button" class="master-chip-btn" data-jump-week="3">Tuần 3</button>
+                  <button type="button" class="master-chip-btn" data-jump-week="4">Tuần 4</button>
+                </div>
+              </div>
+
+              <div class="master-nav-right">
+                <span class="master-scroll-hint">💡 Giữ chuột kéo (drag) hoặc lăn chuột để xem 4 tuần</span>
+                <div class="master-arrow-btns">
+                  <button type="button" class="btn btn-secondary btn-sm master-arrow-btn" id="btn-master-scroll-left" title="Cuộn sang trái (Tuần trước)">
+                    <span>◀ Tuần Trước</span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm master-arrow-btn" id="btn-master-scroll-right" title="Cuộn sang phải (Tuần sau)">
+                    <span>Tuần Sau ▶</span>
+                  </button>
+                </div>
+
+                <!-- Đổi kiểu hiển thị: Cuộn Ngang ↔ Xếp Dọc -->
+                <div class="view-mode-toggle" id="master-layout-toggle" style="margin-left: 0.5rem;">
+                  <button type="button" class="view-mode-btn active" id="btn-layout-horizontal" title="Hiển thị cuộn ngang 4 tuần liên tiếp">
+                    <span>↔️ Cuộn Ngang</span>
+                  </button>
+                  <button type="button" class="view-mode-btn" id="btn-layout-vertical" title="Hiển thị xếp dọc 4 tuần">
+                    <span>↕️ Xếp Dọc</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Container 4 tuần có hỗ trợ cuộn mượt và kéo chuột -->
+            <div id="admin-master-month-container" class="master-month-container layout-horizontal">
+              <!-- Render 4 tuần liên tiếp tại đây -->
+            </div>
           </div>
 
           <!-- Danh sách Dự bị / Ưu tiên cho Tuần 2 khi đông người -->
