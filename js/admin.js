@@ -1,0 +1,1914 @@
+/**
+ * ==========================================================================
+ * ADMIN PORTAL LOGIC (Bảng Điều Hành Quản Trị & Xếp Lịch)
+ * ==========================================================================
+ * Đóng gói trong IIFE để tránh xung đột biến toàn cục.
+ * Hỗ trợ demo 30 sinh viên và luân phiên 2 tuần (Tuần 1 & Tuần 2)
+ */
+
+(() => {
+  'use strict';
+
+  const { SHIFTS, SHIFT_MAP, runAutoSchedule, runTwoWeekSchedule } = window.SchedulerEngine || {};
+
+  const STORAGE_KEYS = {
+    STUDENTS: 'ts_scheduler_students',
+    SCHEDULE: 'ts_scheduler_schedule_result',
+    TWO_WEEK_SCHEDULE: 'ts_scheduler_two_week_result',
+    REG_CONFIG: 'ts_scheduler_reg_config',
+    ADMIN_USERS: 'ts_scheduler_admin_users',
+    AUTH_TOKEN: 'ts_admin_authenticated',
+    CURRENT_USER: 'ts_admin_user_data'
+  };
+
+  // Danh sách tài khoản cán bộ mặc định có quyền quản trị
+  const DEFAULT_ADMIN_USERS = [
+    {
+      id: 'usr_admin',
+      username: 'admin',
+      password: '123',
+      pin: '9999',
+      fullName: 'Trưởng Ban Tuyển Sinh',
+      role: 'Trưởng ban điều hành',
+      createdAt: Date.now() - 500000
+    },
+    {
+      id: 'usr_diephoi',
+      username: 'diephoi',
+      password: '123',
+      pin: '8888',
+      fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
+      role: 'Điều phối viên tuyển sinh',
+      createdAt: Date.now() - 300000
+    }
+  ];
+
+  // Dữ liệu mẫu ban đầu (12 SV) và 30 SV
+  const SAMPLE_12_STUDENTS = [
+    { id: 's_old_1', fullName: 'Nguyễn Văn An', studentId: '2102001', phone: '0912345678', role: 'old', availableShifts: ['T2_S', 'T2_C', 'T3_S', 'T4_S', 'T5_C', 'T6_S'], createdAt: Date.now() - 100000 },
+    { id: 's_old_2', fullName: 'Trần Thị Bích', studentId: '2102002', phone: '0923456789', role: 'old', availableShifts: ['T2_C', 'T3_S', 'T3_C', 'T4_C', 'T5_S', 'T6_C'], createdAt: Date.now() - 90000 },
+    { id: 's_old_3', fullName: 'Lê Hoàng Cường', studentId: '2102003', phone: '0934567890', role: 'old', availableShifts: ['T2_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 80000 },
+    { id: 's_old_4', fullName: 'Phạm Minh Đức', studentId: '2102004', phone: '0945678901', role: 'old', availableShifts: ['T2_S', 'T3_S', 'T4_C', 'T5_C', 'T6_S', 'T6_C'], createdAt: Date.now() - 70000 },
+    { id: 's_old_5', fullName: 'Vũ Thị Hồng', studentId: '2102005', phone: '0956789012', role: 'old', availableShifts: ['T2_C', 'T3_C', 'T4_S', 'T5_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 60000 },
+    { id: 's_new_1', fullName: 'Hoàng Lan Anh', studentId: '2302001', phone: '0967890123', role: 'new', availableShifts: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], createdAt: Date.now() - 50000 },
+    { id: 's_new_2', fullName: 'Ngô Gia Bảo', studentId: '2302002', phone: '0978901234', role: 'new', availableShifts: ['T2_C', 'T3_C', 'T4_C', 'T5_C', 'T6_C'], createdAt: Date.now() - 40000 },
+    { id: 's_new_3', fullName: 'Bùi Khánh Linh', studentId: '2302003', phone: '0989012345', role: 'new', availableShifts: ['T2_S', 'T2_C', 'T3_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 30000 },
+    { id: 's_new_4', fullName: 'Đỗ Tuấn Kiệt', studentId: '2302004', phone: '0990123456', role: 'new', availableShifts: ['T3_S', 'T3_C', 'T4_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 20000 },
+    { id: 's_new_5', fullName: 'Lý Thu Trang', studentId: '2302005', phone: '0901234567', role: 'new', availableShifts: ['T2_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 15000 },
+    { id: 's_new_6', fullName: 'Dương Minh Trí', studentId: '2302006', phone: '0911223344', role: 'new', availableShifts: ['T2_C', 'T3_S', 'T4_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 10000 },
+    { id: 's_new_7', fullName: 'Mai Phương Thảo', studentId: '2302007', phone: '0922334455', role: 'new', availableShifts: ['T2_S', 'T3_C', 'T5_S', 'T5_C', 'T6_S'], createdAt: Date.now() - 5000 }
+  ];
+
+  const state = {
+    students: [],
+    currentSchedule: null,
+    twoWeekSchedule: null,
+    viewWeek: 1, // 1 hoặc 2
+    activeTab: 'tab-schedule-mgmt',
+    roleFilter: 'all',
+    searchQuery: '',
+    reassignModalData: null,
+    regConfig: {
+      mode: 'always_open',
+      startTime: '',
+      endTime: '',
+      closedNotice: ''
+    },
+    adminUsers: [],
+    currentUser: null,
+    isAuthenticated: false
+  };
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  let elements = {};
+
+  function cacheDOMElements() {
+    elements = {
+      // Auth Screen Elements
+      authScreen: document.getElementById('admin-auth-screen'),
+      dashboardContainer: document.getElementById('admin-dashboard-container'),
+      tabAuthPwd: document.getElementById('tab-auth-pwd'),
+      tabAuthPin: document.getElementById('tab-auth-pin'),
+      formAuthCredentials: document.getElementById('form-auth-credentials'),
+      formAuthPin: document.getElementById('form-auth-pin'),
+      inputAuthUsername: document.getElementById('auth-input-username'),
+      inputAuthPassword: document.getElementById('auth-input-password'),
+      inputAuthPin: document.getElementById('auth-input-pin'),
+      authErrorBox: document.getElementById('auth-error-box'),
+      authErrorMsg: document.getElementById('auth-error-msg'),
+      btnAdminLogout: document.getElementById('btn-admin-logout'),
+      adminUserName: document.getElementById('admin-user-name'),
+      adminUserAvatar: document.getElementById('admin-user-avatar'),
+
+      // User Management Modal Elements
+      userMgmtModal: document.getElementById('user-mgmt-modal'),
+      btnOpenUserMgmt: document.getElementById('btn-open-user-mgmt'),
+      btnCloseUserMgmtModal: document.getElementById('btn-close-user-mgmt-modal'),
+      tabBtnUserList: document.getElementById('tab-btn-user-list'),
+      tabBtnAddUser: document.getElementById('tab-btn-add-user'),
+      tabBtnChangePwd: document.getElementById('tab-btn-change-pwd'),
+      panelUserList: document.getElementById('panel-user-list'),
+      userMgmtTableBody: document.getElementById('user-mgmt-table-body'),
+      formAddAdminUser: document.getElementById('form-add-admin-user'),
+      formChangeCurrentPwd: document.getElementById('form-change-current-pwd'),
+
+      tabButtons: document.querySelectorAll('.tab-btn'),
+      tabContents: document.querySelectorAll('.tab-content'),
+
+      totalStudentsCount: document.getElementById('count-total-students'),
+      oldStudentsCount: document.getElementById('count-old-students'),
+      newStudentsCount: document.getElementById('count-new-students'),
+      filledShiftsCount: document.getElementById('count-filled-shifts'),
+      badgeAdminStudentCount: document.getElementById('badge-admin-student-count'),
+
+      btnAutoSchedule: document.getElementById('btn-admin-auto-schedule'),
+      btnLoadSample30: document.getElementById('btn-load-sample-30'),
+      btnExportCsv: document.getElementById('btn-export-csv'),
+      btnPrintSchedule: document.getElementById('btn-print-schedule'),
+      btnWeek1: document.getElementById('btn-admin-week-1'),
+      btnWeek2: document.getElementById('btn-admin-week-2'),
+      timetableGrid: document.getElementById('admin-timetable-grid'),
+      scheduleWarningsBox: document.getElementById('schedule-warnings-box'),
+      standbyBox: document.getElementById('admin-standby-box'),
+      fairnessListOld: document.getElementById('fairness-list-old'),
+      fairnessListNew: document.getElementById('fairness-list-new'),
+
+      // Registration Config Panel Elements
+      regConfigForm: document.getElementById('admin-reg-config-form'),
+      adminRegModeRadios: document.querySelectorAll('input[name="adminRegMode"]'),
+      adminRegStart: document.getElementById('admin-reg-start'),
+      adminRegEnd: document.getElementById('admin-reg-end'),
+      adminRegClosedMsg: document.getElementById('admin-reg-closed-msg'),
+      adminRegLiveStatus: document.getElementById('admin-reg-live-status'),
+      btnSaveRegConfig: document.getElementById('btn-save-reg-config'),
+      btnPresetNow: document.getElementById('btn-preset-now'),
+      btnPreset3days: document.getElementById('btn-preset-3days'),
+      btnPreset5days: document.getElementById('btn-preset-5days'),
+      btnPreset7days: document.getElementById('btn-preset-7days'),
+      configSaveHint: document.getElementById('config-save-hint'),
+      cardModeOpen: document.getElementById('card-mode-open'),
+      cardModeTime: document.getElementById('card-mode-time'),
+      cardModeClosed: document.getElementById('card-mode-closed'),
+      timeWindowContainer: document.getElementById('time-window-inputs-container'),
+
+      studentTableBody: document.getElementById('admin-student-table-body'),
+      filterButtons: document.querySelectorAll('.filter-btn'),
+      inputSearch: document.getElementById('input-search-student'),
+      btnOpenAddStudent: document.getElementById('btn-open-add-student'),
+      btnLoadSample: document.getElementById('btn-load-sample'),
+      btnResetData: document.getElementById('btn-reset-data'),
+
+      reassignModal: document.getElementById('reassign-modal'),
+      modalCloseBtn: document.getElementById('btn-close-modal'),
+      modalCancelBtn: document.getElementById('btn-cancel-modal'),
+      modalSaveBtn: document.getElementById('btn-save-modal'),
+      modalSlotTitle: document.getElementById('modal-slot-title'),
+      modalRoleBadge: document.getElementById('modal-role-badge'),
+      modalCandidateSelect: document.getElementById('modal-candidate-select'),
+
+      studentModal: document.getElementById('student-form-modal'),
+      studentModalTitle: document.getElementById('student-modal-title'),
+      btnCloseStudentModal: document.getElementById('btn-close-student-modal'),
+      btnCancelStudentModal: document.getElementById('btn-cancel-student-modal'),
+      adminStudentForm: document.getElementById('admin-student-form'),
+      editStudentIdInput: document.getElementById('admin-edit-student-id'),
+      inputAdminFullName: document.getElementById('admin-input-fullname'),
+      inputAdminStudentId: document.getElementById('admin-input-studentid'),
+      inputAdminPhone: document.getElementById('admin-input-phone'),
+      adminSlotCbs: document.querySelectorAll('.admin-slot-cb'),
+      btnAdminQuickAll: document.getElementById('btn-admin-quick-all'),
+      btnAdminQuickClear: document.getElementById('btn-admin-quick-clear'),
+
+      // Excel & Google Sheets Export Elements (Mẫu HCM-UTE)
+      btnOpenExcelModal: document.getElementById('btn-open-excel-modal'),
+      btnQuickCopySheet: document.getElementById('btn-quick-copy-sheet'),
+      btnLoadSampleUte: document.getElementById('btn-load-sample-ute'),
+      excelModal: document.getElementById('excel-export-modal'),
+      btnCloseExcelModal: document.getElementById('btn-close-excel-modal'),
+      exportStartDate: document.getElementById('export-start-date'),
+      exportRangeSelect: document.getElementById('export-range-select'),
+      exportOptRepPage: document.getElementById('export-opt-reppage'),
+      exportOptRedCells: document.getElementById('export-opt-redcells'),
+      btnModalCopyClipboard: document.getElementById('btn-modal-copy-clipboard'),
+      btnModalDownloadXls: document.getElementById('btn-modal-download-xls'),
+      btnModalDownloadCsv: document.getElementById('btn-modal-download-csv'),
+      btnModalPrintSheet: document.getElementById('btn-modal-print-sheet'),
+      excelPreviewTableContainer: document.getElementById('excel-preview-table-container'),
+      excelCopyStatusHint: document.getElementById('excel-copy-status-hint'),
+
+      toastContainer: document.getElementById('toast-container')
+    };
+  }
+
+  function initAdminPortal() {
+    cacheDOMElements();
+    loadAdminUsers();
+    bindAuthEvents();
+    bindUserMgmtEvents();
+
+    // Kiểm tra phiên đăng nhập quản trị trong sessionStorage
+    const isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
+    if (isAuth) {
+      state.isAuthenticated = true;
+      try {
+        const storedUser = sessionStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+        if (storedUser) state.currentUser = JSON.parse(storedUser);
+      } catch (err) {
+        state.currentUser = state.adminUsers[0] || null;
+      }
+      unlockAdminDashboard();
+    } else {
+      lockAdminDashboard();
+    }
+
+    // Lắng nghe sự kiện đồng bộ giữa các tab
+    window.addEventListener('storage', (e) => {
+      if (!state.isAuthenticated) return;
+      if (e.key === STORAGE_KEYS.STUDENTS) {
+        loadData();
+        renderAll();
+        showToast('Có sinh viên vừa đăng ký từ Cổng Sinh Viên!', 'info');
+      } else if (e.key === STORAGE_KEYS.REG_CONFIG) {
+        loadRegConfig();
+        renderRegConfigUI();
+      } else if (e.key === STORAGE_KEYS.ADMIN_USERS) {
+        loadAdminUsers();
+        renderUserMgmtTable();
+      }
+    });
+  }
+
+  function unlockAdminDashboard() {
+    if (elements.authScreen) elements.authScreen.style.display = 'none';
+    if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'block';
+
+    updateAdminUserHeader();
+
+    loadData();
+    loadRegConfig();
+    bindEvents();
+    bindRegConfigEvents();
+    renderAll();
+    renderRegConfigUI();
+
+    // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây
+    setInterval(updateRegLiveStatus, 30000);
+  }
+
+  function lockAdminDashboard() {
+    if (elements.authScreen) elements.authScreen.style.display = 'flex';
+    if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'none';
+  }
+
+  function updateAdminUserHeader() {
+    const user = state.currentUser || { fullName: 'Trưởng Ban', role: 'Quản trị viên' };
+    if (elements.adminUserName) {
+      elements.adminUserName.textContent = user.fullName || user.username;
+      elements.adminUserName.title = `${user.fullName} (${user.role})`;
+    }
+    if (elements.adminUserAvatar) {
+      const initial = (user.fullName || user.username || 'A').charAt(0).toUpperCase();
+      elements.adminUserAvatar.textContent = initial;
+    }
+  }
+
+  function loadAdminUsers() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
+      if (raw) {
+        state.adminUsers = JSON.parse(raw);
+      } else {
+        state.adminUsers = [...DEFAULT_ADMIN_USERS];
+        saveAdminUsers();
+      }
+    } catch (err) {
+      state.adminUsers = [...DEFAULT_ADMIN_USERS];
+    }
+  }
+
+  function saveAdminUsers() {
+    localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
+  }
+
+  function bindAuthEvents() {
+    // Chuyển tab Đăng nhập: Mật khẩu vs Mã PIN
+    elements.tabAuthPwd?.addEventListener('click', () => {
+      elements.tabAuthPwd.classList.add('active');
+      elements.tabAuthPin?.classList.remove('active');
+      if (elements.formAuthCredentials) elements.formAuthCredentials.style.display = 'block';
+      if (elements.formAuthPin) elements.formAuthPin.style.display = 'none';
+      hideAuthError();
+    });
+
+    elements.tabAuthPin?.addEventListener('click', () => {
+      elements.tabAuthPin.classList.add('active');
+      elements.tabAuthPwd?.classList.remove('active');
+      if (elements.formAuthPin) elements.formAuthPin.style.display = 'block';
+      if (elements.formAuthCredentials) elements.formAuthCredentials.style.display = 'none';
+      hideAuthError();
+    });
+
+    // Xử lý đăng nhập Form 1: Username & Password
+    elements.formAuthCredentials?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const username = elements.inputAuthUsername ? elements.inputAuthUsername.value.trim().toLowerCase() : '';
+      const password = elements.inputAuthPassword ? elements.inputAuthPassword.value : '';
+
+      const matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+      if (matched) {
+        authenticateSuccess(matched);
+      } else {
+        showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
+      }
+    });
+
+    // Xử lý đăng nhập Form 2: Mã PIN nhanh
+    elements.formAuthPin?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pin = elements.inputAuthPin ? elements.inputAuthPin.value.trim() : '';
+      const matched = state.adminUsers.find(u => u.pin && u.pin === pin);
+      if (matched) {
+        authenticateSuccess(matched);
+      } else {
+        showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
+      }
+    });
+
+    // Đăng xuất an toàn
+    elements.btnAdminLogout?.addEventListener('click', () => {
+      if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc Quản Trị?')) {
+        sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+        sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        lockAdminDashboard();
+        showToast('Đã đăng xuất khỏi hệ thống an toàn!', 'info');
+      }
+    });
+  }
+
+  function authenticateSuccess(user) {
+    state.isAuthenticated = true;
+    state.currentUser = user;
+    sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'true');
+    sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+
+    hideAuthError();
+    unlockAdminDashboard();
+    showToast(`Xin chào ${user.fullName}! Đăng nhập quản trị thành công.`, 'success');
+  }
+
+  function showAuthError(msg) {
+    if (elements.authErrorBox) {
+      elements.authErrorBox.style.display = 'flex';
+      if (elements.authErrorMsg) elements.authErrorMsg.textContent = msg;
+    }
+  }
+
+  function hideAuthError() {
+    if (elements.authErrorBox) {
+      elements.authErrorBox.style.display = 'none';
+    }
+  }
+
+  function bindUserMgmtEvents() {
+    // Mở modal quản lý quyền
+    elements.btnOpenUserMgmt?.addEventListener('click', () => {
+      renderUserMgmtTable();
+      switchUserMgmtTab('list');
+      if (elements.userMgmtModal) elements.userMgmtModal.classList.add('active');
+    });
+
+    elements.btnCloseUserMgmtModal?.addEventListener('click', () => {
+      if (elements.userMgmtModal) elements.userMgmtModal.classList.remove('active');
+    });
+
+    // Chuyển tab trong modal
+    elements.tabBtnUserList?.addEventListener('click', () => switchUserMgmtTab('list'));
+    elements.tabBtnAddUser?.addEventListener('click', () => switchUserMgmtTab('add'));
+    elements.tabBtnChangePwd?.addEventListener('click', () => switchUserMgmtTab('pwd'));
+
+    // Form thêm cán bộ mới
+    elements.formAddAdminUser?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fullName = document.getElementById('add-user-fullname')?.value.trim();
+      const username = document.getElementById('add-user-username')?.value.trim().toLowerCase();
+      const role = document.getElementById('add-user-role')?.value;
+      const password = document.getElementById('add-user-pwd')?.value;
+      const pin = document.getElementById('add-user-pin')?.value.trim();
+
+      if (!fullName || !username || !password) {
+        showToast('Vui lòng điền đủ họ tên, username và mật khẩu!', 'error');
+        return;
+      }
+
+      if (state.adminUsers.some(u => u.username.toLowerCase() === username)) {
+        showToast(`Tên đăng nhập "${username}" đã tồn tại! Vui lòng chọn tên khác.`, 'error');
+        return;
+      }
+
+      const newUser = {
+        id: 'usr_' + Date.now(),
+        username,
+        password,
+        pin: pin || '',
+        fullName,
+        role: role || 'Điều phối viên tuyển sinh',
+        createdAt: Date.now()
+      };
+
+      state.adminUsers.push(newUser);
+      saveAdminUsers();
+      elements.formAddAdminUser.reset();
+      showToast(`Đã cấp quyền truy cập thành công cho cán bộ ${fullName}!`, 'success');
+      switchUserMgmtTab('list');
+    });
+
+    // Form đổi mật khẩu cho tài khoản hiện tại
+    elements.formChangeCurrentPwd?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const currentPwd = document.getElementById('pwd-current')?.value;
+      const newPwd = document.getElementById('pwd-new')?.value;
+      const confirmPwd = document.getElementById('pwd-confirm')?.value;
+      const newPin = document.getElementById('pin-new')?.value.trim();
+
+      const user = state.currentUser;
+      if (!user) return;
+
+      if (currentPwd !== user.password) {
+        showToast('Mật khẩu hiện tại không đúng!', 'error');
+        return;
+      }
+
+      if (!newPwd || newPwd.length < 3) {
+        showToast('Mật khẩu mới phải có ít nhất 3 ký tự!', 'error');
+        return;
+      }
+
+      if (newPwd !== confirmPwd) {
+        showToast('Mật khẩu xác nhận không khớp!', 'error');
+        return;
+      }
+
+      // Cập nhật trong danh sách cán bộ
+      const idx = state.adminUsers.findIndex(u => u.id === user.id || u.username === user.username);
+      if (idx !== -1) {
+        state.adminUsers[idx].password = newPwd;
+        if (newPin) state.adminUsers[idx].pin = newPin;
+        saveAdminUsers();
+
+        state.currentUser.password = newPwd;
+        if (newPin) state.currentUser.pin = newPin;
+        sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(state.currentUser));
+      }
+
+      elements.formChangeCurrentPwd.reset();
+      showToast('Đã đổi mật khẩu thành công!', 'success');
+      switchUserMgmtTab('list');
+    });
+  }
+
+  function switchUserMgmtTab(tab) {
+    elements.tabBtnUserList?.classList.toggle('active', tab === 'list');
+    elements.tabBtnAddUser?.classList.toggle('active', tab === 'add');
+    elements.tabBtnChangePwd?.classList.toggle('active', tab === 'pwd');
+
+    if (elements.panelUserList) elements.panelUserList.style.display = tab === 'list' ? 'block' : 'none';
+    if (elements.formAddAdminUser) elements.formAddAdminUser.style.display = tab === 'add' ? 'block' : 'none';
+    if (elements.formChangeCurrentPwd) elements.formChangeCurrentPwd.style.display = tab === 'pwd' ? 'block' : 'none';
+
+    if (tab === 'list') renderUserMgmtTable();
+  }
+
+  function renderUserMgmtTable() {
+    if (!elements.userMgmtTableBody) return;
+    elements.userMgmtTableBody.innerHTML = '';
+
+    state.adminUsers.forEach((user, index) => {
+      const tr = document.createElement('tr');
+      const isRoot = user.username === 'admin';
+      const isCurrent = state.currentUser && state.currentUser.username === user.username;
+
+      tr.innerHTML = `
+        <td style="color: var(--text-muted); font-weight: 700;">${index + 1}</td>
+        <td><code>${escapeHtml(user.username)}</code> ${isCurrent ? '<span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; padding:1px 5px;">Bạn</span>' : ''}</td>
+        <td><strong>${escapeHtml(user.fullName)}</strong></td>
+        <td><span style="font-size: 0.78rem; color: #4338ca;">${escapeHtml(user.role)}</span></td>
+        <td><code>${escapeHtml(user.pin || '-')}</code></td>
+        <td>
+          ${isRoot ? '<span style="font-size:0.75rem; color:#94a3b8;">Mặc định</span>' : `
+            <button type="button" class="btn-action delete btn-delete-user" data-uid="${escapeHtml(user.id)}" title="Thu hồi quyền truy cập">🗑️</button>
+          `}
+        </td>
+      `;
+
+      elements.userMgmtTableBody.appendChild(tr);
+    });
+
+    elements.userMgmtTableBody.querySelectorAll('.btn-delete-user').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const uid = btn.getAttribute('data-uid');
+        const target = state.adminUsers.find(u => u.id === uid);
+        if (!target) return;
+        if (confirm(`Bạn có chắc muốn thu hồi quyền truy cập của cán bộ "${target.fullName}" (${target.username}) không?`)) {
+          state.adminUsers = state.adminUsers.filter(u => u.id !== uid);
+          saveAdminUsers();
+          renderUserMgmtTable();
+          showToast(`Đã thu hồi quyền của cán bộ ${target.fullName}!`, 'info');
+        }
+      });
+    });
+  }
+
+  function loadData() {
+    try {
+      const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (rawStudents) {
+        state.students = JSON.parse(rawStudents);
+      } else {
+        const defaultList = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS;
+        state.students = [...defaultList];
+        saveStudents();
+      }
+
+      const rawTwoWeek = localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      if (rawTwoWeek) {
+        state.twoWeekSchedule = JSON.parse(rawTwoWeek);
+        state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1;
+      } else {
+        runFullSchedule();
+      }
+    } catch (err) {
+      console.error(err);
+      state.students = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS;
+    }
+  }
+
+  function saveStudents() {
+    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+  }
+
+  function saveSchedule() {
+    localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
+    if (state.twoWeekSchedule) {
+      localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.twoWeekSchedule));
+    }
+  }
+
+  function runFullSchedule() {
+    if (state.students.length === 0) {
+      state.currentSchedule = null;
+      state.twoWeekSchedule = null;
+      return;
+    }
+
+    if (state.students.length > 10) {
+      // Chế độ 2 tuần luân phiên
+      state.twoWeekSchedule = runTwoWeekSchedule(state.students);
+      state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1;
+    } else {
+      state.twoWeekSchedule = null;
+      state.currentSchedule = runAutoSchedule(state.students);
+    }
+    saveSchedule();
+  }
+
+  function bindEvents() {
+    elements.tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-tab');
+        switchTab(targetTab);
+      });
+    });
+
+    elements.filterButtons.forEach(btn => {
+      if (btn.hasAttribute('data-filter')) {
+        btn.addEventListener('click', () => {
+          elements.filterButtons.forEach(b => {
+            if (b.hasAttribute('data-filter')) b.classList.remove('active');
+          });
+          btn.classList.add('active');
+          state.roleFilter = btn.getAttribute('data-filter');
+          renderStudentTable();
+        });
+      }
+    });
+
+    // Tuần 1 / Tuần 2 Toggles
+    elements.btnWeek1?.addEventListener('click', () => {
+      state.viewWeek = 1;
+      elements.btnWeek1.classList.add('active');
+      elements.btnWeek2?.classList.remove('active');
+      if (state.twoWeekSchedule) {
+        state.currentSchedule = state.twoWeekSchedule.week1;
+      }
+      renderTimetable();
+      renderFairness();
+    });
+
+    elements.btnWeek2?.addEventListener('click', () => {
+      state.viewWeek = 2;
+      elements.btnWeek2.classList.add('active');
+      elements.btnWeek1?.classList.remove('active');
+      if (state.twoWeekSchedule) {
+        state.currentSchedule = state.twoWeekSchedule.week2;
+      }
+      renderTimetable();
+      renderFairness();
+    });
+
+    elements.inputSearch?.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value.trim().toLowerCase();
+      renderStudentTable();
+    });
+
+    // Tự động phân bổ lịch
+    elements.btnAutoSchedule?.addEventListener('click', () => {
+      triggerAutoSchedule(true);
+    });
+
+    // Nạp Demo 30 Người
+    elements.btnLoadSample30?.addEventListener('click', () => {
+      const list30 = window.SAMPLE_30_STUDENTS || [];
+      if (list30.length > 0) {
+        state.students = JSON.parse(JSON.stringify(list30));
+        saveStudents();
+        runFullSchedule();
+        renderAll();
+        showToast('Đã nạp 30 sinh viên mẫu & phân bổ luân phiên 2 tuần (100% đều có ca)!', 'success');
+      }
+    });
+
+    elements.btnLoadSample?.addEventListener('click', () => {
+      state.students = JSON.parse(JSON.stringify(SAMPLE_12_STUDENTS));
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast('Đã nạp 12 sinh viên mẫu và xếp lịch!', 'success');
+    });
+
+    elements.btnResetData?.addEventListener('click', () => {
+      if (confirm('Bạn có chắc muốn xóa sạch toàn bộ sinh viên và lịch trực đã xếp không?')) {
+        state.students = [];
+        state.currentSchedule = null;
+        state.twoWeekSchedule = null;
+        saveStudents();
+        saveSchedule();
+        renderAll();
+        showToast('Đã làm trống dữ liệu hệ thống!', 'info');
+      }
+    });
+
+    elements.btnExportCsv?.addEventListener('click', exportScheduleToCsv);
+    elements.btnPrintSchedule?.addEventListener('click', () => window.print());
+
+    // Nạp 16 CTV HCM-UTE chuẩn mẫu thực tế
+    elements.btnLoadSampleUte?.addEventListener('click', loadUtePresetStudents);
+
+    // Mở modal xuất Excel / Google Sheets
+    elements.btnOpenExcelModal?.addEventListener('click', () => {
+      openExcelModal();
+    });
+
+    // Sao chép nhanh bảng để dán vào Google Sheets (Quick Copy 1-Click)
+    elements.btnQuickCopySheet?.addEventListener('click', () => {
+      copyUteSheetToClipboard(true);
+    });
+
+    // Đóng modal Excel
+    elements.btnCloseExcelModal?.addEventListener('click', closeExcelModal);
+    elements.excelModal?.addEventListener('click', (e) => {
+      if (e.target === elements.excelModal) closeExcelModal();
+    });
+
+    // Thay đổi cấu hình ngày / phạm vi -> render lại preview bảng tính
+    elements.exportStartDate?.addEventListener('change', renderUteSheetPreview);
+    elements.exportRangeSelect?.addEventListener('change', renderUteSheetPreview);
+    elements.exportOptRepPage?.addEventListener('change', renderUteSheetPreview);
+    elements.exportOptRedCells?.addEventListener('change', renderUteSheetPreview);
+
+    // Các nút thao tác trong modal Excel
+    elements.btnModalCopyClipboard?.addEventListener('click', () => copyUteSheetToClipboard(false));
+    elements.btnModalDownloadXls?.addEventListener('click', downloadUteExcelFile);
+    elements.btnModalDownloadCsv?.addEventListener('click', downloadUteCsvFile);
+    elements.btnModalPrintSheet?.addEventListener('click', printUteSheet);
+
+    elements.modalCloseBtn?.addEventListener('click', closeReassignModal);
+    elements.modalCancelBtn?.addEventListener('click', closeReassignModal);
+    elements.modalSaveBtn?.addEventListener('click', saveManualReassignment);
+    elements.reassignModal?.addEventListener('click', (e) => {
+      if (e.target === elements.reassignModal) closeReassignModal();
+    });
+
+    elements.btnOpenAddStudent?.addEventListener('click', openAddStudentModal);
+    elements.btnCloseStudentModal?.addEventListener('click', closeStudentModal);
+    elements.btnCancelStudentModal?.addEventListener('click', closeStudentModal);
+    elements.adminStudentForm?.addEventListener('submit', handleSaveStudentForm);
+    elements.studentModal?.addEventListener('click', (e) => {
+      if (e.target === elements.studentModal) closeStudentModal();
+    });
+
+    elements.btnAdminQuickAll?.addEventListener('click', () => {
+      elements.adminSlotCbs.forEach(cb => cb.checked = true);
+    });
+    elements.btnAdminQuickClear?.addEventListener('click', () => {
+      elements.adminSlotCbs.forEach(cb => cb.checked = false);
+    });
+  }
+
+  function switchTab(tabId) {
+    state.activeTab = tabId;
+    elements.tabButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+    });
+    elements.tabContents.forEach(content => {
+      content.classList.toggle('active', content.id === tabId);
+    });
+  }
+
+  function triggerAutoSchedule(animate = true) {
+    if (state.students.length === 0) {
+      showToast('Chưa có sinh viên nào. Vui lòng thêm sinh viên hoặc nạp dữ liệu mẫu!', 'warning');
+      return;
+    }
+
+    if (animate && elements.btnAutoSchedule) {
+      const originalText = elements.btnAutoSchedule.innerHTML;
+      elements.btnAutoSchedule.innerHTML = '<span>⚡ Đang tối ưu thuật toán...</span>';
+      elements.btnAutoSchedule.disabled = true;
+
+      setTimeout(() => {
+        runFullSchedule();
+        elements.btnAutoSchedule.innerHTML = originalText;
+        elements.btnAutoSchedule.disabled = false;
+        renderAll();
+        const msg = state.twoWeekSchedule 
+          ? `Đã xếp lịch luân phiên 2 tuần: ${state.twoWeekSchedule.uniqueAssignedCount}/${state.twoWeekSchedule.totalStudents} bạn có ca!`
+          : 'Đã hoàn tất phân bổ ca trực 1 cũ + 1 mới!';
+        showToast(msg, 'success');
+      }, 350);
+    } else {
+      runFullSchedule();
+      renderAll();
+    }
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderStudentTable();
+    renderTimetable();
+    renderFairness();
+  }
+
+  function renderSummary() {
+    const total = state.students.length;
+    const oldStudents = state.students.filter(s => s.role === 'old').length;
+    const newStudents = state.students.filter(s => s.role === 'new').length;
+
+    if (elements.totalStudentsCount) elements.totalStudentsCount.textContent = total;
+    if (elements.oldStudentsCount) elements.oldStudentsCount.textContent = oldStudents;
+    if (elements.newStudentsCount) elements.newStudentsCount.textContent = newStudents;
+    if (elements.badgeAdminStudentCount) elements.badgeAdminStudentCount.textContent = total;
+
+    if (elements.filledShiftsCount) {
+      const fullShifts = state.currentSchedule?.summary?.fullShifts || 0;
+      elements.filledShiftsCount.textContent = `${fullShifts}/10 ca`;
+    }
+  }
+
+  function renderStudentTable() {
+    if (!elements.studentTableBody) return;
+
+    let filtered = [...state.students];
+
+    if (state.roleFilter !== 'all') {
+      filtered = filtered.filter(s => s.role === state.roleFilter);
+    }
+
+    if (state.searchQuery) {
+      filtered = filtered.filter(s => 
+        s.fullName.toLowerCase().includes(state.searchQuery) ||
+        s.studentId.toLowerCase().includes(state.searchQuery)
+      );
+    }
+
+    if (filtered.length === 0) {
+      elements.studentTableBody.innerHTML = `
+        <tr>
+          <td colspan="7">
+            <div class="empty-state">
+              <div class="empty-state-icon">📋</div>
+              <h3>Không tìm thấy sinh viên nào</h3>
+              <p>Bấm "👥 Nạp Demo 30 Người" hoặc "+ Thêm Sinh Viên Mới" để bắt đầu.</p>
+            </div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const assignedCounts = state.currentSchedule?.studentStats || {};
+    const combinedStats = state.twoWeekSchedule?.combinedStats || {};
+
+    elements.studentTableBody.innerHTML = filtered.map((s, index) => {
+      const isOld = s.role === 'old';
+      const roleBadge = isOld 
+        ? `<span class="badge badge-old">🎓 Người cũ</span>` 
+        : `<span class="badge badge-new">🌱 Người mới</span>`;
+      
+      const currentAssigned = assignedCounts[s.id]?.assignedCount || 0;
+      const totalTwoWeeks = combinedStats[s.id]?.totalCount || currentAssigned;
+      
+      const shiftTags = (s.availableShifts || []).map(id => {
+        const info = SHIFT_MAP[id];
+        return info ? `<span class="shift-tag">${info.dayName} ${info.period}</span>` : '';
+      }).join('');
+
+      return `
+        <tr>
+          <td style="font-weight: 600; color: #94a3b8;">#${index + 1}</td>
+          <td>
+            <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(s.fullName)}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">${s.phone ? 'SĐT: ' + escapeHtml(s.phone) : 'Chưa có SĐT'}</div>
+          </td>
+          <td><code style="font-weight: 700; color: var(--primary);">${escapeHtml(s.studentId)}</code></td>
+          <td>${roleBadge}</td>
+          <td>
+            <div class="shift-tag-list">${shiftTags}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Rảnh <strong>${s.availableShifts?.length || 0}</strong> ca
+            </div>
+          </td>
+          <td>
+            <strong style="color: var(--primary); font-size: 1rem;">${currentAssigned}</strong> ca tuần này
+            ${state.twoWeekSchedule ? `<div style="font-size: 0.72rem; color: var(--text-muted);">(Tổng 2 tuần: ${totalTwoWeeks} ca)</div>` : ''}
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.4rem;">
+              <button class="btn btn-secondary btn-sm" onclick="window.adminEditStudent('${s.id}')" title="Sửa thông tin & ca rảnh">✏️ Sửa</button>
+              <button class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteStudent('${s.id}')" title="Xóa">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function renderTimetable() {
+    if (!elements.timetableGrid) return;
+
+    const schedule = state.currentSchedule?.scheduleTable || {};
+    const days = [
+      { key: 'T2', name: 'Thứ Hai', sub: 'Thứ 2' },
+      { key: 'T3', name: 'Thứ Ba', sub: 'Thứ 3' },
+      { key: 'T4', name: 'Thứ Tư', sub: 'Thứ 4' },
+      { key: 'T5', name: 'Thứ Năm', sub: 'Thứ 5' },
+      { key: 'T6', name: 'Thứ Sáu', sub: 'Thứ 6' }
+    ];
+
+    let gridHtml = '';
+
+    gridHtml += `<div class="grid-cell grid-header"><span class="day-name">Ca / Ngày</span></div>`;
+    days.forEach(day => {
+      gridHtml += `
+        <div class="grid-cell grid-header">
+          <span class="day-name">${day.name}</span>
+          <span class="day-sub">${day.sub}</span>
+        </div>
+      `;
+    });
+
+    // Sáng
+    gridHtml += `
+      <div class="grid-cell period-cell">
+        <span class="period-name">☀️ Sáng</span>
+        <span class="period-time">08:00 - 11:30</span>
+      </div>
+    `;
+    days.forEach(day => {
+      const shiftId = `${day.key}_S`;
+      const slot = schedule[shiftId];
+      gridHtml += renderShiftSlotHtml(shiftId, slot);
+    });
+
+    // Chiều
+    gridHtml += `
+      <div class="grid-cell period-cell">
+        <span class="period-name">🌤️ Chiều</span>
+        <span class="period-time">13:30 - 17:00</span>
+      </div>
+    `;
+    days.forEach(day => {
+      const shiftId = `${day.key}_C`;
+      const slot = schedule[shiftId];
+      gridHtml += renderShiftSlotHtml(shiftId, slot);
+    });
+
+    elements.timetableGrid.innerHTML = gridHtml;
+
+    // Hiển thị danh sách Dự bị / Ưu tiên cho Tuần 2
+    if (elements.standbyBox) {
+      const unassigned = state.currentSchedule?.unassignedMembers || [];
+      if (unassigned.length > 0 && state.viewWeek === 1) {
+        elements.standbyBox.style.display = 'block';
+        elements.standbyBox.innerHTML = `
+          <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: gap: 0.5rem;">
+              <h4 style="color: #166534; font-weight: 700; font-size: 0.95rem;">
+                📋 Danh Sách ${unassigned.length} Sinh Viên Dự Bị (Được Ưu Tiên 100% Xếp Vào Tuần 2):
+              </h4>
+              <button class="btn btn-primary btn-sm" id="btn-quick-switch-w2" style="font-size: 0.78rem;">
+                <span>Xem Lịch Tuần 2 →</span>
+              </button>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+              ${unassigned.map(m => `
+                <span class="badge ${m.role === 'old' ? 'badge-old' : 'badge-new'}" style="font-size: 0.78rem;">
+                  ${m.role === 'old' ? '🎓' : '🌱'} ${escapeHtml(m.fullName)} (${escapeHtml(m.studentId)})
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        document.getElementById('btn-quick-switch-w2')?.addEventListener('click', () => {
+          elements.btnWeek2?.click();
+        });
+      } else {
+        elements.standbyBox.style.display = 'none';
+      }
+    }
+  }
+
+  function renderShiftSlotHtml(shiftId, slot) {
+    if (!slot) {
+      return `<div class="grid-cell shift-duty-slot"><div class="empty-state">Chưa xếp</div></div>`;
+    }
+
+    const oldMem = slot.oldMember;
+    const newMem = slot.newMember;
+
+    let statusPill = '';
+    if (slot.status === 'full') {
+      statusPill = `<span class="shift-status-pill full">✓ Đủ 2 bạn</span>`;
+    } else if (slot.status === 'partial') {
+      statusPill = `<span class="shift-status-pill warning">Thiếu 1 bạn</span>`;
+    } else {
+      statusPill = `<span class="shift-status-pill empty">Trống</span>`;
+    }
+
+    const oldCard = oldMem ? `
+      <div class="duty-member-card role-old" title="Người cũ - Có kinh nghiệm">
+        <div class="member-info">
+          <span class="member-role-tag">🎓 Người Cũ</span>
+          <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
+        </div>
+        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" title="Đổi bạn khác">🔄</button>
+      </div>
+    ` : `
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán người cũ">
+        <span>+ Chưa có Người Cũ</span>
+      </div>
+    `;
+
+    const newCard = newMem ? `
+      <div class="duty-member-card role-new" title="Người mới - Tập sự">
+        <div class="member-info">
+          <span class="member-role-tag">🌱 Người Mới</span>
+          <span class="member-name">${escapeHtml(newMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
+        </div>
+        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" title="Đổi bạn khác">🔄</button>
+      </div>
+    ` : `
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán người mới">
+        <span>+ Chưa có Người Mới</span>
+      </div>
+    `;
+
+    return `
+      <div class="grid-cell shift-duty-slot">
+        <div class="shift-slot-header">
+          <span>${slot.shiftInfo?.dayName || ''}</span>
+          ${statusPill}
+        </div>
+        ${oldCard}
+        ${newCard}
+      </div>
+    `;
+  }
+
+  function renderFairness() {
+    if (!elements.fairnessListOld || !elements.fairnessListNew) return;
+
+    const stats = state.currentSchedule?.studentStats || {};
+    const oldMembers = state.students.filter(s => s.role === 'old');
+    const newMembers = state.students.filter(s => s.role === 'new');
+
+    function renderList(members, container, roleColor) {
+      if (members.length === 0) {
+        container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Chưa có sinh viên nhóm này.</div>`;
+        return;
+      }
+
+      container.innerHTML = members.map(m => {
+        const assigned = stats[m.id]?.assignedCount || 0;
+        const fillPercentage = Math.min(100, Math.round((assigned / 3) * 100));
+
+        return `
+          <div class="fairness-item">
+            <div class="fairness-item-left">
+              <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">${m.fullName}</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">(${m.studentId})</span>
+            </div>
+            <div class="fairness-item-count">
+              <div class="shift-progress-bar">
+                <div class="shift-progress-fill" style="width: ${fillPercentage}%; background: ${roleColor};"></div>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.95rem; width: 45px; text-align: right;">${assigned} ca</strong>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    renderList(oldMembers, elements.fairnessListOld, '#6366f1');
+    renderList(newMembers, elements.fairnessListNew, '#10b981');
+  }
+
+  window.adminOpenReassignModal = function(shiftId, role) {
+    state.reassignModalData = { shiftId, role };
+    const shiftInfo = SHIFT_MAP[shiftId];
+    const roleTitle = role === 'old' ? 'Người Cũ' : 'Người Mới';
+
+    if (elements.modalSlotTitle) {
+      elements.modalSlotTitle.textContent = `${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
+    }
+
+    if (elements.modalRoleBadge) {
+      elements.modalRoleBadge.textContent = roleTitle;
+      elements.modalRoleBadge.className = `badge ${role === 'old' ? 'badge-old' : 'badge-new'}`;
+    }
+
+    const eligibleStudents = state.students.filter(s => s.role === role);
+    const currentAssigned = state.currentSchedule?.scheduleTable[shiftId]?.[role === 'old' ? 'oldMember' : 'newMember'];
+
+    let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
+
+    eligibleStudents.sort((a, b) => {
+      const aAvail = (a.availableShifts || []).includes(shiftId) ? 1 : 0;
+      const bAvail = (b.availableShifts || []).includes(shiftId) ? 1 : 0;
+      return bAvail - aAvail;
+    });
+
+    eligibleStudents.forEach(s => {
+      const isAvailable = (s.availableShifts || []).includes(shiftId);
+      const isSelected = currentAssigned?.id === s.id;
+      const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
+
+      selectHtml += `
+        <option value="${s.id}" ${isSelected ? 'selected' : ''}>
+          ${s.fullName} (${s.studentId}) - ${availLabel}
+        </option>
+      `;
+    });
+
+    if (elements.modalCandidateSelect) {
+      elements.modalCandidateSelect.innerHTML = selectHtml;
+    }
+
+    elements.reassignModal?.classList.add('active');
+  };
+
+  function closeReassignModal() {
+    elements.reassignModal?.classList.remove('active');
+    state.reassignModalData = null;
+  }
+
+  function saveManualReassignment() {
+    if (!state.reassignModalData || !state.currentSchedule) return;
+
+    const { shiftId, role } = state.reassignModalData;
+    const selectedStudentId = elements.modalCandidateSelect.value;
+    const newStudent = selectedStudentId ? state.students.find(s => s.id === selectedStudentId) : null;
+
+    const slot = state.currentSchedule.scheduleTable[shiftId];
+    if (!slot) return;
+
+    if (role === 'old') {
+      slot.oldMember = newStudent;
+    } else {
+      slot.newMember = newStudent;
+    }
+
+    if (slot.oldMember && slot.newMember) {
+      slot.status = 'full';
+    } else if (!slot.oldMember && !slot.newMember) {
+      slot.status = 'empty';
+    } else {
+      slot.status = 'partial';
+    }
+
+    const newStats = {};
+    state.students.forEach(s => {
+      newStats[s.id] = {
+        student: s,
+        assignedCount: 0,
+        registeredCount: (s.availableShifts || []).length
+      };
+    });
+
+    Object.values(state.currentSchedule.scheduleTable).forEach(s => {
+      if (s.oldMember && newStats[s.oldMember.id]) newStats[s.oldMember.id].assignedCount++;
+      if (s.newMember && newStats[s.newMember.id]) newStats[s.newMember.id].assignedCount++;
+    });
+
+    state.currentSchedule.studentStats = newStats;
+    state.currentSchedule.timestamp = Date.now();
+
+    saveSchedule();
+    renderAll();
+    closeReassignModal();
+    showToast('Đã lưu thay đổi nhân sự trực!', 'success');
+  }
+
+  function openAddStudentModal() {
+    if (!elements.studentModal) return;
+    elements.studentModalTitle.textContent = 'Thêm Sinh Viên Mới';
+    elements.editStudentIdInput.value = '';
+    elements.inputAdminFullName.value = '';
+    elements.inputAdminStudentId.value = '';
+    if (elements.inputAdminPhone) elements.inputAdminPhone.value = '';
+    elements.adminSlotCbs.forEach(cb => cb.checked = false);
+
+    const roleRadio = document.querySelector('input[name="adminStudentRole"][value="new"]');
+    if (roleRadio) roleRadio.checked = true;
+
+    elements.studentModal.classList.add('active');
+    elements.inputAdminFullName.focus();
+  }
+
+  window.adminEditStudent = function(studentId) {
+    const student = state.students.find(s => s.id === studentId);
+    if (!student) return;
+
+    elements.studentModalTitle.textContent = 'Chỉnh Sửa Hồ Sơ Sinh Viên';
+    elements.editStudentIdInput.value = student.id;
+    elements.inputAdminFullName.value = student.fullName;
+    elements.inputAdminStudentId.value = student.studentId;
+    if (elements.inputAdminPhone) elements.inputAdminPhone.value = student.phone || '';
+
+    const roleRadio = document.querySelector(`input[name="adminStudentRole"][value="${student.role}"]`);
+    if (roleRadio) roleRadio.checked = true;
+
+    const availSet = new Set(student.availableShifts || []);
+    elements.adminSlotCbs.forEach(cb => {
+      cb.checked = availSet.has(cb.value);
+    });
+
+    elements.studentModal.classList.add('active');
+  };
+
+  function closeStudentModal() {
+    elements.studentModal?.classList.remove('active');
+  }
+
+  function handleSaveStudentForm(e) {
+    e.preventDefault();
+
+    const editId = elements.editStudentIdInput.value;
+    const fullName = elements.inputAdminFullName.value.trim();
+    const studentId = elements.inputAdminStudentId.value.trim();
+    const phone = elements.inputAdminPhone ? elements.inputAdminPhone.value.trim() : '';
+    const role = document.querySelector('input[name="adminStudentRole"]:checked')?.value || 'new';
+
+    const availableShifts = [];
+    elements.adminSlotCbs.forEach(cb => {
+      if (cb.checked) availableShifts.push(cb.value);
+    });
+
+    if (!fullName || !studentId) {
+      showToast('Vui lòng nhập đầy đủ Họ tên và MSSV!', 'error');
+      return;
+    }
+
+    if (availableShifts.length === 0) {
+      showToast('Vui lòng chọn ít nhất 1 ca rảnh!', 'error');
+      return;
+    }
+
+    if (editId) {
+      const idx = state.students.findIndex(s => s.id === editId);
+      if (idx !== -1) {
+        state.students[idx] = {
+          ...state.students[idx],
+          fullName,
+          studentId,
+          phone,
+          role,
+          availableShifts,
+          updatedAt: Date.now()
+        };
+        showToast(`Đã cập nhật sinh viên ${fullName}!`, 'success');
+      }
+    } else {
+      const existing = state.students.find(s => s.studentId.toLowerCase() === studentId.toLowerCase());
+      if (existing) {
+        showToast(`MSSV ${studentId} đã tồn tại trong hệ thống!`, 'error');
+        elements.inputAdminStudentId.focus();
+        return;
+      }
+
+      const newStudent = {
+        id: 's_' + Date.now(),
+        fullName,
+        studentId,
+        phone,
+        role,
+        availableShifts,
+        createdAt: Date.now()
+      };
+      state.students.unshift(newStudent);
+      showToast(`Đã thêm thành công bạn ${fullName}!`, 'success');
+    }
+
+    saveStudents();
+    runFullSchedule();
+    renderAll();
+    closeStudentModal();
+  }
+
+  window.adminDeleteStudent = function(studentId) {
+    const student = state.students.find(s => s.id === studentId);
+    if (!student) return;
+
+    if (confirm(`Bạn có chắc muốn xóa bạn "${student.fullName}" (MSSV: ${student.studentId}) không?`)) {
+      state.students = state.students.filter(s => s.id !== studentId);
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã xóa bạn ${student.fullName}!`, 'info');
+    }
+  };
+
+  /**
+   * ==========================================================================
+   * QUẢN LÝ CẤU HÌNH THỜI GIAN MỞ CỔNG ĐĂNG KÝ (ADMIN)
+   * ==========================================================================
+   */
+  function toDateTimeLocalString(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  function formatVNDateTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+  }
+
+  function getRemainingText(targetIso) {
+    const diff = new Date(targetIso).getTime() - Date.now();
+    if (diff <= 0) return 'Đã hết hạn';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (days > 0) {
+      return `Còn ${days} ngày ${remHours} giờ`;
+    }
+    return `Còn ${hours} giờ ${mins} phút`;
+  }
+
+  function loadRegConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REG_CONFIG);
+      if (raw) {
+        state.regConfig = JSON.parse(raw);
+      } else {
+        const now = new Date();
+        const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+        state.regConfig = {
+          mode: 'always_open',
+          startTime: toDateTimeLocalString(now),
+          endTime: toDateTimeLocalString(end),
+          closedNotice: 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.'
+        };
+        saveRegConfig(false);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function saveRegConfig(notify = true) {
+    localStorage.setItem(STORAGE_KEYS.REG_CONFIG, JSON.stringify(state.regConfig));
+    if (notify) {
+      showToast('Đã lưu cấu hình thời gian mở cổng đăng ký!', 'success');
+      if (elements.configSaveHint) {
+        elements.configSaveHint.textContent = `✓ Đã lưu lúc ${new Date().toLocaleTimeString('vi-VN')}`;
+        setTimeout(() => {
+          if (elements.configSaveHint) elements.configSaveHint.textContent = '';
+        }, 4000);
+      }
+    }
+    updateRegLiveStatus();
+  }
+
+  function renderRegConfigUI() {
+    if (!elements.adminRegModeRadios) return;
+
+    elements.adminRegModeRadios.forEach(radio => {
+      radio.checked = radio.value === state.regConfig.mode;
+    });
+
+    updateModeCardStyles(state.regConfig.mode);
+
+    if (elements.adminRegStart) {
+      elements.adminRegStart.value = state.regConfig.startTime || '';
+    }
+    if (elements.adminRegEnd) {
+      elements.adminRegEnd.value = state.regConfig.endTime || '';
+    }
+    if (elements.adminRegClosedMsg) {
+      elements.adminRegClosedMsg.value = state.regConfig.closedNotice || '';
+    }
+
+    updateRegLiveStatus();
+  }
+
+  function updateModeCardStyles(selectedMode) {
+    elements.cardModeOpen?.classList.toggle('active', selectedMode === 'always_open');
+    elements.cardModeTime?.classList.toggle('active', selectedMode === 'time_window');
+    elements.cardModeClosed?.classList.toggle('active', selectedMode === 'closed');
+  }
+
+  function updateRegLiveStatus() {
+    if (!elements.adminRegLiveStatus) return;
+
+    const mode = state.regConfig.mode;
+    const now = Date.now();
+    const start = state.regConfig.startTime ? new Date(state.regConfig.startTime).getTime() : 0;
+    const end = state.regConfig.endTime ? new Date(state.regConfig.endTime).getTime() : 0;
+
+    elements.adminRegLiveStatus.className = 'admin-config-status-badge';
+
+    if (mode === 'always_open') {
+      elements.adminRegLiveStatus.classList.add('open');
+      elements.adminRegLiveStatus.innerHTML = '<span>🟢 Cổng Đang Mở Tự Do (Luôn mở)</span>';
+    } else if (mode === 'closed') {
+      elements.adminRegLiveStatus.classList.add('closed');
+      elements.adminRegLiveStatus.innerHTML = '<span>🔴 Cổng Đang Đóng (Khóa bởi Admin)</span>';
+    } else if (mode === 'time_window') {
+      if (start && now < start) {
+        elements.adminRegLiveStatus.classList.add('scheduled');
+        elements.adminRegLiveStatus.innerHTML = `<span>⏳ Chưa Mở (Bắt đầu: ${formatVNDateTime(state.regConfig.startTime)})</span>`;
+      } else if (end && now > end) {
+        elements.adminRegLiveStatus.classList.add('closed');
+        elements.adminRegLiveStatus.innerHTML = `<span>🔴 Đã Hết Hạn Đăng Ký (${formatVNDateTime(state.regConfig.endTime)})</span>`;
+      } else {
+        elements.adminRegLiveStatus.classList.add('open');
+        const remaining = end ? getRemainingText(state.regConfig.endTime) : '';
+        elements.adminRegLiveStatus.innerHTML = `<span>🟢 Đang Mở Cho Sinh Viên (${remaining})</span>`;
+      }
+    }
+  }
+
+  function bindRegConfigEvents() {
+    elements.adminRegModeRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        state.regConfig.mode = radio.value;
+        updateModeCardStyles(radio.value);
+        updateRegLiveStatus();
+      });
+    });
+
+    elements.btnPresetNow?.addEventListener('click', () => {
+      const nowStr = toDateTimeLocalString(new Date());
+      if (elements.adminRegStart) elements.adminRegStart.value = nowStr;
+      state.regConfig.startTime = nowStr;
+      showToast('Đã đặt thời gian bắt đầu là bây giờ', 'info');
+      updateRegLiveStatus();
+    });
+
+    elements.btnPreset3days?.addEventListener('click', () => {
+      const end = new Date(Date.now() + 3 * 24 * 3600 * 1000);
+      const endStr = toDateTimeLocalString(end);
+      if (elements.adminRegEnd) elements.adminRegEnd.value = endStr;
+      state.regConfig.endTime = endStr;
+      showToast('Đã gia hạn đóng cổng: +3 ngày', 'info');
+      updateRegLiveStatus();
+    });
+
+    elements.btnPreset5days?.addEventListener('click', () => {
+      const end = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+      const endStr = toDateTimeLocalString(end);
+      if (elements.adminRegEnd) elements.adminRegEnd.value = endStr;
+      state.regConfig.endTime = endStr;
+      showToast('Đã gia hạn đóng cổng: +5 ngày', 'info');
+      updateRegLiveStatus();
+    });
+
+    elements.btnPreset7days?.addEventListener('click', () => {
+      const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      const endStr = toDateTimeLocalString(end);
+      if (elements.adminRegEnd) elements.adminRegEnd.value = endStr;
+      state.regConfig.endTime = endStr;
+      showToast('Đã gia hạn đóng cổng: +7 ngày (1 tuần)', 'info');
+      updateRegLiveStatus();
+    });
+
+    elements.regConfigForm?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const selectedMode = document.querySelector('input[name="adminRegMode"]:checked')?.value || 'always_open';
+      const startTime = elements.adminRegStart ? elements.adminRegStart.value : '';
+      const endTime = elements.adminRegEnd ? elements.adminRegEnd.value : '';
+      const closedNotice = elements.adminRegClosedMsg ? elements.adminRegClosedMsg.value.trim() : '';
+
+      if (selectedMode === 'time_window' && startTime && endTime) {
+        if (new Date(startTime).getTime() >= new Date(endTime).getTime()) {
+          showToast('Thời gian kết thúc phải diễn ra sau thời gian bắt đầu!', 'error');
+          return;
+        }
+      }
+
+      state.regConfig = {
+        mode: selectedMode,
+        startTime,
+        endTime,
+        closedNotice: closedNotice || 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.'
+      };
+
+      saveRegConfig(true);
+    });
+  }
+
+  function exportScheduleToCsv() {
+    if (!state.currentSchedule) {
+      showToast('Chưa có lịch trực nào để xuất!', 'warning');
+      return;
+    }
+
+    const schedule = state.currentSchedule.scheduleTable;
+    let csvContent = '\uFEFF';
+    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới (Tập Sự),MSSV Người Mới,Trạng Thái Ca\n';
+
+    SHIFTS.forEach((shift, index) => {
+      const slot = schedule[shift.id];
+      const oldName = slot?.oldMember?.fullName || 'Chưa có';
+      const oldMssv = slot?.oldMember?.studentId || '-';
+      const newName = slot?.newMember?.fullName || 'Chưa có';
+      const newMssv = slot?.newMember?.studentId || '-';
+      const statusText = slot?.status === 'full' ? 'Đủ 2 bạn' : (slot?.status === 'partial' ? 'Thiếu 1 bạn' : 'Trống ca');
+
+      csvContent += `"${index + 1}","${shift.dayName}","${shift.period}","${shift.time}","${oldName}","${oldMssv}","${newName}","${newMssv}","${statusText}"\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Lich_Truc_Tuyen_Sinh_Tuan_${state.viewWeek}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Đã tải file CSV lịch trực Tuần ${state.viewWeek}!`, 'success');
+  }
+
+  /**
+   * ==========================================================================
+   * BẢNG TÍNH XUẤT EXCEL & SAO CHÉP GOOGLE SHEETS CHUẨN HCM-UTE 2026
+   * ==========================================================================
+   */
+  function openExcelModal() {
+    if (!elements.excelModal) return;
+    if (elements.exportStartDate && !elements.exportStartDate.value) {
+      elements.exportStartDate.value = '2026-07-01';
+    }
+    renderUteSheetPreview();
+    elements.excelModal.classList.add('active');
+  }
+
+  function closeExcelModal() {
+    elements.excelModal?.classList.remove('active');
+  }
+
+  function loadUtePresetStudents() {
+    const uteList = window.SAMPLE_HCM_UTE_STUDENTS || [];
+    if (uteList.length === 0) {
+      showToast('Không tìm thấy danh sách mẫu HCM-UTE!', 'error');
+      return;
+    }
+
+    state.students = JSON.parse(JSON.stringify(uteList));
+    saveStudents();
+    runFullSchedule();
+    renderAll();
+    openExcelModal();
+    showToast('Đã nạp 16 CTV HCM-UTE chuẩn theo ảnh thực tế và mở bảng tính!', 'success');
+  }
+
+  function generateUteExportData() {
+    const startDateVal = elements.exportStartDate?.value || '2026-07-01';
+    const rangeMode = elements.exportRangeSelect?.value || '14days_full';
+
+    // Parse ngày bắt đầu an toàn
+    const parts = startDateVal.split('-');
+    let curDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    if (isNaN(curDate.getTime())) {
+      curDate = new Date(2026, 6, 1); // 01/07/2026
+    }
+
+    let daysToGenerate = 14;
+    let onlyWorkdays = false;
+    let forceWeek = null;
+
+    if (rangeMode === '14days_full') {
+      daysToGenerate = 14;
+      onlyWorkdays = false;
+    } else if (rangeMode === '10days_2weeks') {
+      daysToGenerate = 10;
+      onlyWorkdays = true;
+    } else if (rangeMode === '5days_w1') {
+      daysToGenerate = 5;
+      onlyWorkdays = true;
+      forceWeek = 1;
+    } else if (rangeMode === '5days_w2') {
+      daysToGenerate = 5;
+      onlyWorkdays = true;
+      forceWeek = 2;
+    } else if (rangeMode === '7days_w1') {
+      daysToGenerate = 7;
+      onlyWorkdays = false;
+      forceWeek = 1;
+    }
+
+    const week1Table = state.twoWeekSchedule?.week1?.scheduleTable || state.currentSchedule?.scheduleTable || {};
+    const week2Table = state.twoWeekSchedule?.week2?.scheduleTable || state.currentSchedule?.scheduleTable || {};
+
+    const rows = [];
+    let addedCount = 0;
+    let loopGuard = 0;
+
+    const dayKeyMap = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6' };
+
+    while (addedCount < daysToGenerate && loopGuard < 60) {
+      loopGuard++;
+      const dayOfWeek = curDate.getDay(); // 0: CN, 1: T2, ..., 6: T7
+
+      if (onlyWorkdays && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        curDate.setDate(curDate.getDate() + 1);
+        continue;
+      }
+
+      addedCount++;
+      const stt = addedCount;
+      const dd = String(curDate.getDate()).padStart(2, '0');
+      const mm = String(curDate.getMonth() + 1).padStart(2, '0');
+      const yyyy = curDate.getFullYear();
+      const dateStr = `${dd}/${mm}/${yyyy}`;
+
+      let activeTable = week1Table;
+      if (forceWeek === 1) activeTable = week1Table;
+      else if (forceWeek === 2) activeTable = week2Table;
+      else activeTable = (addedCount > 7) ? week2Table : week1Table;
+
+      let morningText = '';
+      let afternoonText = '';
+
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        // Thứ 2 đến Thứ 6
+        const dayKey = dayKeyMap[dayOfWeek];
+        const morningSlot = activeTable[`${dayKey}_S`];
+        const afternoonSlot = activeTable[`${dayKey}_C`];
+
+        const mList = [];
+        if (morningSlot?.oldMember) mList.push(`${morningSlot.oldMember.fullName} - ${morningSlot.oldMember.studentId}`);
+        if (morningSlot?.newMember) mList.push(`${morningSlot.newMember.fullName} - ${morningSlot.newMember.studentId}`);
+        morningText = mList.join('\n');
+
+        const aList = [];
+        if (afternoonSlot?.oldMember) aList.push(`${afternoonSlot.oldMember.fullName} - ${afternoonSlot.oldMember.studentId}`);
+        if (afternoonSlot?.newMember) aList.push(`${afternoonSlot.newMember.fullName} - ${afternoonSlot.newMember.studentId}`);
+        afternoonText = aList.join('\n');
+      } else {
+        // Thứ 7 hoặc Chủ Nhật (Cuối tuần)
+        if (state.students.length >= 2) {
+          const s1 = state.students[(addedCount * 2) % state.students.length];
+          const s2 = state.students[(addedCount * 2 + 1) % state.students.length];
+          morningText = `${s1.fullName} - ${s1.studentId}\n${s2.fullName} - ${s2.studentId}`;
+          afternoonText = `${s1.fullName} - ${s1.studentId}\n${s2.fullName} - ${s2.studentId}`;
+        }
+      }
+
+      rows.push({
+        stt,
+        dateStr,
+        dayOfWeek,
+        morningText,
+        afternoonText
+      });
+
+      curDate.setDate(curDate.getDate() + 1);
+    }
+
+    return rows;
+  }
+
+  function renderUteSheetPreview() {
+    if (!elements.excelPreviewTableContainer) return;
+
+    const rows = generateUteExportData();
+
+    let html = `
+      <table class="ute-sheet-table">
+        <thead>
+          <tr>
+            <th colspan="9" class="ute-title-row">
+              CỘNG TÁC VIÊN ĐĂNG KÝ TRỰC PHÒNG VÀ THAM GIA HOẠT ĐỘNG TƯ VẤN TUYỂN SINH
+            </th>
+          </tr>
+          <tr>
+            <th class="ute-th-green ute-col-stt">STT</th>
+            <th class="ute-th-green ute-col-date">NGÀY</th>
+            <th class="ute-th-green ute-col-time" style="width: 80px;">THỜI GIAN</th>
+            <th class="ute-th-green ute-col-desc" style="width: 90px;">NỘI DUNG</th>
+            <th class="ute-th-yellow ute-col-shift" style="width: 220px;">TRỰC VĂN PHÒNG TVTS CA SÁNG<br>(7H30-11H30)</th>
+            <th class="ute-th-yellow ute-col-shift" style="width: 220px;">TRỰC VĂN PHÒNG TVTS CA CHIỀU<br>(13H-16H30)</th>
+            <th class="ute-th-white" style="width: 120px;">TƯ VẤN SỰ KIỆN</th>
+            <th class="ute-th-white" style="width: 100px;">DẪN TOUR</th>
+            <th class="ute-th-white" style="width: 100px;">GHI CHÚ</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    rows.forEach(r => {
+      html += `
+        <tr>
+          <td class="ute-col-stt">${r.stt}</td>
+          <td class="ute-col-date">${r.dateStr}</td>
+          <td style="text-align: center;"></td>
+          <td></td>
+          <td class="ute-cell-multiline">${r.morningText || ''}</td>
+          <td class="ute-cell-multiline">${r.afternoonText || ''}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </tbody>
+      </table>
+    `;
+
+    elements.excelPreviewTableContainer.innerHTML = html;
+  }
+
+  function buildUteHtmlTable(rows) {
+    let html = `
+      <table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; border: 1px solid #000000; width: 100%;">
+        <thead>
+          <tr>
+            <th colspan="9" style="text-align: center; font-weight: bold; font-size: 13pt; height: 35px; border: 1px solid #000000; vertical-align: middle; background-color: #ffffff; text-transform: uppercase;">
+              CỘNG TÁC VIÊN ĐĂNG KÝ TRỰC PHÒNG VÀ THAM GIA HOẠT ĐỘNG TƯ VẤN TUYỂN SINH
+            </th>
+          </tr>
+          <tr>
+            <th style="background-color: #c2dfd3; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 45px;">STT</th>
+            <th style="background-color: #c2dfd3; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 95px;">NGÀY</th>
+            <th style="background-color: #c2dfd3; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 85px;">THỜI GIAN</th>
+            <th style="background-color: #c2dfd3; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 95px;">NỘI DUNG</th>
+            <th style="background-color: #ffff00; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 230px;">TRỰC VĂN PHÒNG TVTS CA SÁNG<br>(7H30-11H30)</th>
+            <th style="background-color: #ffff00; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 230px;">TRỰC VĂN PHÒNG TVTS CA CHIỀU<br>(13H-16H30)</th>
+            <th style="background-color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 120px;">TƯ VẤN SỰ KIỆN</th>
+            <th style="background-color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 100px;">DẪN TOUR</th>
+            <th style="background-color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000; padding: 6px 8px; vertical-align: middle; width: 100px;">GHI CHÚ</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    rows.forEach(r => {
+      const morningLines = (r.morningText || '').replace(/\n/g, '<br style="mso-data-placement: same-cell;">');
+      const afternoonLines = (r.afternoonText || '').replace(/\n/g, '<br style="mso-data-placement: same-cell;">');
+
+      html += `
+        <tr>
+          <td style="text-align: center; font-weight: bold; border: 1px solid #000000; padding: 6px 8px; vertical-align: top;">${r.stt}</td>
+          <td style="text-align: center; font-weight: bold; border: 1px solid #000000; padding: 6px 8px; vertical-align: top; mso-number-format: '\\@';">${r.dateStr}</td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top;"></td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top;"></td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top; white-space: pre-line; mso-data-placement: same-cell; mso-number-format: '\\@';">${morningLines}</td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top; white-space: pre-line; mso-data-placement: same-cell; mso-number-format: '\\@';">${afternoonLines}</td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top;"></td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top;"></td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; vertical-align: top;"></td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </tbody>
+      </table>
+    `;
+
+    return html;
+  }
+
+  function buildUteTsvString(rows) {
+    let tsv = 'CỘNG TÁC VIÊN ĐĂNG KÝ TRỰC PHÒNG VÀ THAM GIA HOẠT ĐỘNG TƯ VẤN TUYỂN SINH\t\t\t\t\t\t\t\t\r\n';
+    tsv += 'STT\tNGÀY\tTHỜI GIAN\tNỘI DUNG\t"TRỰC VĂN PHÒNG TVTS CA SÁNG\n(7H30-11H30)"\t"TRỰC VĂN PHÒNG TVTS CA CHIỀU\n(13H-16H30)"\tTƯ VẤN SỰ KIỆN\tDẪN TOUR\tGHI CHÚ\r\n';
+
+    rows.forEach(r => {
+      const morningEscaped = r.morningText ? `"${r.morningText.replace(/"/g, '""')}"` : '';
+      const afternoonEscaped = r.afternoonText ? `"${r.afternoonText.replace(/"/g, '""')}"` : '';
+
+      tsv += `${r.stt}\t${r.dateStr}\t\t\t${morningEscaped}\t${afternoonEscaped}\t\t\t\r\n`;
+    });
+
+    return tsv;
+  }
+
+  async function copyUteSheetToClipboard(isQuick = false) {
+    const rows = generateUteExportData();
+    const htmlTable = buildUteHtmlTable(rows);
+    const tsvData = buildUteTsvString(rows);
+
+    let copied = false;
+
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const blobHtml = new Blob([htmlTable], { type: 'text/html' });
+        const blobText = new Blob([tsvData], { type: 'text/plain' });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText
+          })
+        ]);
+        copied = true;
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(tsvData);
+        copied = true;
+      }
+    } catch (err) {
+      console.warn('Clipboard write failed, using textarea fallback', err);
+      const ta = document.createElement('textarea');
+      ta.value = tsvData;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    if (copied) {
+      const targetBtn = isQuick ? elements.btnQuickCopySheet : elements.btnModalCopyClipboard;
+      if (targetBtn) {
+        const origText = targetBtn.innerHTML;
+        targetBtn.innerHTML = '<span>✓ ĐÃ SAO CHÉP THÀNH CÔNG!</span>';
+        targetBtn.style.background = '#059669';
+        setTimeout(() => {
+          targetBtn.innerHTML = origText;
+          targetBtn.style.background = '';
+        }, 2500);
+      }
+
+      if (elements.excelCopyStatusHint) {
+        elements.excelCopyStatusHint.innerHTML = '<span style="color: #059669; font-weight: 700;">✓ Đã sao chép vào Clipboard! Hãy mở Google Sheets hoặc Excel và nhấn <strong>Ctrl + V</strong> (Dán) ngay!</span>';
+      }
+
+      showToast('Đã sao chép toàn bộ bảng! Chỉ cần sang Google Sheets hoặc Excel nhấn Ctrl + V là ăn ngay!', 'success');
+    } else {
+      showToast('Không thể tự động sao chép. Vui lòng cho phép quyền truy cập Clipboard!', 'error');
+    }
+  }
+
+  function downloadUteExcelFile() {
+    const rows = generateUteExportData();
+    const htmlTable = buildUteHtmlTable(rows);
+
+    const excelDoc = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+            xmlns:x="urn:schemas-microsoft-com:office:excel" 
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>CTV_Truc_Phong_TVTS_2026</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
+          td, th { border: 1px solid #000000; padding: 6px 8px; vertical-align: top; mso-number-format: "\\@"; }
+          br { mso-data-placement: same-cell; }
+        </style>
+      </head>
+      <body>
+        ${htmlTable}
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\uFEFF' + excelDoc], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `CTV_Dang_Ky_Truc_Phong_TVTS_HCM-UTE_2026.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Đã tải xuống file Excel (.xls) chuẩn mẫu HCM-UTE!', 'success');
+  }
+
+  function downloadUteCsvFile() {
+    const rows = generateUteExportData();
+    const tsvData = buildUteTsvString(rows);
+    // Thay đổi Tab thành Phẩy cho CSV
+    const csvContent = '\uFEFF' + tsvData.split('\r\n').map(line => {
+      return line.split('\t').join(',');
+    }).join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `CTV_Dang_Ky_Truc_Phong_TVTS_HCM-UTE_2026.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Đã tải xuống file CSV tiếng Việt UTF-8!', 'success');
+  }
+
+  function printUteSheet() {
+    window.print();
+  }
+
+  function showToast(message, type = 'info') {
+    if (!elements.toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
+      <span>${message}</span>
+    `;
+
+    elements.toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    }, 3200);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAdminPortal);
+  } else {
+    initAdminPortal();
+  }
+})();

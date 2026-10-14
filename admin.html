@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bảng Điều Hành Quản Trị & Xếp Ca - Tư Vấn Tuyển Sinh</title>
+  <meta name="description" content="Trang quản trị dành riêng cho ban điều hành văn phòng tư vấn tuyển sinh để quản lý thông tin sinh viên và tự động xếp lịch trực.">
+  
+  <!-- Google Fonts: Be Vietnam Pro -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- In ấn banner -->
+  <div class="print-header-banner">
+    <h1>BẢNG PHÂN CÔNG LỊCH TRỰC VĂN PHÒNG TƯ VẤN TUYỂN SINH</h1>
+    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Quy định: 1 Người Cũ (Kinh nghiệm) + 1 Người Mới (Tập sự) mỗi ca</p>
+  </div>
+
+  <!-- ====================================================================
+       MÀN HÌNH XÁC THỰC QUYỀN TRUY CẬP (ADMIN AUTHENTICATION SCREEN)
+       Mặc định hiển thị khi chưa xác thực danh tính
+       ==================================================================== -->
+  <div id="admin-auth-screen" class="admin-auth-screen">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-lock-icon">🛡️</div>
+        <h1 class="auth-title">Xác Thực Quyền Quản Trị</h1>
+        <p class="auth-subtitle">Khu vực bảo mật dành riêng cho Ban Điều Hành Tuyển Sinh. Vui lòng xác thực danh tính cán bộ để tiếp tục.</p>
+      </div>
+      <div class="auth-body">
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn active" id="tab-auth-pwd">🔑 Tài Khoản & Mật Khẩu</button>
+          <button type="button" class="auth-tab-btn" id="tab-auth-pin">⚡ Mã PIN Nhanh</button>
+        </div>
+
+        <!-- Hộp báo lỗi đăng nhập -->
+        <div id="auth-error-box" class="auth-error-box">
+          <span>⚠️</span>
+          <span id="auth-error-msg">Tài khoản hoặc mật khẩu không chính xác!</span>
+        </div>
+
+        <!-- Form 1: Đăng nhập bằng tài khoản và mật khẩu -->
+        <form id="form-auth-credentials">
+          <div class="form-group">
+            <label class="form-label" for="auth-input-username">Tên Đăng Nhập / Mã Cán Bộ <span class="required">*</span></label>
+            <input type="text" id="auth-input-username" class="form-input" placeholder="Ví dụ: admin hoặc diephoi" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="auth-input-password">Mật Khẩu Truy Cập <span class="required">*</span></label>
+            <input type="password" id="auth-input-password" class="form-input" placeholder="Nhập mật khẩu của bạn..." required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
+            <span>Đăng Nhập Quản Trị</span>
+          </button>
+        </form>
+
+        <!-- Form 2: Đăng nhập bằng mã PIN nhanh -->
+        <form id="form-auth-pin" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="auth-input-pin">Nhập Mã PIN 4-6 Số <span class="required">*</span></label>
+            <input type="password" id="auth-input-pin" class="form-input" placeholder="••••" maxlength="10" autocomplete="off" style="letter-spacing: 0.3em; font-size: 1.3rem; text-align: center;">
+            <div class="form-hint" style="text-align: center;">Mã PIN bí mật do Trưởng ban tuyển sinh cấp.</div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
+            <span>Xác Nhận Mã PIN</span>
+          </button>
+        </form>
+
+        <!-- Hướng dẫn tài khoản mẫu -->
+        <div class="auth-demo-accounts">
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 0.25rem;">🔐 Thông tin đăng nhập mặc định:</div>
+          <div>• Tài khoản Trưởng ban: <code>admin</code> / Mật khẩu: <code>123</code></div>
+          <div>• Tài khoản Điều phối: <code>diephoi</code> / Mật khẩu: <code>123</code></div>
+          <div>• Hoặc Mã PIN nhanh: <code>9999</code></div>
+        </div>
+
+        <div style="text-align: center; margin-top: 1.25rem;">
+          <a href="index.html" style="font-size: 0.82rem; color: #64748b; text-decoration: none; font-weight: 600;">
+            ← Quay về Cổng Sinh Viên
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       BẢNG ĐIỀU HÀNH CHÍNH (ADMIN DASHBOARD CONTAINER)
+       Chỉ hiển thị khi đã đăng nhập thành công
+       ==================================================================== -->
+  <div id="admin-dashboard-container" style="display: none;">
+
+    <!-- App Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand">
+          <div class="brand-icon" style="background: linear-gradient(135deg, #1e1b4b, #4338ca);">🛡️</div>
+          <div class="brand-text">
+            <h1>Bảng Điều Hành Quản Trị (Admin)</h1>
+            <p>Quản Lý Nhân Sự & Tự Động Xếp Lịch Trực Tuyển Sinh</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <!-- Tab chuyển đổi -->
+          <nav class="nav-tabs" aria-label="Tab quản trị">
+            <button class="tab-btn active" data-tab="tab-schedule-mgmt" id="btn-tab-schedule">
+              <span>📅 Lịch Trực & Xếp Ca</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-student-mgmt" id="btn-tab-students">
+              <span>👥 Quản Lý Sinh Viên</span>
+              <span class="tab-badge" id="badge-admin-student-count">0</span>
+            </button>
+          </nav>
+
+          <!-- Nút Quản lý quyền truy cập -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-user-mgmt" title="Cấp quyền truy cập cho cán bộ & đổi mật khẩu" style="font-weight: 700;">
+            <span>🔑 Cấp Quyền & Đổi MK</span>
+          </button>
+
+          <!-- Thông tin người dùng đăng nhập & Nút Đăng xuất -->
+          <div class="admin-user-profile" id="admin-user-profile">
+            <div class="admin-user-avatar" id="admin-user-avatar">A</div>
+            <div class="admin-user-name" id="admin-user-name">Trưởng Ban</div>
+            <button type="button" class="btn-admin-logout" id="btn-admin-logout" title="Đăng xuất khỏi phiên làm việc">
+              🚪 Đăng Xuất
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+  <!-- Summary Stats Bar -->
+  <section class="summary-bar" aria-label="Thống kê nhanh">
+    <div class="summary-card">
+      <div class="summary-icon primary">👥</div>
+      <div class="summary-info">
+        <div class="label">Tổng sinh viên đăng ký</div>
+        <div class="value" id="count-total-students">0</div>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon old">🎓</div>
+      <div class="summary-info">
+        <div class="label">Người cũ (Kinh nghiệm)</div>
+        <div class="value" id="count-old-students">0</div>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon new">🌱</div>
+      <div class="summary-info">
+        <div class="label">Người mới (Tập sự)</div>
+        <div class="value" id="count-new-students">0</div>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon success">🎯</div>
+      <div class="summary-info">
+        <div class="label">Ca trực đã lấp đầy</div>
+        <div class="value" id="count-filled-shifts">0/10 ca</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- ====================================================================
+         TAB 1: LỊCH TRỰC TUẦN & TỰ ĐỘNG XẾP CA (ADMIN)
+         ==================================================================== -->
+    <div class="tab-content active" id="tab-schedule-mgmt">
+      
+      <!-- Schedule Hero Section with Admin Actions -->
+      <section class="schedule-hero">
+        <div class="schedule-hero-info">
+          <h2>⚡ Điều Phối & Phân Bổ Ca Trực Tự Động</h2>
+          <p>Thuật toán tối ưu hóa công bằng: Mỗi ca đúng <strong>1 Người Cũ</strong> + <strong>1 Người Mới</strong>, ai cũng có lịch trực.</p>
+        </div>
+        <div class="schedule-hero-actions">
+          <button class="btn-magic" id="btn-admin-auto-schedule">
+            <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH TRỰC</span>
+          </button>
+          <button class="btn btn-primary" id="btn-open-excel-modal" style="background: linear-gradient(135deg, #107c41, #185a37); color: #ffffff; border: none; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 124, 65, 0.35);" title="Mở bảng tính xuất Excel & Copy sang Google Sheets chuẩn mẫu HCM-UTE">
+            <span>📊 Xuất Excel Mẫu HCM-UTE</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-quick-copy-sheet" style="background: #eef2ff; color: #4338ca; border: 1.5px solid #c7d2fe; font-weight: 700;" title="Sao chép toàn bộ bảng vào clipboard để dán Ctrl+V sang Google Sheets">
+            <span>📋 Sao Chép Bảng (Ctrl+V)</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-load-sample-ute" style="background: #fffbeb; color: #b45309; border: 1.5px solid #fde68a; font-weight: 700;" title="Nạp 16 CTV HCM-UTE chuẩn theo ảnh chụp mẫu thực tế">
+            <span>🏛️ Nạp 16 CTV HCM-UTE</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-load-sample-30" style="background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; border: none; font-weight: 700;" title="Nạp 30 sinh viên mẫu để kiểm thử">
+            <span>👥 Nạp Demo 30 Người</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-export-csv" title="Tải file Excel/CSV">
+            <span>📥 Xuất CSV</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-print-schedule" title="In hoặc lưu PDF A4">
+            <span>🖨️ In Lịch Trực</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           CẤU HÌNH THỜI GIAN MỞ CỔNG ĐĂNG KÝ CHO SINH VIÊN
+           ==================================================================== -->
+      <section class="admin-config-panel" id="panel-reg-config">
+        <div class="admin-config-header">
+          <div class="admin-config-title">
+            <span>⏰ Cấu Hình Thời Gian Mở Cổng Đăng Ký Ca Trực</span>
+          </div>
+          <div class="admin-config-status-badge open" id="admin-reg-live-status">
+            <span>● Cổng Đang Mở Tự Do</span>
+          </div>
+        </div>
+
+        <form id="admin-reg-config-form">
+          <div class="admin-config-grid">
+            <!-- Chế độ mở cổng -->
+            <div>
+              <label class="form-label" style="font-weight: 700; margin-bottom: 0.5rem;">Chế Độ Mở Cổng Đăng Ký:</label>
+              <div class="mode-radio-group">
+                <label class="mode-radio-card active" id="card-mode-open">
+                  <input type="radio" name="adminRegMode" value="always_open" checked>
+                  <div>
+                    <div class="mode-info-title">🟢 Mở tự do (Luôn mở)</div>
+                    <div class="mode-info-sub">Sinh viên có thể đăng ký hoặc cập nhật ca rảnh bất cứ lúc nào.</div>
+                  </div>
+                </label>
+                <label class="mode-radio-card" id="card-mode-time">
+                  <input type="radio" name="adminRegMode" value="time_window">
+                  <div>
+                    <div class="mode-info-title">⏱️ Mở theo khoảng thời gian xác định</div>
+                    <div class="mode-info-sub">Chỉ cho phép đăng ký trong khoảng Ngày & Giờ cài đặt bên phải.</div>
+                  </div>
+                </label>
+                <label class="mode-radio-card" id="card-mode-closed">
+                  <input type="radio" name="adminRegMode" value="closed">
+                  <div>
+                    <div class="mode-info-title">🔴 Đóng cổng ngay lập tức (Khóa đăng ký)</div>
+                    <div class="mode-info-sub">Khóa chọn ca mới để ban điều hành chốt danh sách và điều phối.</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Cài đặt thời gian mở - đóng -->
+            <div id="time-window-inputs-container">
+              <div class="datetime-field-group">
+                <label class="form-label" for="admin-reg-start" style="font-weight: 700;">
+                  📅 Thời Gian Bắt Đầu Mở Cổng:
+                </label>
+                <input type="datetime-local" id="admin-reg-start" class="form-input">
+              </div>
+
+              <div class="datetime-field-group" style="margin-top: 0.85rem;">
+                <label class="form-label" for="admin-reg-end" style="font-weight: 700;">
+                  ⌛ Hạn Chót Đóng Cổng:
+                </label>
+                <input type="datetime-local" id="admin-reg-end" class="form-input">
+                <div class="datetime-presets">
+                  <span style="font-size: 0.73rem; color: var(--text-muted); align-self: center;">Nhanh:</span>
+                  <button type="button" class="preset-chip" id="btn-preset-now">Bắt đầu từ bây giờ</button>
+                  <button type="button" class="preset-chip" id="btn-preset-3days">+3 Ngày</button>
+                  <button type="button" class="preset-chip" id="btn-preset-5days">+5 Ngày</button>
+                  <button type="button" class="preset-chip" id="btn-preset-7days">+7 Ngày (1 tuần)</button>
+                </div>
+              </div>
+
+              <div class="datetime-field-group" style="margin-top: 0.85rem;">
+                <label class="form-label" for="admin-reg-closed-msg" style="font-weight: 700;">
+                  📢 Thông Báo Hiển Thị Khi Đóng Cổng:
+                </label>
+                <input type="text" id="admin-reg-closed-msg" class="form-input" placeholder="Ví dụ: Cổng đăng ký tạm khóa để ban điều hành chốt danh sách...">
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1.25rem; display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+            <span id="config-save-hint" style="font-size: 0.8rem; color: var(--text-muted); margin-right: auto;"></span>
+            <button type="submit" class="btn btn-primary" id="btn-save-reg-config" style="padding: 0.55rem 1.4rem;">
+              <span>💾 Lưu Cấu Hình Thời Gian Cổng</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Hộp cảnh báo nếu có ca thiếu người -->
+      <div id="schedule-warnings-box" style="margin-bottom: 1.5rem; display: none;"></div>
+
+      <!-- Bảng Thời Khóa Biểu Tuần -->
+      <div class="card timetable-card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">🕒 Bảng Phân Công 10 Ca Trực Trong Tuần (Thứ 2 - Thứ 6)</h3>
+            <p class="card-desc">Nhấn nút 🔄 trong từng thẻ nhân sự để hoán đổi hoặc chỉ định người trực thủ công</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <!-- Bộ chọn Tuần 1 / Tuần 2 -->
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">Lịch tuần:</span>
+              <div class="filter-group">
+                <button class="filter-btn active" data-week="1" id="btn-admin-week-1">Tuần 1</button>
+                <button class="filter-btn" data-week="2" id="btn-admin-week-2">Tuần 2</button>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; font-size: 0.78rem;">
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span> Người Cũ
+              </span>
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span> Người Mới
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="card-body" style="padding: 1rem;">
+          <div class="timetable-wrapper">
+            <div class="timetable-grid" id="admin-timetable-grid">
+              <!-- Render 10 ca với các nút hoán đổi 🔄 -->
+            </div>
+          </div>
+
+          <!-- Danh sách Dự bị / Ưu tiên cho Tuần 2 khi đông người -->
+          <div id="admin-standby-box" style="margin-top: 1.25rem; display: none;"></div>
+        </div>
+      </div>
+
+      <!-- Khu vực Thống Kê Độ Công Bằng (Fairness Analytics) -->
+      <div class="fairness-section">
+        
+        <!-- Cột Người Cũ -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">🎓 Thống Kê Số Ca: Người Cũ</h3>
+              <p class="card-desc">Theo dõi phân bổ đều khối lượng ca trực</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="fairness-list" id="fairness-list-old">
+              <!-- Render số ca người cũ -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột Người Mới -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">🌱 Thống Kê Số Ca: Người Mới</h3>
+              <p class="card-desc">Đảm bảo ai đăng ký cũng được phân công trực</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="fairness-list" id="fairness-list-new">
+              <!-- Render số ca người mới -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ====================================================================
+         TAB 2: QUẢN LÝ DANH SÁCH SINH VIÊN (ADMIN CRUD)
+         ==================================================================== -->
+    <div class="tab-content" id="tab-student-mgmt">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">👥 Quản Lý Hồ Sơ Sinh Viên Đăng Ký</h2>
+            <p class="card-desc">Xem, chỉnh sửa ca rảnh, thêm mới hoặc xóa sinh viên trong hệ thống</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" id="btn-open-add-student">
+              <span>+ Thêm Sinh Viên Mới</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-load-sample" title="Nạp 12 sinh viên mẫu để test ngay">
+              <span>⚡ Nạp Dữ Liệu Mẫu</span>
+            </button>
+            <button class="btn btn-danger-outline btn-sm" id="btn-reset-data" title="Xóa toàn bộ dữ liệu">
+              <span>🗑️ Làm Trống</span>
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          
+          <!-- Toolbar lọc & tìm kiếm -->
+          <div class="table-toolbar">
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="all">Tất cả</button>
+              <button class="filter-btn" data-filter="old">🎓 Người cũ</button>
+              <button class="filter-btn" data-filter="new">🌱 Người mới</button>
+            </div>
+
+            <div class="search-input-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV...">
+            </div>
+          </div>
+
+          <!-- Bảng quản lý sinh viên -->
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">STT</th>
+                  <th>Họ và Tên</th>
+                  <th>MSSV</th>
+                  <th>Phân Loại</th>
+                  <th>Ca Rảnh Đã Đăng Ký</th>
+                  <th>Số Ca Trực</th>
+                  <th style="width: 130px;">Hành Động</th>
+                </tr>
+              </thead>
+              <tbody id="admin-student-table-body">
+                <!-- Javascript sẽ render vào đây -->
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+  </div> <!-- /#admin-dashboard-container -->
+
+  <!-- ====================================================================
+       MODAL 1: TINH CHỈNH / ĐỔI NGƯỜI TRỰC THỦ CÔNG TRONG CA
+       ==================================================================== -->
+  <div class="modal-overlay" id="reassign-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">🔄 Điều Chỉnh Phân Công Ca Trực</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);" id="modal-slot-title">Ca trực</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1rem;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Vị trí cần gán:</span>
+          <span id="modal-role-badge" class="badge"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="modal-candidate-select">
+            Chọn Sinh Viên Đảm Nhận:
+          </label>
+          <select id="modal-candidate-select" class="form-input">
+            <!-- JS điền danh sách ứng viên -->
+          </select>
+          <div class="form-hint">
+            Hệ thống tự động đưa các bạn có đăng ký rảnh ca này lên đầu danh sách (kèm dấu ✓).
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-modal">Hủy</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-modal">Xác Nhận Thay Đổi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 2: THÊM / SỬA SINH VIÊN (DÀNH CHO ADMIN)
+       ==================================================================== -->
+  <div class="modal-overlay" id="student-form-modal">
+    <div class="modal-box" style="max-width: 650px;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="student-modal-title">Thêm Sinh Viên Mới</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Nhập thông tin và chọn ca rảnh</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-student-modal">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+        <form id="admin-student-form">
+          <input type="hidden" id="admin-edit-student-id">
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="admin-input-fullname">
+                Họ và Tên <span class="required">*</span>
+              </label>
+              <input type="text" id="admin-input-fullname" class="form-input" placeholder="Ví dụ: Trần Quốc Toản" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="admin-input-studentid">
+                Mã Số Sinh Viên (MSSV) <span class="required">*</span>
+              </label>
+              <input type="text" id="admin-input-studentid" class="form-input" placeholder="Ví dụ: 2202111" required>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="admin-input-phone">Số Điện Thoại</label>
+              <input type="tel" id="admin-input-phone" class="form-input" placeholder="0912345678">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phân Loại <span class="required">*</span></label>
+              <div style="display: flex; gap: 1rem; margin-top: 0.4rem;">
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
+                  <input type="radio" name="adminStudentRole" value="old">
+                  <span>🎓 Người cũ</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
+                  <input type="radio" name="adminStudentRole" value="new" checked>
+                  <span>🌱 Người mới</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ma trận ca rảnh trong modal -->
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <label class="form-label" style="margin: 0;">Chọn Các Ca Rảnh:</label>
+              <div style="display: flex; gap: 0.3rem;">
+                <button type="button" class="btn-chip" id="btn-admin-quick-all">Cả tuần</button>
+                <button type="button" class="btn-chip" id="btn-admin-quick-clear">Xóa hết</button>
+              </div>
+            </div>
+
+            <div class="matrix-wrapper">
+              <table class="matrix-table">
+                <thead>
+                  <tr>
+                    <th>Ca</th>
+                    <th>T2</th>
+                    <th>T3</th>
+                    <th>T4</th>
+                    <th>T5</th>
+                    <th>T6</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="font-weight: 700; font-size: 0.78rem;">Sáng</td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T2_S"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T3_S"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T4_S"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T5_S"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T6_S"></td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; font-size: 0.78rem;">Chiều</td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T2_C"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T3_C"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T4_C"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T5_C"></td>
+                    <td><input type="checkbox" class="admin-slot-cb" value="T6_C"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="padding: 1rem 0 0; background: transparent; border: none;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-student-modal">Hủy</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="btn-save-student-modal">Lưu Thông Tin</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 3: QUẢN LÝ QUYỀN TRUY CẬP & CẤP QUYỀN CÁN BỘ
+       ==================================================================== -->
+  <div class="modal-overlay" id="user-mgmt-modal">
+    <div class="modal-box" style="max-width: 680px;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">🔑 Quản Lý Quyền Truy Cập & Cán Bộ</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Cấp quyền cho cán bộ tuyển sinh & quản lý mật khẩu bảo vệ</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-user-mgmt-modal">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+        
+        <!-- Tabs bên trong modal -->
+        <div class="auth-tabs" style="margin-bottom: 1rem;">
+          <button type="button" class="auth-tab-btn active" id="tab-btn-user-list">👥 Danh Sách Được Cấp Quyền</button>
+          <button type="button" class="auth-tab-btn" id="tab-btn-add-user">➕ Thêm Cán Bộ Mới</button>
+          <button type="button" class="auth-tab-btn" id="tab-btn-change-pwd">🔒 Đổi Mật Khẩu</button>
+        </div>
+
+        <!-- Tab 1: Danh Sách Cán Bộ Được Cấp Quyền -->
+        <div id="panel-user-list">
+          <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.65rem;">
+            Chỉ những tài khoản có tên trong danh sách dưới đây mới có quyền đăng nhập vào Bảng Điều Hành Quản Trị:
+          </div>
+          <table class="user-mgmt-table">
+            <thead>
+              <tr>
+                <th style="width: 45px;">STT</th>
+                <th>Tài Khoản</th>
+                <th>Họ & Tên Cán Bộ</th>
+                <th>Vai Trò</th>
+                <th>Mã PIN</th>
+                <th style="width: 80px;">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="user-mgmt-table-body">
+              <!-- Render danh sách tài khoản -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tab 2: Thêm Cán Bộ Mới Được Cấp Quyền -->
+        <form id="form-add-admin-user" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="add-user-fullname">Họ và Tên Cán Bộ <span class="required">*</span></label>
+            <input type="text" id="add-user-fullname" class="form-input" placeholder="Ví dụ: ThS. Hoàng Văn Nam" required>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="add-user-username">Tên Đăng Nhập (Username) <span class="required">*</span></label>
+              <input type="text" id="add-user-username" class="form-input" placeholder="Ví dụ: namhv" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="add-user-role">Vai Trò / Chức Vụ <span class="required">*</span></label>
+              <select id="add-user-role" class="form-input">
+                <option value="Điều phối viên tuyển sinh">Điều phối viên tuyển sinh</option>
+                <option value="Cán bộ thường trực">Cán bộ thường trực</option>
+                <option value="Trưởng ban điều hành">Trưởng ban điều hành</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="add-user-pwd">Mật Khẩu <span class="required">*</span></label>
+              <input type="password" id="add-user-pwd" class="form-input" placeholder="Tối thiểu 3 ký tự" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="add-user-pin">Mã PIN Nhanh (Tùy chọn)</label>
+              <input type="text" id="add-user-pin" class="form-input" placeholder="4 số (VD: 6789)" maxlength="6">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
+            <span>✓ Cấp Quyền Truy Cập Cho Cán Bộ Này</span>
+          </button>
+        </form>
+
+        <!-- Tab 3: Đổi Mật Khẩu Cho Tài Khoản Đang Đăng Nhập -->
+        <form id="form-change-current-pwd" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="pwd-current">Mật Khẩu Hiện Tại <span class="required">*</span></label>
+            <input type="password" id="pwd-current" class="form-input" placeholder="Nhập mật khẩu đang dùng" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pwd-new">Mật Khẩu Mới <span class="required">*</span></label>
+            <input type="password" id="pwd-new" class="form-input" placeholder="Nhập mật khẩu mới" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pwd-confirm">Xác Nhận Mật Khẩu Mới <span class="required">*</span></label>
+            <input type="password" id="pwd-confirm" class="form-input" placeholder="Nhập lại mật khẩu mới" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pin-new">Cập Nhật Mã PIN Nhanh (Tùy chọn)</label>
+            <input type="text" id="pin-new" class="form-input" placeholder="4 số (VD: 9999)" maxlength="6">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
+            <span>💾 Lưu Mật Khẩu Mới</span>
+          </button>
+        </form>
+
+      </div>
+    </div>
+  <!-- ====================================================================
+       MODAL 4: BẢNG TÍNH XUẤT EXCEL & SAO CHÉP GOOGLE SHEETS CHUẨN HCM-UTE
+       ==================================================================== -->
+  <div class="modal-backdrop" id="excel-export-modal">
+    <div class="modal-dialog excel-modal-dialog">
+      <div class="modal-header" style="background: linear-gradient(135deg, #065f46, #047857); color: #ffffff;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span style="font-size: 1.5rem;">📊</span>
+          <div>
+            <h3 style="color: #ffffff; font-size: 1.15rem; margin-bottom: 0.15rem;">Bảng Tính Xuất Excel & Sao Chép Google Sheets</h3>
+            <p style="color: #d1fae5; font-size: 0.8rem; margin: 0;">Chuẩn mẫu tuyển sinh HCM-UTE 2026 • 1-Click sao chép dán trực tiếp (Ctrl+V) vào Google Sheets</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="btn-close-excel-modal" style="color: #ffffff; background: rgba(255,255,255,0.15);">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem;">
+        
+        <!-- Controls & Settings Bar -->
+        <div class="excel-controls-bar">
+          <div class="excel-control-item">
+            <label class="excel-control-label" for="export-start-date">📅 Ngày Bắt Đầu:</label>
+            <input type="date" id="export-start-date" class="form-input excel-input-date" value="2026-07-01">
+          </div>
+
+          <div class="excel-control-item">
+            <label class="excel-control-label" for="export-range-select">⏱️ Phạm Vi Xuất:</label>
+            <select id="export-range-select" class="form-input excel-select-range">
+              <option value="14days_full" selected>14 ngày liên tục (01/07 -> 14/07 có T7, CN như mẫu ảnh)</option>
+              <option value="10days_2weeks">10 ngày hành chính (Luân phiên 2 tuần T2 - T6)</option>
+              <option value="5days_w1">5 ngày hành chính (Tuần 1: Thứ 2 đến Thứ 6)</option>
+              <option value="5days_w2">5 ngày hành chính (Tuần 2: Thứ 2 đến Thứ 6)</option>
+              <option value="7days_w1">7 ngày trọn vẹn (Tuần 1 gồm cả Thứ 7, Chủ Nhật)</option>
+            </select>
+          </div>
+
+          <div class="excel-control-item" style="margin-top: 1.35rem;">
+            <span style="font-size: 0.82rem; color: #065f46; font-weight: 700; background: #ecfdf5; padding: 0.35rem 0.65rem; border-radius: 6px; border: 1px solid #a7f3d0;">
+              ✓ Bảng tính 9 Cột chuẩn (STT, Ngày, Ca Sáng, Ca Chiều, Sự kiện, Tour, Ghi chú)
+            </span>
+          </div>
+        </div>
+
+        <!-- Action Toolbar -->
+        <div class="excel-action-toolbar">
+          <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" id="btn-modal-copy-clipboard" style="background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; font-weight: 700; border: none; padding: 0.6rem 1.25rem; font-size: 0.92rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);">
+              <span>📋 SAO CHÉP BẢNG (Ctrl+V vào Google Sheets)</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-modal-download-xls" style="background: #107c41; color: #ffffff; border: none; font-weight: 700;" title="Tải file Excel mở chuẩn 100% định dạng">
+              <span>📥 Tải File Excel (.xls)</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-modal-download-csv" title="Tải file CSV tiếng Việt">
+              <span>📑 Tải CSV</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-modal-print-sheet" title="In hoặc xuất PDF khổ A4 ngang">
+              <span>🖨️ In A4 Ngang</span>
+            </button>
+          </div>
+          <div id="excel-copy-status-hint" class="excel-hint-text">
+            <span>💡 <strong>Mẹo:</strong> Bấm nút xanh ở trên để Copy, sau đó mở Google Sheets bấm <strong>Ctrl + V</strong> là ăn ngay từng ô!</span>
+          </div>
+        </div>
+
+        <!-- Google Sheets Simulation Preview Wrapper -->
+        <div class="excel-preview-window">
+          <div class="excel-sheet-topbar">
+            <div class="excel-sheet-tab active">
+              <span>📗 CTV ĐĂNG KÝ TRỰC VÀ THAM DỰ SỰ KIỆN TƯ VẤN TUYỂN SINH HCM-UTE 2026</span>
+            </div>
+            <div class="excel-sheet-fx-bar">
+              <span class="fx-icon">fx</span>
+              <span class="fx-formula">CỘNG TÁC VIÊN ĐĂNG KÝ TRỰC PHÒNG VÀ THAM GIA HOẠT ĐỘNG TƯ VẤN TUYỂN SINH</span>
+            </div>
+          </div>
+
+          <div class="excel-table-scroll-container" id="excel-preview-table-container">
+            <!-- Render bảng tính preview tại đây -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/scheduler.js"></script>
+  <script src="js/sample30.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

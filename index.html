@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cổng Sinh Viên - Đăng Ký Ca Rảnh & Xem Lịch Trực Ban Tuyển Sinh</title>
+  <meta name="description" content="Trang dành cho sinh viên và cộng tác viên đăng ký ca rảnh và tra cứu lịch trực văn phòng tư vấn tuyển sinh.">
+  
+  <!-- Google Fonts: Be Vietnam Pro -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">🏛️</div>
+        <div class="brand-text">
+          <h1>Văn Phòng Tư Vấn Tuyển Sinh</h1>
+          <p>Cổng Đăng Ký Ca Rảnh & Tra Cứu Lịch Trực Tuần</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span style="font-size: 0.82rem; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #10b981; padding: 0.35rem 0.85rem; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 0.35rem;">
+          <span>🌱 Cổng Dành Cho Sinh Viên</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Banner Trạng Thái Cổng Đăng Ký (Được quản lý bởi Admin) -->
+    <div id="student-reg-status-banner" class="reg-status-banner open">
+      <div class="reg-status-info">
+        <span class="reg-status-icon" id="student-reg-status-icon">🟢</span>
+        <div>
+          <div class="reg-status-title" id="student-reg-status-title">Cổng Đăng Ký Ca Trực Đang Mở</div>
+          <div class="reg-status-desc" id="student-reg-status-desc">Sinh viên vui lòng chọn các ca rảnh trong tuần và nhấn Gửi Đăng Ký.</div>
+        </div>
+      </div>
+      <div class="reg-status-countdown" id="student-reg-countdown" style="display: none;">
+        <span>⌛ Hạn chót:</span> <span id="student-reg-countdown-time">--</span>
+      </div>
+    </div>
+
+    <!-- Thông báo đăng ký thành công -->
+    <div id="reg-success-alert" style="display: none; margin-bottom: 1.5rem; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: var(--radius-md); padding: 1.25rem 1.5rem;">
+      <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+        <span style="font-size: 1.5rem; line-height: 1;">🎉</span>
+        <div>
+          <h3 style="color: #065f46; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">Ghi nhận đăng ký thành công!</h3>
+          <p id="reg-success-text" style="color: #047857; font-size: 0.88rem; line-height: 1.5;"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         PHẦN 1: FORM ĐIỀN THÔNG TIN CÁ NHÂN & CHỌN LỊCH RẢNH
+         ==================================================================== -->
+    <section style="margin-bottom: 2.5rem;">
+      <div class="form-layout">
+        
+        <!-- Cột trái: Nhập tên, MSSV, SĐT và Chọn Người Mới / Người Cũ -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">📝 Thông Tin Cá Nhân</h2>
+              <p class="card-desc">Vui lòng điền chính xác họ tên và MSSV của bạn</p>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <!-- Hộp Thông Báo Nhận Diện Trùng MSSV (Đã Đăng Ký Trước Đó) -->
+            <div id="mssv-registered-alert-box" style="display: none;"></div>
+
+            <form id="student-reg-form">
+              <div class="form-group">
+                <label class="form-label" for="input-studentid">
+                  Mã Số Sinh Viên (MSSV) <span class="required">*</span>
+                  <span id="mssv-live-tag" style="margin-left: 0.5rem; display: none;"></span>
+                </label>
+                <input type="text" id="input-studentid" class="form-input" placeholder="Ví dụ: 2102001 (Nhập để tự kiểm tra đăng ký)" required autocomplete="off">
+                <div class="form-hint" id="mssv-input-hint">Nhập MSSV hệ thống sẽ tự nhận diện nếu bạn đã đăng ký trước đó.</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-fullname">
+                  Họ và Tên Sinh Viên <span class="required">*</span>
+                </label>
+                <input type="text" id="input-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-phone">
+                  Số Điện Thoại (Zalo liên hệ)
+                </label>
+                <input type="tel" id="input-phone" class="form-input" placeholder="Ví dụ: 0912345678">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  Phân Loại Kinh Nghiệm <span class="required">*</span>
+                </label>
+                <div class="role-cards">
+                  <!-- Người cũ -->
+                  <label class="role-card-label" for="role-old">
+                    <input type="radio" id="role-old" name="studentRole" value="old">
+                    <span class="role-icon">🎓</span>
+                    <span class="role-name">Người Cũ</span>
+                    <span class="role-sub">Đã có kinh nghiệm trực</span>
+                  </label>
+
+                  <!-- Người mới -->
+                  <label class="role-card-label" for="role-new">
+                    <input type="radio" id="role-new" name="studentRole" value="new" checked>
+                    <span class="role-icon">🌱</span>
+                    <span class="role-name">Người Mới</span>
+                    <span class="role-sub">Tập sự / Mới tham gia</span>
+                  </label>
+                </div>
+                <div class="form-hint" style="margin-top: 0.5rem;">
+                  ⭐ <em>Mỗi ca trực Ban điều hành sẽ ghép <strong>1 bạn người cũ + 1 bạn người mới</strong> để hỗ trợ nhau tốt nhất.</em>
+                </div>
+              </div>
+
+              <div style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-reg">
+                  <span>Gửi Đăng Ký Ca Trực</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Cột phải: Chọn các ca rảnh T2 đến T6 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">🕒 Chọn Các Ca Bạn Có Thể Trực (Thứ 2 - Thứ 6)</h2>
+              <p class="card-desc">Bấm vào các ô để chọn ca rảnh trong giờ hành chính</p>
+            </div>
+            <div class="selected-counter" id="selected-shift-count">
+              0 ca đã chọn
+            </div>
+          </div>
+          <div class="card-body">
+            
+            <!-- Cảnh báo nếu Cổng Đăng Ký đang Đóng -->
+            <div id="matrix-locked-notice" class="matrix-locked-notice" style="display: none;">
+              <span>🔒 <strong>Cổng đăng ký hiện đang đóng.</strong> Chức năng chọn ca trực đang tạm khóa. Bạn vẫn có thể nhập MSSV bên trái để xem lại các ca bạn đã chọn trước đó.</span>
+            </div>
+
+            <!-- Quick Toolbar -->
+            <div class="matrix-toolbar" id="matrix-quick-toolbar">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">
+                ⚡ Chọn nhanh:
+              </span>
+              <div class="matrix-quick-btns">
+                <button type="button" class="btn-chip" id="btn-quick-morning">Tất cả ca Sáng</button>
+                <button type="button" class="btn-chip" id="btn-quick-afternoon">Tất cả ca Chiều</button>
+                <button type="button" class="btn-chip" id="btn-quick-all">Chọn Cả Tuần (10 ca)</button>
+                <button type="button" class="btn-chip" id="btn-quick-clear">Xóa Hết</button>
+              </div>
+            </div>
+
+            <!-- Matrix Table -->
+            <div class="matrix-wrapper" id="shift-matrix-container">
+              <table class="matrix-table" aria-label="Bảng chọn ca rảnh">
+                <thead>
+                  <tr>
+                    <th class="period-header">Ca / Giờ</th>
+                    <th>Thứ Hai (T2)</th>
+                    <th>Thứ Ba (T3)</th>
+                    <th>Thứ Tư (T4)</th>
+                    <th>Thứ Năm (T5)</th>
+                    <th>Thứ Sáu (T6)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Ca Sáng -->
+                  <tr>
+                    <td class="period-header">
+                      <span class="period-title">☀️ Sáng</span>
+                      <span class="period-time">08:00 - 11:30</span>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T2_S">
+                        <input type="checkbox" id="cb-T2_S" class="slot-checkbox" value="T2_S">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Sáng T2</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T3_S">
+                        <input type="checkbox" id="cb-T3_S" class="slot-checkbox" value="T3_S">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Sáng T3</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T4_S">
+                        <input type="checkbox" id="cb-T4_S" class="slot-checkbox" value="T4_S">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Sáng T4</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T5_S">
+                        <input type="checkbox" id="cb-T5_S" class="slot-checkbox" value="T5_S">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Sáng T5</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T6_S">
+                        <input type="checkbox" id="cb-T6_S" class="slot-checkbox" value="T6_S">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Sáng T6</span>
+                      </label>
+                    </td>
+                  </tr>
+
+                  <!-- Ca Chiều -->
+                  <tr>
+                    <td class="period-header">
+                      <span class="period-title">🌤️ Chiều</span>
+                      <span class="period-time">13:30 - 17:00</span>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T2_C">
+                        <input type="checkbox" id="cb-T2_C" class="slot-checkbox" value="T2_C">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Chiều T2</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T3_C">
+                        <input type="checkbox" id="cb-T3_C" class="slot-checkbox" value="T3_C">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Chiều T3</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T4_C">
+                        <input type="checkbox" id="cb-T4_C" class="slot-checkbox" value="T4_C">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Chiều T4</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T5_C">
+                        <input type="checkbox" id="cb-T5_C" class="slot-checkbox" value="T5_C">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Chiều T5</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="slot-toggle" for="cb-T6_C">
+                        <input type="checkbox" id="cb-T6_C" class="slot-checkbox" value="T6_C">
+                        <span class="slot-icon">✓</span>
+                        <span class="slot-state-text">Rảnh Chiều T6</span>
+                      </label>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="margin-top: 1rem; padding: 0.9rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+              💡 <em>Đăng ký càng nhiều ca rảnh sẽ giúp Ban điều hành xếp lịch cho bạn thuận tiện hơn và không bị trùng lịch học cá nhân.</em>
+            </div>
+
+            <!-- Nút gửi đăng ký to nổi bật ngay dưới bảng ca rảnh -->
+            <div style="margin-top: 1.25rem;">
+              <button type="button" class="btn btn-primary btn-block" id="btn-submit-reg-2" style="font-size: 1rem; padding: 0.85rem; font-weight: 700;">
+                <span>✓ Gửi Đăng Ký Ca Trực Ngay</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         PHẦN 2: TRA CỨU NHANH CA TRỰC CỦA TÔI
+         ==================================================================== -->
+    <section class="card" style="margin-bottom: 2.5rem;">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">🔍 Tra Cứu Ca Trực Của Bạn</h2>
+          <p class="card-desc">Nhập Mã số sinh viên (MSSV) để xem các ca bạn được phân công trực</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
+          <input type="text" id="input-lookup-mssv" class="form-input" style="flex: 1; min-width: 220px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)">
+          <button type="button" id="btn-lookup" class="btn btn-primary">
+            <span>Tra Cứu</span>
+          </button>
+        </div>
+        <div id="lookup-result" style="margin-top: 1rem; display: none;"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         PHẦN 3: BẢNG LỊCH TRỰC CHUNG CHO TẤT CẢ MỌI NGƯỜI (READ-ONLY)
+         ==================================================================== -->
+    <section class="card timetable-card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">📅 Lịch Trực Chung Văn Phòng Tư Vấn Tuyển Sinh</h2>
+          <p class="card-desc" id="schedule-update-time">Lịch trực chính thức (Mỗi ca: 1 Người Cũ + 1 Người Mới)</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <!-- Chọn Tuần 1 / Tuần 2 -->
+          <div class="filter-group" id="student-week-selector">
+            <button class="filter-btn active" data-week="1" id="btn-student-week-1">Tuần 1</button>
+            <button class="filter-btn" data-week="2" id="btn-student-week-2">Tuần 2</button>
+          </div>
+          <div id="schedule-status-banner"></div>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 1rem;">
+        
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.8rem; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span>
+            <strong>Người Cũ:</strong> Thành viên hướng dẫn, phụ trách chính
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
+            <strong>Người Mới:</strong> Thành viên tập sự, phối hợp tư vấn
+          </span>
+        </div>
+
+        <div class="timetable-wrapper">
+          <div class="timetable-grid" id="student-timetable-grid">
+            <!-- JS sẽ nạp lịch trực vào đây -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Chân trang kín đáo dành cho Ban Điều Hành Tuyển Sinh -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <div>
+        <p style="font-weight: 700; color: var(--text-main);">Văn Phòng Tư Vấn Tuyển Sinh</p>
+        <p style="font-size: 0.78rem;">Hệ thống đăng ký & phân bổ ca trực sinh viên tuyển sinh</p>
+      </div>
+      <div class="footer-links">
+        <span style="font-size: 0.76rem; color: var(--text-muted);">Hotline: 028.3896.1234 (Phím 1)</span>
+        <a href="admin.html" class="footer-admin-link" id="link-footer-admin" title="Khu vực dành riêng cho Cán Bộ Quản Trị">
+          <span>🔒 Cán Bộ Quản Trị</span>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/scheduler.js"></script>
+  <script src="js/sample30.js"></script>
+  <script src="js/student.js"></script>
+</body>
+</html>
