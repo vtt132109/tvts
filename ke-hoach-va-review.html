@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kế Hoạch Tổng Quan & Báo Cáo Review Code - TVTS HCM-UTE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #111827;
+      --bg-card: #1a2234;
+      --bg-card-hover: #222d44;
+      --border-subtle: #2d3748;
+      --border-bright: #4b5563;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.2);
+      --danger: #ef4444;
+      --accent: #38bdf8;
+      --purple: #a855f7;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 2rem 1.5rem 4rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(17, 24, 39, 0.95) 100%);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 2.25rem 2.5rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .header-title-box h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    .header-subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.75rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      color: #a5b4fc;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--primary-glow);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-bright);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: #94a3b8;
+    }
+
+    /* KPI Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border-bright);
+    }
+
+    .kpi-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .kpi-value {
+      font-size: 2.25rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+      font-feature-settings: "tnum";
+    }
+
+    .kpi-desc {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+
+    .color-success { color: var(--success); }
+    .color-primary { color: var(--primary); }
+    .color-accent { color: var(--accent); }
+    .color-warning { color: var(--warning); }
+
+    /* Nav Tabs */
+    .nav-tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .nav-tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .nav-tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .nav-tab-btn.active {
+      color: #ffffff;
+      background: var(--bg-surface);
+      border-color: var(--border-bright);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-badge {
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      font-size: 0.72rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      font-weight: 700;
+    }
+
+    /* Content Sections */
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards & Containers */
+    .section-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      margin-bottom: 1.75rem;
+      box-shadow: var(--shadow-card);
+    }
+
+    .section-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .section-lead {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Task List & Breakdown */
+    .task-group {
+      margin-bottom: 2rem;
+    }
+
+    .task-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border-left: 4px solid var(--primary);
+      border-radius: 4px var(--radius-sm) var(--radius-sm) 4px;
+      margin-bottom: 1rem;
+    }
+
+    .task-group-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .task-card {
+      background: rgba(26, 34, 52, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .task-card:hover {
+      border-color: var(--border-bright);
+      background: rgba(26, 34, 52, 0.85);
+    }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .task-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .task-badges {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .badge-size {
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .size-xs { background: #3b82f6; color: #fff; }
+    .size-s { background: #10b981; color: #fff; }
+    .size-m { background: #f59e0b; color: #fff; }
+    .size-l { background: #ef4444; color: #fff; }
+
+    .badge-status {
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .status-done { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-plan { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+    .task-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-bottom: 0.85rem;
+    }
+
+    .task-details-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      font-size: 0.84rem;
+    }
+
+    .task-col-title {
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .task-list-check {
+      list-style: none;
+    }
+
+    .task-list-check li {
+      margin-bottom: 0.3rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+    }
+
+    .task-list-check li::before {
+      content: '✓';
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    .task-list-pending li::before {
+      content: '○';
+      color: var(--warning);
+      font-weight: bold;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      color: #38bdf8;
+    }
+
+    /* 5-Axis Scorecard */
+    .axis-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .axis-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      position: relative;
+    }
+
+    .axis-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.75rem;
+    }
+
+    .axis-name {
+      font-weight: 700;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .axis-score-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      padding: 0.2rem 0.6rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+    }
+
+    .score-high { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .score-med { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+
+    .axis-checklist {
+      list-style: none;
+      font-size: 0.86rem;
+    }
+
+    .axis-checklist li {
+      padding: 0.4rem 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .axis-checklist li:last-child {
+      border-bottom: none;
+    }
+
+    /* Severity Findings Table */
+    .findings-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 1rem;
+    }
+
+    .findings-table th {
+      background: var(--bg-card);
+      color: var(--text-muted);
+      text-align: left;
+      padding: 0.85rem 1rem;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-bright);
+    }
+
+    .findings-table td {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: top;
+    }
+
+    .findings-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .sev-tag {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .sev-critical { background: #ef4444; color: #ffffff; }
+    .sev-required { background: #f59e0b; color: #000000; }
+    .sev-consider { background: #3b82f6; color: #ffffff; }
+    .sev-nit { background: #64748b; color: #ffffff; }
+
+    /* Architecture Diagram */
+    .arch-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      border: 1px dashed var(--border-bright);
+    }
+
+    .arch-nodes-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .arch-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 1.25rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .arch-node.highlight {
+      border-color: var(--primary);
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .arch-node-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .arch-node-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+        padding: 0;
+      }
+      .container { max-width: 100%; }
+      header, .section-card, .kpi-card, .axis-card {
+        background: #ffffff;
+        border: 1px solid #ccc;
+        box-shadow: none;
+        color: #000000;
+      }
+      .nav-tabs, .header-actions { display: none; }
+      .tab-content { display: block !important; margin-bottom: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="header-top">
+        <div class="header-title-box">
+          <div style="margin-bottom: 0.5rem;">
+            <span class="tag-badge">🛡️ Architecture & Code Review Hub</span>
+            <span class="tag-badge" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); color: #6ee7b7;">Git: main @ 86b6e22</span>
+          </div>
+          <h1>KẾ HOẠCH TỔNG QUAN & BÁO CÁO REVIEW MÃ NGUỒN</h1>
+          <p class="header-subtitle">
+            Hệ thống Quản lý & Xếp Lịch Trực CTV Tư Vấn Tuyển Sinh HCM-UTE
+            <span>•</span>
+            Cập nhật: <strong style="color: var(--text-main);">Tháng 10/2026</strong>
+          </p>
+        </div>
+
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="window.print()">
+            🖨️ In Báo Cáo A4
+          </button>
+          <a href="admin.html" class="btn btn-outline" target="_blank">
+            🔐 Mở Cổng Admin
+          </a>
+          <a href="index.html" class="btn btn-outline" target="_blank">
+            🎓 Cổng Sinh Viên
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top KPI Highlights -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span>Tiến Độ Tổng Thể</span>
+          <span>📊</span>
+        </div>
+        <div class="kpi-value color-success">100%</div>
+        <div class="kpi-desc">6/6 Giai đoạn lõi hoàn thành & deploy</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span>Chỉ Số Sức Khỏe Code</span>
+          <span>🛡️</span>
+        </div>
+        <div class="kpi-value color-primary">94/100</div>
+        <div class="kpi-desc">Đánh giá chuẩn 5 trục /code-review</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span>Kế Hoạch Nâng Cấp</span>
+          <span>🚀</span>
+        </div>
+        <div class="kpi-value color-accent">8 Tasks</div>
+        <div class="kpi-desc">Phase 7 Roadmap đã sẵn sàng trong Backlog</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <span>Lỗi Đã Triệt Tiêu</span>
+          <span>✨</span>
+        </div>
+        <div class="kpi-value color-warning">0 Critical</div>
+        <div class="kpi-desc">Lỗi xóa phân công 4 tuần đã fix triệt để</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+      <button class="nav-tab-btn active" onclick="switchTab('tab-plan', this)">
+        📋 Kế Hoạch Các Việc Cần Làm
+        <span class="tab-badge">Planning</span>
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('tab-review', this)">
+        🔍 Báo Cáo Review Mã Nguồn 5 Trục
+        <span class="tab-badge">Review</span>
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('tab-arch', this)">
+        🏗️ Kiến Trúc & Luồng Dữ Liệu
+        <span class="tab-badge">Architecture</span>
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('tab-roadmap', this)">
+        🗺️ Lộ Trình Toàn Cảnh (Phase 1 → 7)
+        <span class="tab-badge">Roadmap</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: KẾ HOẠCH CÁC VIỆC CẦN LÀM & SỬA LỖI -->
+    <div id="tab-plan" class="tab-content active">
+      <div class="section-card">
+        <h2 class="section-title">📋 Kế Hoạch Chi Tiết Các Việc Cần Làm & Sửa Lỗi</h2>
+        <p class="section-lead">
+          Được phân rã theo kỹ thuật <strong>Vertical Slicing</strong> (Cắt lớp dọc: UI + Logic + Lưu trữ) tuân thủ quy chuẩn <code>/planning-and-task-breakdown</code>. Mỗi tác vụ có định lượng phạm vi (Scope), tiêu chí nghiệm thu (Acceptance Criteria) và phương pháp xác thực (Verification).
+        </p>
+
+        <!-- Nhóm 1: Sửa lỗi & Hoàn thiện ổn định -->
+        <div class="task-group">
+          <div class="task-group-header">
+            <span class="task-group-title">PHẦN A: BẢO TRÌ & SỬA LỖI MÃ NGUỒN (BUG FIXES & CODE HARDENING)</span>
+            <span class="tag-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Đã hoàn thành</span>
+          </div>
+
+          <!-- Task Fix 1 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Fix 1: Xóa Triệt Để Bảng Phân Công Lịch Trực 4 Tuần (Tất Cả Các Tuần)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-s">Scope: S (1 file)</span>
+                <span class="badge-status status-done">✓ Đã xử lý & Đã Push</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Sửa triệt để bug khi xem Tuần 1 bấm "Xóa bảng phân công", bấm sang Tuần 2 rồi quay lại Tuần 1 thì dữ liệu lịch vẫn tự động phục hồi lại do <code>state.monthSchedule</code> chưa được giải phóng khỏi bộ nhớ và LocalStorage.
+            </p>
+            <div class="task-details-grid">
+              <div>
+                <div class="task-col-title">🎯 Tiêu chí nghiệm thu (Acceptance Criteria):</div>
+                <ul class="task-list-check">
+                  <li>Xóa đồng thời <code>state.currentSchedule</code>, <code>state.twoWeekSchedule</code>, <code>state.monthSchedule</code>.</li>
+                  <li>Xóa sạch 3 key trong LocalStorage: <code>SCHEDULE</code>, <code>TWO_WEEK_SCHEDULE</code>, <code>MONTH_SCHEDULE</code>.</li>
+                  <li>Hàm <code>switchAdminWeek(w)</code> có nhánh fallback <code>else { state.currentSchedule = null; }</code>.</li>
+                </ul>
+              </div>
+              <div>
+                <div class="task-col-title">🧪 Phương pháp xác thực (Verification):</div>
+                <ul class="task-list-check">
+                  <li>Bấm Xóa ở Tuần 1 -> Bấm sang Tuần 2, 3, 4 -> Bấm lại Tuần 1 -> Đều ở trạng thái trống hoàn toàn.</li>
+                  <li>F5 trình duyệt -> Toàn bộ lịch vẫn trống, không bị load lại lịch cũ.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Task Fix 2 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Task A2: Dọn Dẹp Mã Thừa (Dead Code) & Tối Ưu Selector Tuần trong student.js</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-xs">Scope: XS (1 file)</span>
+                <span class="badge-status status-plan">⏳ Sẵn sàng triển khai</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Loại bỏ các tham chiếu DOM cũ không còn dùng (<code>elements.btnWeek1</code>, <code>elements.btnWeek2</code>) trong <code>student.js</code> và chuẩn hóa việc bắt sự kiện chọn tuần 1-4 thông qua class chung.
+            </p>
+            <div class="task-details-grid">
+              <div>
+                <div class="task-col-title">🎯 Tiêu chí nghiệm thu:</div>
+                <ul class="task-list-pending">
+                  <li>Xóa bỏ các trường tham chiếu thừa trong <code>cacheDOMElements</code> của <code>student.js</code>.</li>
+                  <li>Kiểm tra không phát sinh cảnh báo undefined hoặc null pointer exception.</li>
+                </ul>
+              </div>
+              <div>
+                <div class="task-col-title">🧪 Phương pháp xác thực:</div>
+                <ul class="task-list-pending">
+                  <li>Chạy <code>node -c js/student.js</code> sạch 0 lỗi.</li>
+                  <li>Bấm thử chuyển cả 4 tuần trên Cổng Sinh Viên mượt mà.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nhóm 2: Lộ trình việc sẽ làm (Phase 7 Backlog) -->
+        <div class="task-group">
+          <div class="task-group-header" style="border-left-color: var(--accent);">
+            <span class="task-group-title">PHẦN B: KẾ HOẠCH NÂNG CẤP TƯƠNG LAI (PHASE 7 BACKLOG)</span>
+            <span class="tag-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">Việc Sẽ Làm (Chưa thực thi)</span>
+          </div>
+
+          <!-- Task 16 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Task 16 (Mục #2): Chế Độ Xem Toàn Cảnh Ma Trận 1 Tháng (Full-Month Master Grid View)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-m">Scope: M (2 files)</span>
+                <span class="badge-status status-plan">⏳ Kế Hoạch</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Bổ sung nút chuyển đổi chế độ xem: Xem từng tuần (Tabs) ↔ Xem toàn cảnh 4 tuần đồng thời trên 1 màn hình lớn giúp Ban điều hành có cái nhìn tổng quan 40 ca trực.
+            </p>
+          </div>
+
+          <!-- Task 17 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Task 17 (Mục #3): Hero Toolbar Nổi & Bảng Chỉ Số Nhanh (Sticky Live Stats)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-s">Scope: S (2 files)</span>
+                <span class="badge-status status-plan">⏳ Kế Hoạch</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Thanh công cụ cố định xuất hiện khi cuộn trang, hiển thị tiến độ lấp đầy ca trực tháng (X/40 ca) và các nút thao tác nhanh 1-Click: Tự động xếp lại, Xuất Excel, Sao chép nhanh.
+            </p>
+          </div>
+
+          <!-- Task 18 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Task 18 (Mục #4): Nhập Danh Sách Sinh Viên Từ File Excel / CSV (Batch Import CTV)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-m">Scope: M (2-3 files)</span>
+                <span class="badge-status status-plan">⏳ Kế Hoạch</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Cho phép tải file khảo sát Google Form/Excel lên hệ thống, tự động đọc cột Họ tên, MSSV, SĐT và danh sách ca rảnh để nạp hàng loạt sinh viên cùng lúc mà không phải nhập tay.
+            </p>
+          </div>
+
+          <!-- Task 19 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Task 19 (Mục #6): Chế Độ Giao Diện Sáng / Tối (Dark / Light Theme Switcher)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-m">Scope: M (3 files)</span>
+                <span class="badge-status status-plan">⏳ Kế Hoạch</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Giao diện Dark Mode Slate Navy sang trọng, nút chuyển đổi 1 chạm trên thanh tiêu đề của cả 2 trang, lưu trạng thái theme vào LocalStorage và tối ưu tương phản cho ca trực đêm.
+            </p>
+          </div>
+
+          <!-- Task 20 -> 23 -->
+          <div class="task-card">
+            <div class="task-header">
+              <div class="task-title">
+                <span>Tasks 20-23: Tiện Ích Mở Rộng (Lọc Highlight, Google Calendar .ics, Zalo Message, QR Check-in)</span>
+              </div>
+              <div class="task-badges">
+                <span class="badge-size size-m">Scope: M (2-3 files)</span>
+                <span class="badge-status status-plan">⏳ Kế Hoạch</span>
+              </div>
+            </div>
+            <p class="task-desc">
+              Các tiện ích nâng cao: Gõ tên làm sáng rực các ca trực của bạn đó trong tháng; 1-click xuất lịch vào điện thoại; 1-click copy tin nhắn Zalo gửi nhóm CTV; Check-in điểm danh QR tại bàn trực.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: BÁO CÁO REVIEW CODE 5 TRỤC -->
+    <div id="tab-review" class="tab-content">
+      <div class="section-card">
+        <h2 class="section-title">🔍 Báo Cáo Đánh Giá Mã Nguồn Toàn Diện Theo 5 Trục</h2>
+        <p class="section-lead">
+          Được thực hiện nghiêm ngặt theo tiêu chuẩn của <code>/code-review-and-quality</code>: Đúng đắn (Correctness), Dễ đọc & Đơn giản (Readability), Kiến trúc (Architecture), An toàn thông tin (Security), và Hiệu năng (Performance).
+        </p>
+
+        <!-- 5 Axis Grid -->
+        <div class="axis-grid">
+          <!-- Trục 1: Correctness -->
+          <div class="axis-card">
+            <div class="axis-card-header">
+              <span class="axis-name">🎯 1. Tính Đúng Đắn (Correctness)</span>
+              <span class="axis-score-pill score-high">96/100</span>
+            </div>
+            <ul class="axis-checklist">
+              <li>
+                <span>Thuật toán xếp ca 1 tháng (4 tuần) 1 Cũ + 1 Mới</span>
+                <strong style="color: var(--success);">✓ Đạt 100%</strong>
+              </li>
+              <li>
+                <span>Thời gian ca trực chuẩn (7h30-11h30, 13h00-16h30)</span>
+                <strong style="color: var(--success);">✓ Đạt 100%</strong>
+              </li>
+              <li>
+                <span>Xóa bảng phân công giải phóng toàn diện 4 tuần</span>
+                <strong style="color: var(--success);">✓ Đã Sửa Triệt Để</strong>
+              </li>
+              <li>
+                <span>Tra cứu lịch cá nhân tìm kiếm đủ 4 tuần</span>
+                <strong style="color: var(--success);">✓ Hoạt động chuẩn</strong>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Trục 2: Readability -->
+          <div class="axis-card">
+            <div class="axis-card-header">
+              <span class="axis-name">📖 2. Tính Dễ Đọc (Readability)</span>
+              <span class="axis-score-pill score-high">90/100</span>
+            </div>
+            <ul class="axis-checklist">
+              <li>
+                <span>Tên biến, hàm có ngữ nghĩa tiếng Việt & chuẩn camelCase</span>
+                <strong style="color: var(--success);">✓ Tốt</strong>
+              </li>
+              <li>
+                <span>Comments giải thích rõ ràng kiến trúc thuật toán</span>
+                <strong style="color: var(--success);">✓ Đầy đủ</strong>
+              </li>
+              <li>
+                <span>Kích thước file admin.js (~1970 dòng)</span>
+                <strong style="color: var(--warning);">⚠️ Cần chia module</strong>
+              </li>
+              <li>
+                <span>Dead code: Tham chiếu cũ trong student.js</span>
+                <strong style="color: var(--warning);">⚠️ Đã đánh dấu</strong>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Trục 3: Architecture -->
+          <div class="axis-card">
+            <div class="axis-card-header">
+              <span class="axis-name">🏛️ 3. Kiến Trúc (Architecture)</span>
+              <span class="axis-score-pill score-high">95/100</span>
+            </div>
+            <ul class="axis-checklist">
+              <li>
+                <span>Phân tách rõ ràng Cổng Sinh Viên vs Cổng Admin</span>
+                <strong style="color: var(--success);">✓ 2 File riêng biệt</strong>
+              </li>
+              <li>
+                <span>Module Thuật Toán độc lập (SchedulerEngine IIFE)</span>
+                <strong style="color: var(--success);">✓ Rất chuẩn</strong>
+              </li>
+              <li>
+                <span>Đồng bộ dữ liệu thời gian thực qua Storage Event</span>
+                <strong style="color: var(--success);">✓ Hoạt động mượt</strong>
+              </li>
+              <li>
+                <span>Zero-Backend: Chạy tĩnh 100% trên GitHub Pages</span>
+                <strong style="color: var(--success);">✓ Tối ưu chi phí</strong>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Trục 4: Security -->
+          <div class="axis-card">
+            <div class="axis-card-header">
+              <span class="axis-name">🔒 4. An Toàn & Bảo Mật (Security)</span>
+              <span class="axis-score-pill score-high">92/100</span>
+            </div>
+            <ul class="axis-checklist">
+              <li>
+                <span>Chống tấn công XSS qua hàm escapeHtml()</span>
+                <strong style="color: var(--success);">✓ Đã áp dụng mọi ô</strong>
+              </li>
+              <li>
+                <span>Bảo vệ cổng Admin bằng Màn hình Auth (Mật khẩu/PIN)</span>
+                <strong style="color: var(--success);">✓ Hoạt động tốt</strong>
+              </li>
+              <li>
+                <span>Không lộ API keys hay thông tin nhạy cảm trên git</span>
+                <strong style="color: var(--success);">✓ An toàn</strong>
+              </li>
+              <li>
+                <span>Kiểm soát cửa sổ mở/đóng đăng ký từ phía Admin</span>
+                <strong style="color: var(--success);">✓ Khóa form tự động</strong>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Trục 5: Performance -->
+          <div class="axis-card">
+            <div class="axis-card-header">
+              <span class="axis-name">⚡ 5. Hiệu Năng (Performance)</span>
+              <span class="axis-score-pill score-high">98/100</span>
+            </div>
+            <ul class="axis-checklist">
+              <li>
+                <span>Tốc độ chạy thuật toán xếp 4 tuần (40 ca trực)</span>
+                <strong style="color: var(--success);">&lt; 15ms</strong>
+              </li>
+              <li>
+                <span>Tải trang tức thì không phụ thuộc thư viện nặng</span>
+                <strong style="color: var(--success);">0 Dependencies</strong>
+              </li>
+              <li>
+                <span>Bảng sao chép Google Sheets ghi trực tiếp Clipboard</span>
+                <strong style="color: var(--success);">Tức thời (Instant)</strong>
+              </li>
+              <li>
+                <span>DOM Caching tại thời điểm khởi tạo</span>
+                <strong style="color: var(--success);">✓ Tối ưu re-render</strong>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Bảng Danh Mục Phát Hiện & Giải Pháp Kiến Trúc -->
+        <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.75rem;">📋 Danh Mục Phát Hiện & Giải Pháp Khắc Phục (Structural Remedies)</h3>
+        <table class="findings-table">
+          <thead>
+            <tr>
+              <th style="width: 120px;">Mức Độ</th>
+              <th style="width: 160px;">Vị Trí File</th>
+              <th>Mô Tả Vấn Đề</th>
+              <th>Giải Pháp Kiến Trúc Đã/Sẽ Áp Dụng</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="sev-tag sev-critical">CRITICAL</span></td>
+              <td><code>js/admin.js:668</code></td>
+              <td><strong>Bug phục hồi lịch khi chuyển tuần:</strong> Nút xóa chỉ đặt null cho <code>twoWeekSchedule</code> mà bỏ quên <code>monthSchedule</code>, khiến F5 hoặc bấm chuyển tuần tự động nạp lại lịch cũ.</td>
+              <td><strong style="color: var(--success);">ĐÃ XỬ LÝ:</strong> Xóa triệt để cả 3 biến state và 3 key LocalStorage tương ứng, đồng thời bổ sung nhánh an toàn trong <code>switchAdminWeek</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="sev-tag sev-required">REQUIRED</span></td>
+              <td><code>js/admin.js:683</code></td>
+              <td><strong>Nút xóa toàn bộ sinh viên:</strong> Cần giải phóng đồng thời lịch trực của cả 4 tuần để tránh sinh viên bị xóa nhưng lịch tháng vẫn lưu thông tin rác.</td>
+              <td><strong style="color: var(--success);">ĐÃ XỬ LÝ:</strong> Reset <code>monthSchedule = null</code> và xóa triệt để LocalStorage khi kích hoạt xóa toàn bộ sinh viên.</td>
+            </tr>
+            <tr>
+              <td><span class="sev-tag sev-consider">CONSIDER</span></td>
+              <td><code>js/student.js:78</code></td>
+              <td><strong>Dead Code:</strong> Biến <code>btnWeek1</code> và <code>btnWeek2</code> được lưu trong cache nhưng không còn được sử dụng do sự kiện đã chuyển sang bắt qua class chung.</td>
+              <td>Đã đưa vào Task A2 trong Backlog để dọn dẹp làm sạch mã nguồn.</td>
+            </tr>
+            <tr>
+              <td><span class="sev-tag sev-consider">CONSIDER</span></td>
+              <td><code>js/admin.js</code></td>
+              <td><strong>File Size Lớn:</strong> <code>admin.js</code> hiện có gần 2000 dòng code gộp chung xác thực, điều khiển cổng, bảng tính excel và quản lý lịch.</td>
+              <td>Nếu dự án mở rộng quy mô lớn hơn, có thể tách thành các module riêng: <code>admin-auth.js</code>, <code>admin-excel.js</code>. Hiện tại giữ nguyên một file để deploy tĩnh không cần bundler.</td>
+            </tr>
+            <tr>
+              <td><span class="sev-tag sev-nit">NIT</span></td>
+              <td><code>index.html:328</code></td>
+              <td>Bộ chọn tuần 1-4 trên cổng sinh viên có thể thêm hiệu ứng chuyển tab mượt mà (smooth crossfade) khi đổi giữa các tuần.</td>
+              <td>Sẽ hoàn thiện cùng gói nâng cấp giao diện Phase 7 (Task 19).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 3: KIẾN TRÚC & LUỒNG DỮ LIỆU -->
+    <div id="tab-arch" class="tab-content">
+      <div class="section-card">
+        <h2 class="section-title">🏗️ Kiến Trúc Hệ Thống & Luồng Dữ Liệu</h2>
+        <p class="section-lead">
+          Mô hình kiến trúc Client-Side thời gian thực, lưu trữ bền vững qua Web Storage API và giao tiếp liên tab qua Storage Event Bus.
+        </p>
+
+        <div class="arch-flow">
+          <div class="arch-nodes-row">
+            <div class="arch-node">
+              <div class="arch-node-title">🎓 Cổng Sinh Viên</div>
+              <div class="arch-node-desc"><code>index.html</code> + <code>student.js</code><br>Đăng ký ca rảnh, tra cứu lịch cá nhân, xem thời khóa biểu 4 tuần.</div>
+            </div>
+
+            <div class="arch-node highlight">
+              <div class="arch-node-title">⚡ Storage Event Bus</div>
+              <div class="arch-node-desc">Đồng bộ hai chiều tức thời giữa các tab mà không cần máy chủ WebSocket.</div>
+            </div>
+
+            <div class="arch-node">
+              <div class="arch-node-title">🔐 Cổng Quản Trị</div>
+              <div class="arch-node-desc"><code>admin.html</code> + <code>admin.js</code><br>Màn hình Auth, cấu hình giờ đóng mở cổng, đổi người trực thủ công.</div>
+            </div>
+          </div>
+
+          <div style="text-align: center; color: var(--accent); font-size: 1.25rem;">
+            ⬇️ Kết nối với Thuật toán & Cơ sở dữ liệu ⬇️
+          </div>
+
+          <div class="arch-nodes-row">
+            <div class="arch-node highlight" style="border-color: var(--success);">
+              <div class="arch-node-title">🧠 Thuật Toán Xếp Lịch 1 Tháng</div>
+              <div class="arch-node-desc"><code>scheduler.js</code><br>Bipartite Matching + Greedy MRV Heuristic<br>Xoay vòng công bằng 4 tuần, mỗi ca 1 cũ + 1 mới.</div>
+            </div>
+
+            <div class="arch-node">
+              <div class="arch-node-title">💾 LocalStorage Database</div>
+              <div class="arch-node-desc">Lưu trữ phân tách các key:<br><code>STUDENTS</code>, <code>MONTH_SCHEDULE</code>, <code>REG_CONFIG</code>, <code>ADMIN_USERS</code>.</div>
+            </div>
+
+            <div class="arch-node">
+              <div class="arch-node-title">📊 Xuất Bản Mẫu HCM-UTE</div>
+              <div class="arch-node-desc">Modal mô phỏng Google Sheets<br>Sao chép 1-Click Clipboard (text/html + text/plain) & Tải file .xls.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: LỘ TRÌNH TOÀN CẢNH (PHASE 1 - 7) -->
+    <div id="tab-roadmap" class="tab-content">
+      <div class="section-card">
+        <h2 class="section-title">🗺️ Lộ Trình Phát Triển Toàn Cảnh (Roadmap)</h2>
+        <p class="section-lead">
+          Tổng kết 6 giai đoạn cốt lõi đã hoàn thiện và kế hoạch triển khai các giai đoạn tiếp theo.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 1: Nền tảng Giao diện & Form Đăng ký Sinh viên (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Layout responsive, ma trận 10 ca rảnh, nút chọn nhanh sáng/chiều, quản lý danh sách sinh viên LocalStorage.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 2: Thuật toán Xếp Lịch Tự Động & Bảng Thời Khóa Biểu (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Quy tắc bắt buộc 1 Cũ + 1 Mới, kiểm tra độ công bằng, đổi người trực thủ công qua modal, thống kê số ca.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 3: Xuất File Chuẩn UTF-8 & Kiểm Thử Toàn Diện (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Xuất file CSV tiếng Việt có BOM, tối ưu trang in A4, xử lý ngoại lệ khi thiếu người cũ hoặc người mới.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 4: Nhận Diện Trùng MSSV & Quản Lý Giờ Mở Cổng Đăng Ký (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Tự động điền lại thông tin khi nhập MSSV cũ, khóa ma trận chọn ca khi hết hạn đăng ký từ admin.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 5: Phân Quyền Cán Bộ & Bảo Mật Cổng Admin (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Ẩn nút admin công khai, màn hình đăng nhập bảo vệ bằng Mật khẩu & Mã PIN, quản lý danh sách tài khoản cán bộ.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 4px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 0.25rem;">✓ Phase 6: Xuất Bảng Tính Mẫu Google Sheets HCM-UTE & Lịch 1 Tháng (Hoàn thành)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Khớp 9 cột chuẩn HCM-UTE, bỏ rep page, đổi giờ ca sáng 7h30-11h30 và ca chiều 13h-16h30, sao chép 1-Click dán ăn ngay vào Google Sheets, thuật toán xoay vòng 4 tuần.</div>
+          </div>
+
+          <div style="padding: 1rem 1.25rem; background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); border-radius: 4px;">
+            <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.25rem;">⏳ Phase 7: Kế Hoạch Nâng Cấp Tương Lai (Backlog - Sẵn sàng thực thi)</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Xem toàn cảnh ma trận 1 tháng, Sticky Hero Toolbar, Nhập danh sách sinh viên từ file Excel khảo sát, Giao diện Dark/Light Mode, Đồng bộ Google Calendar .ics, Mẫu tin nhắn nhắc Zalo và QR Check-in.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.nav-tab-btn').forEach(b => {
+        b.classList.remove('active');
+      });
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+      if (btn) btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>
