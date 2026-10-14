@@ -13,6 +13,21 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- Pre-render Theme Activator (Zero flash) -->
+  <script>
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('ts_scheduler_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -118,6 +133,12 @@
             </button>
           </nav>
 
+          <!-- Nút Chuyển Giao Diện Sáng / Tối -->
+          <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Chuyển chế độ Sáng / Tối (Dark Mode)" aria-label="Đổi giao diện Sáng / Tối">
+            <span class="theme-icon">🌙</span>
+            <span class="theme-text">Tối</span>
+          </button>
+
           <!-- Nút Quản lý quyền truy cập -->
           <button type="button" class="btn btn-secondary btn-sm" id="btn-open-user-mgmt" title="Cấp quyền truy cập cho cán bộ & đổi mật khẩu" style="font-weight: 700;">
             <span>🔑 Cấp Quyền & Đổi MK</span>
@@ -139,6 +160,36 @@
         </div>
       </div>
     </header>
+
+  <!-- ====================================================================
+       STICKY HERO TOOLBAR & QUICK ACTION BAR (TASK 17)
+       Cố định khi cuộn trang, hiển thị tiến độ và thao tác nhanh 1-Click
+       ==================================================================== -->
+  <div class="sticky-hero-bar" id="admin-sticky-hero-bar">
+    <div class="sticky-hero-stats">
+      <span class="sticky-stat-pill">
+        <span>👥 Tổng:</span> <strong id="sticky-stat-students">0 CTV</strong>
+      </span>
+      <span class="sticky-stat-pill" id="sticky-pill-filled">
+        <span>📅 Phủ ca:</span> <strong id="sticky-stat-filled">0/10 ca</strong>
+      </span>
+      <span class="sticky-stat-pill pill-warning" id="sticky-pill-empty" style="display: none;">
+        <span>⚠️</span> <strong id="sticky-stat-empty">0 ca trống</strong>
+      </span>
+    </div>
+
+    <div class="sticky-hero-actions">
+      <button type="button" class="btn btn-primary btn-sm" id="btn-sticky-auto-schedule" style="font-weight: 700; box-shadow: 0 2px 8px var(--primary-glow);">
+        <span>⚡ Xếp Ca Nhanh</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-quick-copy" style="font-weight: 700;" title="Sao chép nhanh sang Google Sheets">
+        <span>📋 Copy Google Sheets</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-open-excel" style="font-weight: 700;" title="Mở bảng tính Excel UTE">
+        <span>📊 Xuất Excel</span>
+      </button>
+    </div>
+  </div>
 
   <!-- Summary Stats Bar -->
   <section class="summary-bar" aria-label="Thống kê nhanh">
@@ -305,10 +356,20 @@
             <h3 class="card-title">🕒 Bảng Phân Công 10 Ca Trực Trong Tuần (Thứ 2 - Thứ 6)</h3>
             <p class="card-desc">Nhấn nút 🔄 trong từng thẻ nhân sự để hoán đổi hoặc chỉ định người trực thủ công</p>
           </div>
-          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-            <!-- Bộ chọn 4 Tuần Trong Tháng (Lịch 1 Tháng) -->
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">🗓️ Lịch 1 Tháng:</span>
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+            <!-- Chế độ xem: Từng Tuần vs Toàn Cảnh Cả Tháng (Task 16) -->
+            <div class="view-mode-toggle" id="admin-view-mode-toggle">
+              <button type="button" class="view-mode-btn active" data-mode="single" id="btn-view-single-week" title="Xem chi tiết từng tuần">
+                <span>📑 Từng Tuần</span>
+              </button>
+              <button type="button" class="view-mode-btn" data-mode="master" id="btn-view-master-month" title="Xem toàn cảnh cả 4 tuần trong tháng (40 ca)">
+                <span>🌐 Toàn Cảnh 1 Tháng</span>
+              </button>
+            </div>
+
+            <!-- Bộ chọn 4 Tuần Trong Tháng (chỉ hiển thị khi ở chế độ Xem Từng Tuần) -->
+            <div id="admin-single-week-controls" style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">🗓️ Tuần:</span>
               <div class="filter-group" id="admin-week-selector">
                 <button class="filter-btn active" data-week="1" id="btn-admin-week-1">Tuần 1</button>
                 <button class="filter-btn" data-week="2" id="btn-admin-week-2">Tuần 2</button>
@@ -328,10 +389,16 @@
           </div>
         </div>
         <div class="card-body" style="padding: 1rem;">
-          <div class="timetable-wrapper">
+          <!-- Chế độ Xem Từng Tuần -->
+          <div id="admin-single-week-wrapper" class="timetable-wrapper">
             <div class="timetable-grid" id="admin-timetable-grid">
               <!-- Render 10 ca với các nút hoán đổi 🔄 -->
             </div>
+          </div>
+
+          <!-- Chế độ Xem Toàn Cảnh Cả Tháng (Render 4 tuần cùng lúc - Task 16) -->
+          <div id="admin-master-month-container" class="master-month-container" style="display: none;">
+            <!-- Render 4 tuần liên tiếp tại đây -->
           </div>
 
           <!-- Danh sách Dự bị / Ưu tiên cho Tuần 2 khi đông người -->
@@ -387,11 +454,14 @@
             <p class="card-desc">Xem, chỉnh sửa ca rảnh, thêm mới hoặc xóa sinh viên trong hệ thống</p>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="btn-open-import-modal" style="font-weight: 700; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;" title="Nhập hàng loạt sinh viên từ file Excel / CSV khảo sát">
+              <span>📥 Nhập Từ Excel / CSV</span>
+            </button>
             <button class="btn btn-primary btn-sm" id="btn-open-add-student">
               <span>+ Thêm Sinh Viên Mới</span>
             </button>
             <button class="btn btn-danger-outline btn-sm" id="btn-reset-data" style="font-weight: 700; background: #fff1f2; color: #be123c; border-color: #fda4af;" title="Xóa toàn bộ hồ sơ sinh viên đã đăng ký trong hệ thống">
-              <span>🗑️ Xóa Toàn Bộ Sinh Viên</span>
+              <span>👥 Xóa Toàn Bộ Sinh Viên</span>
             </button>
           </div>
         </div>
@@ -768,6 +838,81 @@
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL NHẬP DANH SÁCH SINH VIÊN TỪ EXCEL / CSV (TASK 18)
+       ==================================================================== -->
+  <div class="modal-backdrop" id="import-excel-modal">
+    <div class="modal-content" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>📥 Nhập Danh Sách Sinh Viên Từ File Excel / CSV</span>
+        </h3>
+        <button type="button" class="modal-close" id="btn-close-import-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Tải lên file danh sách sinh viên đăng ký từ Google Form hoặc Excel khảo sát (hỗ trợ định dạng <code>.csv</code> UTF-8). Hệ thống sẽ tự động nhận diện Họ tên, MSSV, SĐT, Phân loại và các ca rảnh.
+        </p>
+
+        <!-- Nút tải file mẫu -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-page); padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <span style="font-size: 0.84rem; font-weight: 600;">Chưa có file mẫu chuẩn?</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-download-import-template" style="font-size: 0.78rem;">
+            <span>📄 Tải File Mẫu Excel (.csv)</span>
+          </button>
+        </div>
+
+        <!-- Drag & Drop Zone -->
+        <div class="import-dropzone" id="import-file-dropzone">
+          <input type="file" id="input-import-file" accept=".csv,text/csv" style="display: none;">
+          <div class="import-icon">📂</div>
+          <div style="font-weight: 700; font-size: 1rem; margin-bottom: 0.35rem;">
+            Kéo thả file CSV vào đây hoặc <span style="color: var(--primary); text-decoration: underline;">bấm để chọn file</span>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">
+            Định dạng hỗ trợ: UTF-8 CSV (xuất từ Google Sheets hoặc Excel). Dung lượng tối đa: 5MB
+          </div>
+        </div>
+
+        <!-- Hộp xem trước (Preview) -->
+        <div id="import-preview-section" style="display: none; margin-top: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div style="font-weight: 700; font-size: 0.9rem;" id="import-preview-count-label">
+              📋 Danh sách nhận diện được: 0 sinh viên
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);" id="import-file-name-label">
+              File: -
+            </div>
+          </div>
+          <div class="import-preview-table-wrapper">
+            <table class="import-preview-table" id="import-preview-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">STT</th>
+                  <th>Họ và Tên</th>
+                  <th>MSSV</th>
+                  <th>SĐT</th>
+                  <th>Phân Loại</th>
+                  <th>Ca Rảnh</th>
+                  <th>Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody id="import-preview-tbody">
+                <!-- Rows render here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-import">Hủy bỏ</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-import" disabled style="opacity: 0.6;">
+          <span>✓ Xác Nhận Nạp Sinh Viên</span>
+        </button>
       </div>
     </div>
   </div>

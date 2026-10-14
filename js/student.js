@@ -74,9 +74,8 @@
       btnQuickAll: document.getElementById('btn-quick-all'),
       btnQuickClear: document.getElementById('btn-quick-clear'),
 
-      // Week switchers
-      btnWeek1: document.getElementById('btn-student-week-1'),
-      btnWeek2: document.getElementById('btn-student-week-2'),
+      // Week switchers (Tuần 1 - Tuần 4)
+      weekSelectorButtons: document.querySelectorAll('#student-week-selector .filter-btn'),
 
       // Banners & Notifications
       regSuccessAlert: document.getElementById('reg-success-alert'),
@@ -99,6 +98,7 @@
 
   function initStudentPortal() {
     cacheDOMElements();
+    initThemeToggle();
     evaluateRegistrationWindow();
     bindEvents();
     renderCommonSchedule();
@@ -945,6 +945,49 @@
       toast.style.transform = 'translateX(100%)';
       setTimeout(() => toast.remove(), 300);
     }, 3200);
+  }
+
+  // Quản lý Chế độ Sáng / Tối (Dark / Light Theme Switcher)
+  function initThemeToggle() {
+    const toggleBtn = document.getElementById('btn-theme-toggle');
+    if (!toggleBtn) return;
+
+    function updateBtnVisual(isDark) {
+      const icon = toggleBtn.querySelector('.theme-icon');
+      const text = toggleBtn.querySelector('.theme-text');
+      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+      if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
+      toggleBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
+    }
+
+    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    updateBtnVisual(currentDark);
+
+    toggleBtn.addEventListener('click', () => {
+      const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const newTheme = isCurrentlyDark ? 'light' : 'dark';
+      if (newTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      try {
+        localStorage.setItem('ts_scheduler_theme', newTheme);
+      } catch (e) {}
+      updateBtnVisual(newTheme === 'dark');
+    });
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'ts_scheduler_theme') {
+        const isDark = e.newValue === 'dark';
+        if (isDark) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+        updateBtnVisual(isDark);
+      }
+    });
   }
 
   // Phím tắt bí mật dành cho Ban Điều Hành Tuyển Sinh (Ctrl + Shift + A)

@@ -224,34 +224,34 @@
 - **Description:** 
   - Bổ sung nút chuyển đổi chế độ xem: `Xem Từng Tuần (Tabs)` ↔ `Toàn Cảnh Cả Tháng (Master View)`.
   - Trong chế độ Toàn cảnh, hiển thị trực quan cả 4 tuần (Tuần 1, Tuần 2, Tuần 3, Tuần 4) trải dài hoặc cuộn ngang mượt mà, giúp Ban điều hành có cái nhìn bao quát 40 ca trực trong tháng mà không cần click chuyển qua lại giữa các tab tuần.
-  - Hỗ trợ thu gọn/mở rộng từng tuần hoặc in toàn bộ bảng 1 tháng.
+  - Hỗ trợ đổi nhân sự trực tiếp ở bất kỳ tuần nào ngay trên giao diện toàn cảnh.
 - **Acceptance criteria:**
-  - [ ] Nút chuyển đổi View Mode trên thanh công cụ thời khóa biểu Admin.
-  - [ ] Render 4 bảng tuần liên tiếp nhau với đầy đủ thẻ nhân sự và trạng thái từng ca.
-  - [ ] Đồng bộ chỉnh sửa: Khi đổi nhân sự ở tuần bất kỳ trong chế độ xem cả tháng, dữ liệu tự động lưu vào `monthSchedule`.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
+  - [x] Nút chuyển đổi View Mode trên thanh công cụ thời khóa biểu Admin.
+  - [x] Render 4 bảng tuần liên tiếp nhau với đầy đủ thẻ nhân sự và trạng thái từng ca.
+  - [x] Đồng bộ chỉnh sửa: Khi đổi nhân sự ở tuần bất kỳ trong chế độ xem cả tháng, dữ liệu tự động lưu vào `monthSchedule`.
+- **Status:** ✅ Đã hoàn thành
 
 ### Task 17 (Mục #3): Hero Toolbar Nổi & Bảng Chỉ Số Nhanh (Sticky Hero Toolbar & Live Stats)
 - **Description:**
   - Khi người dùng cuộn chuột xuống bảng thời khóa biểu hoặc danh sách sinh viên, một thanh công cụ nổi (Sticky Hero Bar) xuất hiện ở cạnh trên màn hình.
   - Tích hợp các badge chỉ số thời gian thực: `Tổng sinh viên`, `Số ca đã lấp đầy (X/40 ca)`, `Cảnh báo ca trống / thiếu người`.
-  - Các nút thao tác nhanh 1-Click: `Xếp Lịch Nhanh`, `Xuất Excel HCM-UTE`, `Sao Chép Bảng`, `Bộ lọc nhanh`.
+  - Các nút thao tác nhanh 1-Click: `Xếp Lịch Nhanh`, `Xuất Excel HCM-UTE`, `Sao Chép Bảng`, `Lên đầu trang`.
 - **Acceptance criteria:**
-  - [ ] Thanh Sticky Bar xuất hiện mượt mà khi cuộn qua khỏi viewport của header.
-  - [ ] Hiển thị chính xác tiến độ lấp đầy ca trực của toàn bộ 4 tuần.
-  - [ ] Bấm các nút thao tác nhanh trên Sticky Bar hoạt động tương đương nút chính.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
+  - [x] Thanh Sticky Bar xuất hiện mượt mà khi cuộn qua khỏi viewport của header.
+  - [x] Hiển thị chính xác tiến độ lấp đầy ca trực của toàn bộ 4 tuần.
+  - [x] Bấm các nút thao tác nhanh trên Sticky Bar hoạt động mượt mà.
+- **Status:** ✅ Đã hoàn thành
 
 ### Task 18 (Mục #4): Nhập Danh Sách Sinh Viên Từ File Excel / CSV (Batch Import CTV)
 - **Description:**
   - Cho phép cán bộ nạp nhanh toàn bộ danh sách CTV từ file Google Form / Excel khảo sát đầu kỳ thay vì nhập tay từng bạn.
-  - Cung cấp file mẫu Excel/CSV chuẩn (`Họ tên`, `MSSV`, `SĐT`, `Vai trò: Người cũ/mới`, `Ca rảnh: T2_S, T2_C...`).
-  - Hộp thoại kéo-thả file (`.xlsx`, `.csv`) với trình phân tích dữ liệu trực tiếp, hiển thị bảng xem trước (Preview) danh sách sinh viên hợp lệ và các lỗi (MSSV trùng, định dạng ca sai) trước khi nhấn "Xác Nhận Nạp".
+  - Cung cấp file mẫu CSV/Excel chuẩn (`Họ tên`, `MSSV`, `SĐT`, `Vai trò: Người cũ/mới`, `Ca rảnh: T2_S, T2_C...`).
+  - Hộp thoại kéo-thả file (`.csv`, `.txt`) với trình phân tích dữ liệu trực tiếp, hiển thị bảng xem trước (Preview) danh sách sinh viên hợp lệ và các lỗi (MSSV trùng, định dạng ca sai) trước khi nhấn "Xác Nhận Nạp".
 - **Acceptance criteria:**
-  - [ ] Nút "Tải file mẫu Excel" và nút "📥 Nhập từ Excel/CSV" tại tab Quản lý sinh viên.
-  - [ ] Phân tích chính xác dữ liệu từ file và nạp vào danh sách sinh viên của hệ thống.
-  - [ ] Cảnh báo trùng MSSV và hỏi người dùng ghi đè hay bỏ qua.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
+  - [x] Nút "Tải file mẫu CSV" và nút "📥 Nhập từ Excel/CSV" tại tab Quản lý sinh viên.
+  - [x] Phân tích chính xác dữ liệu từ file và nạp vào danh sách sinh viên của hệ thống.
+  - [x] Cảnh báo trùng MSSV và hỏi người dùng ghi đè hay bỏ qua.
+- **Status:** ✅ Đã hoàn thành
 
 ### Task 19 (Mục #6): Chế Độ Giao Diện Sáng / Tối (Dark / Light Theme Switcher)
 - **Description:**
@@ -259,50 +259,10 @@
   - Tối ưu bảng màu Dark Mode: Màu nền Slate Navy sang trọng (`#0f172a`, `#1e293b`), chữ tương phản cao, thẻ nhân sự rực rỡ dịu mắt cho các ca trực đêm và làm việc kéo dài.
   - Lưu trạng thái theme đã chọn vào `localStorage` (`ts_scheduler_theme: 'dark' | 'light'`) và tự động nhận diện `prefers-color-scheme` của hệ điều hành.
 - **Acceptance criteria:**
-  - [ ] Nút đổi theme mượt mà không bị giật trang.
-  - [ ] Mọi bảng tính, modal, ma trận ca trực đều hiển thị rõ ràng, chuẩn tương phản WCAG khi ở chế độ Dark Mode.
-  - [ ] F5 trang hoặc chuyển qua lại giữa các tab vẫn giữ nguyên theme đã chọn.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
+  - [x] Nút đổi theme mượt mà không bị giật trang.
+  - [x] Mọi bảng tính, modal, ma trận ca trực đều hiển thị rõ ràng, chuẩn tương phản WCAG khi ở chế độ Dark Mode.
+  - [x] F5 trang hoặc chuyển qua lại giữa các tab vẫn giữ nguyên theme đã chọn.
+- **Status:** ✅ Đã hoàn thành
 
-### Task 20 (Mở rộng A): Bộ Lọc & Tìm Kiếm Thông Minh Trên Thời Khóa Biểu (Smart Duty Filter & Highlight)
-- **Description:**
-  - Thêm thanh tìm kiếm và bộ lọc nhanh ngay trên bảng thời khóa biểu:
-    - Tìm kiếm theo tên / MSSV: Tự động highlight (làm sáng rực) tất cả các ô ca trực mà sinh viên đó được phân công trong 4 tuần, làm mờ các ô còn lại.
-    - Lọc theo tình trạng ca: Chỉ hiển thị `Ca thiếu người cũ`, `Ca thiếu người mới`, `Ca chưa có ai trực`.
-- **Acceptance criteria:**
-  - [ ] Gõ tên sinh viên -> các ca của bạn đó nổi bật ngay lập tức.
-  - [ ] Giúp người điều phối phát hiện ngay các ca cần bù người trong vòng 1 giây.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
 
-### Task 21 (Mở rộng B): Đồng Bộ Lịch Cá Nhân (Xuất File .ics / Google Calendar)
-- **Description:**
-  - Tại Cổng Sinh Viên, sau khi tra cứu bằng MSSV và xem các ca mình được xếp, có nút:
-    - `📅 Thêm vào Google Calendar`: Mở link tạo sự kiện Google Calendar trực tiếp.
-    - `📥 Tải file Lịch (.ics)`: Tải file lịch iCalendar để nhập vào Apple Calendar (iPhone/Mac) hoặc Outlook.
-  - Tự động đặt thông báo nhắc nhở trước ca trực 30 phút hoặc 1 giờ.
-- **Acceptance criteria:**
-  - [ ] Sinh viên tải file .ics hoặc mở link Google Calendar với đầy đủ tiêu đề "Trực Văn Phòng TVTS HCM-UTE", thời gian bắt đầu và kết thúc chuẩn xác.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
-
-### Task 22 (Mở rộng C): Mẫu Tin Nhắn Nhắc Lịch Trực Tự Động (Zalo / SMS / Messenger Template)
-- **Description:**
-  - Tích hợp nút 1-Click "📋 Sao chép tin nhắn Zalo": Tự động trích xuất lịch trực của từng ngày hoặc tuần và tạo nội dung thông báo chuẩn chỉnh:
-    - *"📢 [THÔNG BÁO CA TRỰC NGÀY MAI - THỨ 2]*
-      - *Ca Sáng (07:30 - 11:30): Nguyễn Văn A (Người cũ) & Trần Thị B (Người mới)*
-      - *Ca Chiều (13:00 - 16:30): Lê Văn C (Người cũ) & Phạm Thị D (Người mới)*
-      - *Địa điểm: Văn phòng Ban Tư vấn Tuyển sinh. Chúc các bạn một ca trực hiệu quả!"*
-- **Acceptance criteria:**
-  - [ ] Nút sao chép tin nhắn theo Ngày / theo Tuần.
-  - [ ] Định dạng văn bản gọn gàng, có icon trực quan, sẵn sàng dán vào nhóm Zalo CTV.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
-
-### Task 23 (Mở rộng D): Điểm Danh & Check-in Ca Trực Bằng Mã QR (QR Duty Check-in)
-- **Description:**
-  - Admin có thể tạo mã QR điểm danh động dán tại văn phòng TVTS.
-  - Sinh viên đến ca dùng điện thoại quét mã QR -> Nhập MSSV -> Xác nhận check-in đúng giờ.
-  - Bảng Admin hiển thị trạng thái check-in thực tế: `Đã có mặt (Xanh lá)`, `Đi trễ (Vàng)`, `Vắng mặt (Đỏ)` để cuối tháng thống kê cấp giấy chứng nhận CTV.
-- **Acceptance criteria:**
-  - [ ] Hệ thống ghi nhận mốc thời gian check-in của CTV và đối chiếu với giờ bắt đầu ca trực.
-  - [ ] Báo cáo chuyên cần cuối tháng xuất file Excel.
-- **Status:** ⏳ Đã lên kế hoạch (Chưa làm)
 

@@ -13,6 +13,21 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- Pre-render Theme Activator (Zero flash) -->
+  <script>
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('ts_scheduler_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -28,6 +43,12 @@
       </div>
 
       <div class="header-actions">
+        <!-- Nút Chuyển Giao Diện Sáng / Tối -->
+        <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Chuyển chế độ Sáng / Tối (Dark Mode)" aria-label="Đổi giao diện Sáng / Tối">
+          <span class="theme-icon">🌙</span>
+          <span class="theme-text">Tối</span>
+        </button>
+
         <span style="font-size: 0.82rem; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #10b981; padding: 0.35rem 0.85rem; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 0.35rem;">
           <span>🌱 Cổng Dành Cho Sinh Viên</span>
         </span>

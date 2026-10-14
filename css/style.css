@@ -65,6 +65,57 @@
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ==========================================================================
+   Dark Theme Design Tokens
+   ========================================================================== */
+[data-theme="dark"] {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-light: #1e1b4b;
+  --primary-glow: rgba(99, 102, 241, 0.35);
+
+  --secondary: #38bdf8;
+  --secondary-hover: #0284c7;
+  --secondary-light: #082f49;
+
+  /* Surfaces & Backgrounds */
+  --bg-page: #0b0f19;
+  --bg-card: #131b2e;
+  --bg-card-hover: #1b253d;
+  --bg-glass: rgba(19, 27, 46, 0.92);
+  --border-color: #243049;
+  --border-focus: #818cf8;
+
+  /* Typography */
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-inverse: #0b0f19;
+
+  /* Role Colors */
+  --role-old-subtle: #1e1b4b;
+  --role-old-border: #6366f1;
+  --role-old-text: #c7d2fe;
+
+  --role-new-subtle: #064e3b;
+  --role-new-border: #10b981;
+  --role-new-text: #a7f3d0;
+
+  /* Semantic status colors */
+  --success: #10b981;
+  --success-bg: #064e3b;
+  --warning: #f59e0b;
+  --warning-bg: #451a03;
+  --danger: #ef4444;
+  --danger-bg: #450a0a;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.4);
+}
+
 /* Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -2135,4 +2186,347 @@ body {
   background-color: #ea4335 !important;
   color: #ffffff !important;
 }
+
+/* ==========================================================================
+   Dark Theme Overrides for Core UI Elements
+   ========================================================================== */
+[data-theme="dark"] body {
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+}
+
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] textarea {
+  background-color: #172138 !important;
+  color: #f1f5f9 !important;
+  border-color: #2b3956 !important;
+}
+
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] .form-select:focus {
+  background-color: #1c2844 !important;
+  border-color: #818cf8 !important;
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: #1c2740 !important;
+  color: #cbd5e1 !important;
+  border-color: #2c3c60 !important;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: #253354 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .filter-btn {
+  background: #151d30;
+  border-color: #263452;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .filter-btn:hover {
+  background: #1f2b47;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .filter-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+[data-theme="dark"] .grid-header {
+  background: #19243d;
+  color: #cbd5e1;
+  border-color: #283758;
+}
+
+[data-theme="dark"] .grid-cell {
+  background: #131b2e;
+  border-color: #222f4b;
+}
+
+[data-theme="dark"] .period-cell {
+  background: #0f1627;
+  border-color: #222f4b;
+}
+
+[data-theme="dark"] .duty-member-card.empty-member {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: #2c3a57;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .table-container table thead tr {
+  background: #19243d;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .table-container table td {
+  border-color: #222f4b;
+}
+
+[data-theme="dark"] .table-container table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .slot-toggle {
+  background: #172138;
+  border-color: #283758;
+}
+
+[data-theme="dark"] .slot-toggle:hover {
+  border-color: #4f46e5;
+  background: #1d2a47;
+}
+
+[data-theme="dark"] .slot-toggle.selected {
+  background: #232252;
+  border-color: #6366f1;
+}
+
+[data-theme="dark"] .modal-content {
+  background: #131b2e !important;
+  border: 1px solid #2d3c5e !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer {
+  border-color: #222f4b !important;
+}
+
+[data-theme="dark"] .auth-card {
+  background: #131b2e !important;
+  border-color: #2d3c5e !important;
+}
+
+[data-theme="dark"] .summary-card {
+  background: #131b2e;
+  border-color: #222f4b;
+}
+
+/* Theme Toggle Button */
+.btn-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  user-select: none;
+}
+
+.btn-theme-toggle:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   Sticky Hero Toolbar & Quick Action Bar (Task 17)
+   ========================================================================== */
+.sticky-hero-bar {
+  position: sticky;
+  top: 72px;
+  z-index: 45;
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1.5px solid var(--border-color);
+  padding: 0.65rem 1.5rem;
+  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.sticky-hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.sticky-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.sticky-stat-pill strong {
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.sticky-stat-pill.pill-warning {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+[data-theme="dark"] .sticky-stat-pill.pill-warning {
+  color: #fbbf24;
+}
+
+.sticky-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Full-Month Master Grid View (Task 16)
+   ========================================================================== */
+.view-mode-toggle {
+  display: inline-flex;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.view-mode-btn {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.view-mode-btn:hover {
+  color: var(--text-main);
+}
+
+.view-mode-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+.master-month-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.master-week-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.master-week-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.master-week-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-main);
+}
+
+/* ==========================================================================
+   Import Excel / CSV Modal Styles (Task 18)
+   ========================================================================== */
+.import-dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.import-dropzone:hover,
+.import-dropzone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.import-icon {
+  font-size: 2.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.import-preview-table-wrapper {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.import-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.import-preview-table th {
+  background: var(--bg-page);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.import-preview-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
 

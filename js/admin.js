@@ -66,6 +66,8 @@
     twoWeekSchedule: null,
     monthSchedule: null,
     viewWeek: 1, // 1, 2, 3, hoặc 4
+    viewMode: 'single', // 'single' (từng tuần) hoặc 'master' (toàn cảnh 4 tuần)
+    importedCandidates: [],
     activeTab: 'tab-schedule-mgmt',
     roleFilter: 'all',
     searchQuery: '',
@@ -210,12 +212,47 @@
       excelPreviewTableContainer: document.getElementById('excel-preview-table-container'),
       excelCopyStatusHint: document.getElementById('excel-copy-status-hint'),
 
+      // Sticky Hero Bar Elements (Task 17)
+      stickyHeroBar: document.getElementById('admin-sticky-hero-bar'),
+      stickyStatStudents: document.getElementById('sticky-stat-students'),
+      stickyStatFilled: document.getElementById('sticky-stat-filled'),
+      stickyStatEmpty: document.getElementById('sticky-stat-empty'),
+      stickyPillEmpty: document.getElementById('sticky-pill-empty'),
+      btnStickyAutoSchedule: document.getElementById('btn-sticky-auto-schedule'),
+      btnStickyQuickCopy: document.getElementById('btn-sticky-quick-copy'),
+      btnStickyOpenExcel: document.getElementById('btn-sticky-open-excel'),
+
+      // View Mode Elements (Task 16: Master Month Grid)
+      btnViewSingleWeek: document.getElementById('btn-view-single-week'),
+      btnViewMasterMonth: document.getElementById('btn-view-master-month'),
+      adminSingleWeekControls: document.getElementById('admin-single-week-controls'),
+      adminSingleWeekWrapper: document.getElementById('admin-single-week-wrapper'),
+      adminMasterMonthContainer: document.getElementById('admin-master-month-container'),
+
+      // Import Excel / CSV Modal Elements (Task 18)
+      importModal: document.getElementById('import-excel-modal'),
+      btnOpenImportModal: document.getElementById('btn-open-import-modal'),
+      btnCloseImportModal: document.getElementById('btn-close-import-modal'),
+      btnCancelImport: document.getElementById('btn-cancel-import'),
+      btnConfirmImport: document.getElementById('btn-confirm-import'),
+      btnDownloadImportTemplate: document.getElementById('btn-download-import-template'),
+      importFileDropzone: document.getElementById('import-file-dropzone'),
+      inputImportFile: document.getElementById('input-import-file'),
+      importPreviewSection: document.getElementById('import-preview-section'),
+      importPreviewTbody: document.getElementById('import-preview-tbody'),
+      importPreviewCountLabel: document.getElementById('import-preview-count-label'),
+      importFileNameLabel: document.getElementById('import-file-name-label'),
+
+      // Theme toggle button
+      btnThemeToggle: document.getElementById('btn-theme-toggle'),
+
       toastContainer: document.getElementById('toast-container')
     };
   }
 
   function initAdminPortal() {
     cacheDOMElements();
+    initThemeToggle();
     loadAdminUsers();
     bindAuthEvents();
     bindUserMgmtEvents();
@@ -262,6 +299,9 @@
     loadRegConfig();
     bindEvents();
     bindRegConfigEvents();
+    bindStickyHeroEvents();
+    bindViewModeEvents();
+    bindImportEvents();
     renderAll();
     renderRegConfigUI();
 
@@ -813,8 +853,13 @@
   function renderAll() {
     renderSummary();
     renderStudentTable();
-    renderTimetable();
+    if (state.viewMode === 'master') {
+      renderMasterMonthGrid();
+    } else {
+      renderTimetable();
+    }
     renderFairness();
+    updateStickyHeroStats();
   }
 
   function renderSummary() {
@@ -828,8 +873,16 @@
     if (elements.badgeAdminStudentCount) elements.badgeAdminStudentCount.textContent = total;
 
     if (elements.filledShiftsCount) {
-      const fullShifts = state.currentSchedule?.summary?.fullShifts || 0;
-      elements.filledShiftsCount.textContent = `${fullShifts}/10 ca`;
+      if (state.monthSchedule?.weeks) {
+        let totalFull = 0;
+        state.monthSchedule.weeks.forEach(w => {
+          totalFull += w.summary?.fullShifts || 0;
+        });
+        elements.filledShiftsCount.textContent = `${totalFull}/40 ca`;
+      } else {
+        const fullShifts = state.currentSchedule?.summary?.fullShifts || 0;
+        elements.filledShiftsCount.textContent = `${fullShifts}/10 ca`;
+      }
     }
   }
 
@@ -1093,13 +1146,17 @@
     renderList(newMembers, elements.fairnessListNew, '#10b981');
   }
 
-  window.adminOpenReassignModal = function(shiftId, role) {
-    state.reassignModalData = { shiftId, role };
+  window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
+    state.reassignModalData = { shiftId, role, weekNumber };
     const shiftInfo = SHIFT_MAP[shiftId];
     const roleTitle = role === 'old' ? 'Người Cũ' : 'Người Mới';
+    const targetSchedule = weekNumber && state.monthSchedule?.weeks?.[weekNumber - 1]
+      ? state.monthSchedule.weeks[weekNumber - 1]
+      : state.currentSchedule;
 
     if (elements.modalSlotTitle) {
-      elements.modalSlotTitle.textContent = `${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
+      const weekPrefix = weekNumber ? `[Tuần ${weekNumber}] ` : '';
+      elements.modalSlotTitle.textContent = `${weekPrefix}${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
     }
 
     if (elements.modalRoleBadge) {
@@ -1108,7 +1165,7 @@
     }
 
     const eligibleStudents = state.students.filter(s => s.role === role);
-    const currentAssigned = state.currentSchedule?.scheduleTable[shiftId]?.[role === 'old' ? 'oldMember' : 'newMember'];
+    const currentAssigned = targetSchedule?.scheduleTable?.[shiftId]?.[role === 'old' ? 'oldMember' : 'newMember'];
 
     let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
 
@@ -1143,13 +1200,19 @@
   }
 
   function saveManualReassignment() {
-    if (!state.reassignModalData || !state.currentSchedule) return;
+    if (!state.reassignModalData) return;
 
-    const { shiftId, role } = state.reassignModalData;
+    const { shiftId, role, weekNumber } = state.reassignModalData;
+    const targetSchedule = weekNumber && state.monthSchedule?.weeks?.[weekNumber - 1]
+      ? state.monthSchedule.weeks[weekNumber - 1]
+      : state.currentSchedule;
+
+    if (!targetSchedule) return;
+
     const selectedStudentId = elements.modalCandidateSelect.value;
     const newStudent = selectedStudentId ? state.students.find(s => s.id === selectedStudentId) : null;
 
-    const slot = state.currentSchedule.scheduleTable[shiftId];
+    const slot = targetSchedule.scheduleTable[shiftId];
     if (!slot) return;
 
     if (role === 'old') {
@@ -1175,18 +1238,18 @@
       };
     });
 
-    Object.values(state.currentSchedule.scheduleTable).forEach(s => {
+    Object.values(targetSchedule.scheduleTable).forEach(s => {
       if (s.oldMember && newStats[s.oldMember.id]) newStats[s.oldMember.id].assignedCount++;
       if (s.newMember && newStats[s.newMember.id]) newStats[s.newMember.id].assignedCount++;
     });
 
-    state.currentSchedule.studentStats = newStats;
-    state.currentSchedule.timestamp = Date.now();
+    targetSchedule.studentStats = newStats;
+    targetSchedule.timestamp = Date.now();
 
     saveSchedule();
     renderAll();
     closeReassignModal();
-    showToast('Đã lưu thay đổi nhân sự trực!', 'success');
+    showToast(`Đã lưu thay đổi nhân sự trực ${weekNumber ? `Tuần ${weekNumber}` : ''}!`, 'success');
   }
 
   function openAddStudentModal() {
@@ -1307,6 +1370,565 @@
       showToast(`Đã xóa bạn ${student.fullName}!`, 'info');
     }
   };
+
+  /**
+   * ==========================================================================
+   * 1. GIAO DIỆN SÁNG / TỐI (DARK / LIGHT THEME SWITCHER - TASK 19)
+   * ==========================================================================
+   */
+  function initThemeToggle() {
+    const toggleBtn = elements.btnThemeToggle || document.getElementById('btn-theme-toggle');
+    if (!toggleBtn) return;
+
+    function updateBtnVisual(isDark) {
+      const icon = toggleBtn.querySelector('.theme-icon');
+      const text = toggleBtn.querySelector('.theme-text');
+      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+      if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
+      toggleBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
+    }
+
+    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    updateBtnVisual(currentDark);
+
+    toggleBtn.addEventListener('click', () => {
+      const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const newTheme = isCurrentlyDark ? 'light' : 'dark';
+      if (newTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      try {
+        localStorage.setItem('ts_scheduler_theme', newTheme);
+      } catch (e) {}
+      updateBtnVisual(newTheme === 'dark');
+    });
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'ts_scheduler_theme') {
+        const isDark = e.newValue === 'dark';
+        if (isDark) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+        updateBtnVisual(isDark);
+      }
+    });
+  }
+
+  /**
+   * ==========================================================================
+   * 2. STICKY HERO TOOLBAR & BẢNG CHỈ SỐ NHANH (TASK 17)
+   * ==========================================================================
+   */
+  function bindStickyHeroEvents() {
+    elements.btnStickyAutoSchedule?.addEventListener('click', () => {
+      elements.btnAutoSchedule?.click();
+    });
+    elements.btnStickyQuickCopy?.addEventListener('click', () => {
+      elements.btnQuickCopySheet?.click();
+    });
+    elements.btnStickyOpenExcel?.addEventListener('click', () => {
+      elements.btnOpenExcelModal?.click();
+    });
+  }
+
+  function updateStickyHeroStats() {
+    const total = state.students.length;
+    if (elements.stickyStatStudents) {
+      elements.stickyStatStudents.textContent = `${total} CTV`;
+    }
+
+    if (elements.stickyStatFilled) {
+      if (state.monthSchedule?.weeks) {
+        let totalFull = 0;
+        let totalEmpty = 0;
+        state.monthSchedule.weeks.forEach(w => {
+          totalFull += w.summary?.fullShifts || 0;
+          totalEmpty += (w.summary?.emptyShifts || 0) + (w.summary?.partialShifts || 0);
+        });
+        elements.stickyStatFilled.textContent = `${totalFull}/40 ca`;
+        if (elements.stickyStatEmpty && elements.stickyPillEmpty) {
+          if (totalEmpty > 0) {
+            elements.stickyStatEmpty.textContent = `${totalEmpty} ca chưa đủ`;
+            elements.stickyPillEmpty.style.display = 'inline-flex';
+          } else {
+            elements.stickyPillEmpty.style.display = 'none';
+          }
+        }
+      } else {
+        const fullShifts = state.currentSchedule?.summary?.fullShifts || 0;
+        const emptyShifts = (state.currentSchedule?.summary?.emptyShifts || 0) + (state.currentSchedule?.summary?.partialShifts || 0);
+        elements.stickyStatFilled.textContent = `${fullShifts}/10 ca`;
+        if (elements.stickyStatEmpty && elements.stickyPillEmpty) {
+          if (emptyShifts > 0) {
+            elements.stickyStatEmpty.textContent = `${emptyShifts} ca chưa đủ`;
+            elements.stickyPillEmpty.style.display = 'inline-flex';
+          } else {
+            elements.stickyPillEmpty.style.display = 'none';
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * ==========================================================================
+   * 3. CHẾ ĐỘ XEM TOÀN CẢNH MA TRẬN 1 THÁNG (FULL-MONTH MASTER GRID - TASK 16)
+   * ==========================================================================
+   */
+  function bindViewModeEvents() {
+    elements.btnViewSingleWeek?.addEventListener('click', () => {
+      switchViewMode('single');
+    });
+    elements.btnViewMasterMonth?.addEventListener('click', () => {
+      switchViewMode('master');
+    });
+  }
+
+  function switchViewMode(mode) {
+    state.viewMode = mode;
+    if (elements.btnViewSingleWeek) {
+      elements.btnViewSingleWeek.classList.toggle('active', mode === 'single');
+    }
+    if (elements.btnViewMasterMonth) {
+      elements.btnViewMasterMonth.classList.toggle('active', mode === 'master');
+    }
+
+    if (mode === 'single') {
+      if (elements.adminSingleWeekControls) elements.adminSingleWeekControls.style.display = 'flex';
+      if (elements.adminSingleWeekWrapper) elements.adminSingleWeekWrapper.style.display = 'block';
+      if (elements.adminMasterMonthContainer) elements.adminMasterMonthContainer.style.display = 'none';
+      renderTimetable();
+    } else {
+      if (elements.adminSingleWeekControls) elements.adminSingleWeekControls.style.display = 'none';
+      if (elements.adminSingleWeekWrapper) elements.adminSingleWeekWrapper.style.display = 'none';
+      if (elements.adminMasterMonthContainer) elements.adminMasterMonthContainer.style.display = 'flex';
+      renderMasterMonthGrid();
+    }
+  }
+
+  function renderMasterMonthGrid() {
+    if (!elements.adminMasterMonthContainer) return;
+
+    if (!state.monthSchedule || !state.monthSchedule.weeks || state.monthSchedule.weeks.length === 0) {
+      elements.adminMasterMonthContainer.innerHTML = `
+        <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
+          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công 1 Tháng</h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Nhấn "⚡ TỰ ĐỘNG PHÂN BỔ LỊCH TRỰC" ở trên để hệ thống tự động phân bổ trọn vẹn cả 4 tuần trong tháng!
+          </p>
+          <button type="button" class="btn btn-primary" onclick="document.getElementById('btn-admin-auto-schedule')?.click()">
+            <span>⚡ Phân Bổ Ngay</span>
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    const days = [
+      { key: 'T2', name: 'Thứ Hai', sub: 'Thứ 2' },
+      { key: 'T3', name: 'Thứ Ba', sub: 'Thứ 3' },
+      { key: 'T4', name: 'Thứ Tư', sub: 'Thứ 4' },
+      { key: 'T5', name: 'Thứ Năm', sub: 'Thứ 5' },
+      { key: 'T6', name: 'Thứ Sáu', sub: 'Thứ 6' }
+    ];
+
+    let html = '';
+
+    state.monthSchedule.weeks.forEach((weekObj, wIdx) => {
+      const weekNum = wIdx + 1;
+      const schedule = weekObj.scheduleTable || {};
+      const fullCount = weekObj.summary?.fullShifts || 0;
+
+      let gridHtml = '';
+      gridHtml += `<div class="grid-cell grid-header"><span class="day-name">Ca / Ngày</span></div>`;
+      days.forEach(day => {
+        gridHtml += `
+          <div class="grid-cell grid-header">
+            <span class="day-name">${day.name}</span>
+            <span class="day-sub">${day.sub}</span>
+          </div>
+        `;
+      });
+
+      // Sáng (07:30 - 11:30)
+      gridHtml += `
+        <div class="grid-cell period-cell">
+          <span class="period-name">☀️ Sáng</span>
+          <span class="period-time">07:30 - 11:30</span>
+        </div>
+      `;
+      days.forEach(day => {
+        const shiftId = `${day.key}_S`;
+        const slot = schedule[shiftId];
+        gridHtml += renderShiftSlotHtmlForWeek(shiftId, slot, weekNum);
+      });
+
+      // Chiều (13:00 - 16:30)
+      gridHtml += `
+        <div class="grid-cell period-cell">
+          <span class="period-name">🌤️ Chiều</span>
+          <span class="period-time">13:00 - 16:30</span>
+        </div>
+      `;
+      days.forEach(day => {
+        const shiftId = `${day.key}_C`;
+        const slot = schedule[shiftId];
+        gridHtml += renderShiftSlotHtmlForWeek(shiftId, slot, weekNum);
+      });
+
+      html += `
+        <div class="master-week-section">
+          <div class="master-week-header">
+            <div class="master-week-title">
+              <span>🗓️ Tuần ${weekNum} (10 Ca Trực)</span>
+              <span class="badge" style="background: ${fullCount === 10 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}; color: ${fullCount === 10 ? '#10b981' : '#f59e0b'}; font-size: 0.75rem;">
+                ${fullCount === 10 ? '✓ Đủ 10/10 ca' : `⚠️ Đã lấp đầy ${fullCount}/10 ca`}
+              </span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminQuickSwitchToSingleWeek(${weekNum})" style="font-size: 0.78rem;">
+              <span>Xem riêng tuần ${weekNum} →</span>
+            </button>
+          </div>
+          <div class="timetable-wrapper">
+            <div class="timetable-grid">
+              ${gridHtml}
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    elements.adminMasterMonthContainer.innerHTML = html;
+  }
+
+  function renderShiftSlotHtmlForWeek(shiftId, slot, weekNum) {
+    if (!slot) {
+      return `<div class="grid-cell shift-duty-slot"><div class="empty-state">Chưa xếp</div></div>`;
+    }
+
+    const oldMem = slot.oldMember;
+    const newMem = slot.newMember;
+
+    let statusPill = '';
+    if (slot.status === 'full') {
+      statusPill = `<span class="shift-status-pill full">✓ Đủ 2 bạn</span>`;
+    } else if (slot.status === 'partial') {
+      statusPill = `<span class="shift-status-pill warning">Thiếu 1 bạn</span>`;
+    } else {
+      statusPill = `<span class="shift-status-pill empty">Trống</span>`;
+    }
+
+    const oldCard = oldMem ? `
+      <div class="duty-member-card role-old" title="Người cũ - Có kinh nghiệm">
+        <div class="member-info">
+          <span class="member-role-tag">🎓 Người Cũ</span>
+          <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
+        </div>
+        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
+      </div>
+    ` : `
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán người cũ ở Tuần ${weekNum}">
+        <span>+ Chưa có Người Cũ</span>
+      </div>
+    `;
+
+    const newCard = newMem ? `
+      <div class="duty-member-card role-new" title="Người mới - Tập sự">
+        <div class="member-info">
+          <span class="member-role-tag">🌱 Người Mới</span>
+          <span class="member-name">${escapeHtml(newMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
+        </div>
+        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
+      </div>
+    ` : `
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán người mới ở Tuần ${weekNum}">
+        <span>+ Chưa có Người Mới</span>
+      </div>
+    `;
+
+    return `
+      <div class="grid-cell shift-duty-slot">
+        <div class="shift-slot-header">
+          <span>${slot.shiftInfo?.dayName || ''}</span>
+          ${statusPill}
+        </div>
+        ${oldCard}
+        ${newCard}
+      </div>
+    `;
+  }
+
+  window.adminQuickSwitchToSingleWeek = function(w) {
+    switchViewMode('single');
+    switchAdminWeek(w);
+  };
+
+  /**
+   * ==========================================================================
+   * 4. NHẬP DANH SÁCH SINH VIÊN TỪ EXCEL / CSV (TASK 18)
+   * ==========================================================================
+   */
+  function bindImportEvents() {
+    elements.btnOpenImportModal?.addEventListener('click', openImportModal);
+    elements.btnCloseImportModal?.addEventListener('click', closeImportModal);
+    elements.btnCancelImport?.addEventListener('click', closeImportModal);
+    elements.btnDownloadImportTemplate?.addEventListener('click', downloadImportTemplateCsv);
+
+    elements.importModal?.addEventListener('click', (e) => {
+      if (e.target === elements.importModal) closeImportModal();
+    });
+
+    const dropzone = elements.importFileDropzone;
+    const fileInput = elements.inputImportFile;
+
+    dropzone?.addEventListener('click', () => {
+      fileInput?.click();
+    });
+
+    dropzone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone?.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
+
+    dropzone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        handleImportFileSelect(files[0]);
+      }
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      const files = e.target?.files;
+      if (files && files.length > 0) {
+        handleImportFileSelect(files[0]);
+      }
+    });
+
+    elements.btnConfirmImport?.addEventListener('click', confirmImportStudents);
+  }
+
+  function openImportModal() {
+    state.importedCandidates = [];
+    if (elements.importPreviewSection) elements.importPreviewSection.style.display = 'none';
+    if (elements.importPreviewTbody) elements.importPreviewTbody.innerHTML = '';
+    if (elements.btnConfirmImport) {
+      elements.btnConfirmImport.disabled = true;
+      elements.btnConfirmImport.style.opacity = '0.6';
+    }
+    if (elements.inputImportFile) elements.inputImportFile.value = '';
+    elements.importModal?.classList.add('active');
+  }
+
+  function closeImportModal() {
+    elements.importModal?.classList.remove('active');
+    state.importedCandidates = [];
+  }
+
+  function downloadImportTemplateCsv() {
+    const csvContent = '\uFEFF' + [
+      'Họ và Tên,Mã Số Sinh Viên,Số Điện Thoại,Phân Loại (Người cũ/Người mới),Các Ca Rảnh (cách nhau bởi dấu phẩy)',
+      'Nguyễn Văn A,2102001,0912345678,Người cũ,"T2_S, T2_C, T3_S, T4_C, T5_S, T6_C"',
+      'Trần Thị Bích,2302002,0987654321,Người mới,"T2_S, T3_S, T4_S, T5_S, T6_S"',
+      'Lê Hoàng Cường,2102003,0934567890,Người cũ,"T2_S, T3_C, T4_S, T4_C, T5_S, T6_S"'
+    ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mau_danh_sach_ctv_tvts.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Đã tải xuống file mẫu CSV chuẩn UTF-8!', 'success');
+  }
+
+  function handleImportFileSelect(file) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+      showToast('Vui lòng chọn file định dạng .CSV (UTF-8)!', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text === 'string') {
+        const parsed = parseStudentsCsv(text);
+        if (parsed.length === 0) {
+          showToast('Không đọc được dữ liệu sinh viên nào từ file. Vui lòng kiểm tra lại cấu trúc file!', 'error');
+          return;
+        }
+        state.importedCandidates = parsed;
+        renderImportPreview(parsed, file.name);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  function parseStudentsCsv(csvText) {
+    const lines = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    if (lines.length < 2) return [];
+
+    const candidates = [];
+    const validShiftIds = SHIFTS.map(s => s.id);
+
+    // Bỏ qua dòng tiêu đề
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      // Phân tách CSV xử lý dấu ngoặc kép RFC 4180
+      const row = [];
+      let inQuotes = false;
+      let currentVal = '';
+
+      for (let c = 0; c < line.length; c++) {
+        const ch = line[c];
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          row.push(currentVal.trim());
+          currentVal = '';
+        } else {
+          currentVal += ch;
+        }
+      }
+      row.push(currentVal.trim());
+
+      const fullName = (row[0] || '').replace(/^"|"$/g, '').trim();
+      const studentId = (row[1] || '').replace(/^"|"$/g, '').trim();
+      const phone = (row[2] || '').replace(/^"|"$/g, '').trim();
+      const roleRaw = (row[3] || '').toLowerCase();
+      const shiftsRaw = (row[4] || '').replace(/^"|"$/g, '').trim();
+
+      if (!fullName || !studentId) continue;
+
+      const isOld = roleRaw.includes('cũ') || roleRaw.includes('old') || roleRaw.includes('kinh nghiệm');
+      const role = isOld ? 'old' : 'new';
+
+      // Phân tích danh sách ca rảnh
+      const availableShifts = [];
+      const shiftTokens = shiftsRaw.split(/[,;\s]+/).map(t => t.trim().toUpperCase());
+      
+      shiftTokens.forEach(token => {
+        if (validShiftIds.includes(token)) {
+          if (!availableShifts.includes(token)) availableShifts.push(token);
+        }
+      });
+
+      // Nếu không nhập mã ca chuẩn, gán mặc định ít nhất các ca rảnh hợp lý
+      if (availableShifts.length === 0) {
+        availableShifts.push('T2_S', 'T3_C', 'T4_S', 'T5_C', 'T6_S');
+      }
+
+      const isExisting = state.students.some(s => s.studentId.toLowerCase() === studentId.toLowerCase());
+
+      candidates.push({
+        fullName,
+        studentId,
+        phone,
+        role,
+        availableShifts,
+        isExisting
+      });
+    }
+
+    return candidates;
+  }
+
+  function renderImportPreview(candidates, filename) {
+    if (!elements.importPreviewSection || !elements.importPreviewTbody) return;
+
+    elements.importPreviewSection.style.display = 'block';
+    if (elements.importFileNameLabel) {
+      elements.importFileNameLabel.textContent = `File: ${filename}`;
+    }
+    if (elements.importPreviewCountLabel) {
+      elements.importPreviewCountLabel.textContent = `📋 Nhận diện được: ${candidates.length} sinh viên hợp lệ`;
+    }
+
+    elements.importPreviewTbody.innerHTML = candidates.map((c, idx) => {
+      const statusBadge = c.isExisting 
+        ? `<span class="badge" style="background:#fef3c7; color:#92400e;">🔄 Ghi đè</span>`
+        : `<span class="badge" style="background:#d1fae5; color:#065f46;">🌱 Thêm mới</span>`;
+      const roleBadge = c.role === 'old'
+        ? `<span class="badge badge-old" style="font-size:0.7rem;">🎓 Người cũ</span>`
+        : `<span class="badge badge-new" style="font-size:0.7rem;">🌱 Người mới</span>`;
+
+      return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td><strong>${escapeHtml(c.fullName)}</strong></td>
+          <td><code>${escapeHtml(c.studentId)}</code></td>
+          <td>${escapeHtml(c.phone || '-')}</td>
+          <td>${roleBadge}</td>
+          <td><strong style="color:var(--primary);">${c.availableShifts.length}</strong> ca</td>
+          <td>${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    if (elements.btnConfirmImport) {
+      elements.btnConfirmImport.disabled = false;
+      elements.btnConfirmImport.style.opacity = '1';
+      elements.btnConfirmImport.innerHTML = `<span>✓ Xác Nhận Nạp ${candidates.length} Sinh Viên</span>`;
+    }
+  }
+
+  function confirmImportStudents() {
+    const candidates = state.importedCandidates || [];
+    if (candidates.length === 0) return;
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    candidates.forEach(c => {
+      const existingIdx = state.students.findIndex(s => s.studentId.toLowerCase() === c.studentId.toLowerCase());
+      if (existingIdx !== -1) {
+        state.students[existingIdx] = {
+          ...state.students[existingIdx],
+          fullName: c.fullName,
+          phone: c.phone || state.students[existingIdx].phone,
+          role: c.role,
+          availableShifts: c.availableShifts,
+          updatedAt: Date.now()
+        };
+        updatedCount++;
+      } else {
+        state.students.push({
+          id: 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          fullName: c.fullName,
+          studentId: c.studentId,
+          phone: c.phone,
+          role: c.role,
+          availableShifts: c.availableShifts,
+          createdAt: Date.now()
+        });
+        addedCount++;
+      }
+    });
+
+    saveStudents();
+    runFullSchedule();
+    renderAll();
+    closeImportModal();
+    showToast(`Đã nạp thành công ${candidates.length} sinh viên (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success');
+  }
 
   /**
    * ==========================================================================
