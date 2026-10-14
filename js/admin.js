@@ -620,9 +620,15 @@
       state.currentSchedule = state.monthSchedule.weeks[w - 1];
     } else if (state.twoWeekSchedule) {
       state.currentSchedule = (w === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1);
+    } else {
+      state.currentSchedule = null;
     }
     renderTimetable();
     renderFairness();
+    renderStudentTable();
+    if (typeof renderUteSheetPreview === 'function') {
+      renderUteSheetPreview();
+    }
   }
 
   function bindEvents() {
@@ -666,16 +672,23 @@
 
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
     elements.btnClearSchedule?.addEventListener('click', () => {
-      if (!state.currentSchedule && !state.twoWeekSchedule) {
+      if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
         showToast('Hiện tại chưa có bảng phân công nào để xóa!', 'info');
         return;
       }
-      if (confirm('Bạn có chắc chắn muốn xóa toàn bộ bảng phân công ca trực không?\n(Lưu ý: Danh sách sinh viên và các ca rảnh đã đăng ký vẫn được giữ nguyên)')) {
+      if (confirm('Bạn có chắc chắn muốn xóa toàn bộ bảng phân công ca trực (toàn bộ 4 tuần) không?\n(Lưu ý: Danh sách sinh viên và các ca rảnh đã đăng ký vẫn được giữ nguyên)')) {
         state.currentSchedule = null;
         state.twoWeekSchedule = null;
+        state.monthSchedule = null;
+        localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+        localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+        localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
         saveSchedule();
         renderAll();
-        showToast('Đã xóa bảng phân công! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
+        if (typeof renderUteSheetPreview === 'function') {
+          renderUteSheetPreview();
+        }
+        showToast('Đã xóa sạch toàn bộ bảng phân công 4 tuần! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
       }
     });
 
@@ -689,9 +702,16 @@
         state.students = [];
         state.currentSchedule = null;
         state.twoWeekSchedule = null;
+        state.monthSchedule = null;
+        localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+        localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+        localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
         saveStudents();
         saveSchedule();
         renderAll();
+        if (typeof renderUteSheetPreview === 'function') {
+          renderUteSheetPreview();
+        }
         showToast('Đã xóa toàn bộ danh sách sinh viên và làm trống hệ thống!', 'info');
       }
     };
