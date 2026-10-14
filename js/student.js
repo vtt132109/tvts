@@ -15,6 +15,7 @@
     STUDENTS: 'ts_scheduler_students',
     SCHEDULE: 'ts_scheduler_schedule_result',
     TWO_WEEK_SCHEDULE: 'ts_scheduler_two_week_result',
+    MONTH_SCHEDULE: 'ts_scheduler_month_result',
     REG_CONFIG: 'ts_scheduler_reg_config'
   };
 
@@ -203,19 +204,16 @@
       processStudentRegistration();
     });
 
-    // Tuần 1 / Tuần 2 Toggle
-    elements.btnWeek1?.addEventListener('click', () => {
-      viewWeek = 1;
-      elements.btnWeek1.classList.add('active');
-      elements.btnWeek2?.classList.remove('active');
-      renderCommonSchedule();
-    });
-
-    elements.btnWeek2?.addEventListener('click', () => {
-      viewWeek = 2;
-      elements.btnWeek2.classList.add('active');
-      elements.btnWeek1?.classList.remove('active');
-      renderCommonSchedule();
+    // Bộ chọn Tuần 1 -> Tuần 4 (Lịch 1 Tháng)
+    document.querySelectorAll('#student-week-selector .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const w = parseInt(btn.getAttribute('data-week'), 10) || 1;
+        viewWeek = w;
+        document.querySelectorAll('#student-week-selector .filter-btn').forEach(b => {
+          b.classList.toggle('active', parseInt(b.getAttribute('data-week'), 10) === w);
+        });
+        renderCommonSchedule();
+      });
     });
 
     // Tra cứu ca trực cá nhân
@@ -695,10 +693,11 @@
 
     let scheduleResult = null;
     try {
-      const rawTwoWeek = localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-      if (rawTwoWeek) {
-        const twoWeek = JSON.parse(rawTwoWeek);
-        scheduleResult = viewWeek === 2 ? twoWeek.week2 : twoWeek.week1;
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      if (rawMonth) {
+        const month = JSON.parse(rawMonth);
+        const wIdx = Math.min(Math.max(1, viewWeek), 4) - 1;
+        scheduleResult = month.weeks?.[wIdx] || (viewWeek === 2 ? month.week2 : month.week1);
       } else {
         const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
         if (raw) scheduleResult = JSON.parse(raw);
@@ -753,11 +752,11 @@
       `;
     });
 
-    // Sáng
+    // Sáng (07:30 - 11:30)
     gridHtml += `
       <div class="grid-cell period-cell">
         <span class="period-name">☀️ Sáng</span>
-        <span class="period-time">08:00 - 11:30</span>
+        <span class="period-time">07:30 - 11:30</span>
       </div>
     `;
     days.forEach(day => {
@@ -766,11 +765,11 @@
       gridHtml += renderReadOnlyShiftSlot(shiftId, slot);
     });
 
-    // Chiều
+    // Chiều (13:00 - 16:30)
     gridHtml += `
       <div class="grid-cell period-cell">
         <span class="period-name">🌤️ Chiều</span>
-        <span class="period-time">13:30 - 17:00</span>
+        <span class="period-time">13:00 - 16:30</span>
       </div>
     `;
     days.forEach(day => {
@@ -843,24 +842,27 @@
       return;
     }
 
-    let week1Schedule = null;
-    let week2Schedule = null;
+    let weekTables = [];
 
     try {
-      const rawTwoWeek = localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-      if (rawTwoWeek) {
-        const twoWeek = JSON.parse(rawTwoWeek);
-        week1Schedule = twoWeek.week1?.scheduleTable;
-        week2Schedule = twoWeek.week2?.scheduleTable;
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      if (rawMonth) {
+        const parsed = JSON.parse(rawMonth);
+        if (parsed.weeks && parsed.weeks.length > 0) {
+          weekTables = parsed.weeks.map(w => w.scheduleTable);
+        } else {
+          if (parsed.week1) weekTables.push(parsed.week1.scheduleTable);
+          if (parsed.week2) weekTables.push(parsed.week2.scheduleTable);
+        }
       } else {
         const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
-        if (raw) week1Schedule = JSON.parse(raw)?.scheduleTable;
+        if (raw) weekTables.push(JSON.parse(raw)?.scheduleTable);
       }
     } catch (err) {
       console.error(err);
     }
 
-    if (!week1Schedule && !week2Schedule) {
+    if (weekTables.length === 0 || weekTables.every(t => !t || Object.keys(t).length === 0)) {
       elements.lookupResult.innerHTML = `
         <div style="padding: 1rem; background: var(--warning-bg); border: 1px solid #fde68a; border-radius: var(--radius-sm); font-size: 0.88rem; color: #92400e;">
           ⚠️ Ban điều hành chưa công bố lịch trực. Bạn vui lòng quay lại sau nhé!
@@ -889,20 +891,21 @@
       });
     }
 
-    findInTable(week1Schedule, 1);
-    findInTable(week2Schedule, 2);
+    weekTables.forEach((table, idx) => {
+      findInTable(table, idx + 1);
+    });
 
     if (myShifts.length === 0) {
       elements.lookupResult.innerHTML = `
         <div style="padding: 1rem; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.88rem; color: var(--text-muted);">
-          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong đợt này. Có thể bạn đang nằm trong danh sách dự bị cho tuần tiếp theo!
+          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong tháng này.
         </div>
       `;
     } else {
       elements.lookupResult.innerHTML = `
         <div style="padding: 1rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-sm);">
           <h4 style="color: #065f46; font-weight: 700; margin-bottom: 0.5rem;">
-            🎉 Bạn có tổng cộng <strong>${myShifts.length} ca trực</strong>:
+            🎉 Bạn có tổng cộng <strong>${myShifts.length} ca trực trong tháng</strong>:
           </h4>
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
             ${myShifts.map(s => `

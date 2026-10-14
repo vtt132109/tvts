@@ -9,12 +9,13 @@
 (() => {
   'use strict';
 
-  const { SHIFTS, SHIFT_MAP, runAutoSchedule, runTwoWeekSchedule } = window.SchedulerEngine || {};
+  const { SHIFTS, SHIFT_MAP, runAutoSchedule, runTwoWeekSchedule, runMonthSchedule } = window.SchedulerEngine || {};
 
   const STORAGE_KEYS = {
     STUDENTS: 'ts_scheduler_students',
     SCHEDULE: 'ts_scheduler_schedule_result',
     TWO_WEEK_SCHEDULE: 'ts_scheduler_two_week_result',
+    MONTH_SCHEDULE: 'ts_scheduler_month_result',
     REG_CONFIG: 'ts_scheduler_reg_config',
     ADMIN_USERS: 'ts_scheduler_admin_users',
     AUTH_TOKEN: 'ts_admin_authenticated',
@@ -63,7 +64,8 @@
     students: [],
     currentSchedule: null,
     twoWeekSchedule: null,
-    viewWeek: 1, // 1 hoặc 2
+    monthSchedule: null,
+    viewWeek: 1, // 1, 2, 3, hoặc 4
     activeTab: 'tab-schedule-mgmt',
     roleFilter: 'all',
     searchQuery: '',
@@ -542,22 +544,27 @@
         saveStudents();
       }
 
-      const rawTwoWeek = localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
       const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
 
-      if (rawTwoWeek) {
-        state.twoWeekSchedule = JSON.parse(rawTwoWeek);
-        state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule?.week2 : state.twoWeekSchedule?.week1;
+      if (rawMonth) {
+        state.monthSchedule = JSON.parse(rawMonth);
+        state.twoWeekSchedule = state.monthSchedule;
+        const weekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
+        state.currentSchedule = state.monthSchedule.weeks?.[weekIdx] || state.monthSchedule.week1 || state.monthSchedule;
       } else if (rawSchedule) {
+        state.monthSchedule = null;
         state.twoWeekSchedule = null;
         state.currentSchedule = JSON.parse(rawSchedule);
       } else {
+        state.monthSchedule = null;
         state.twoWeekSchedule = null;
         state.currentSchedule = null;
       }
     } catch (err) {
       console.error(err);
       state.students = [];
+      state.monthSchedule = null;
       state.twoWeekSchedule = null;
       state.currentSchedule = null;
     }
@@ -573,9 +580,11 @@
     } else {
       localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
     }
-    if (state.twoWeekSchedule) {
-      localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.twoWeekSchedule));
+    if (state.monthSchedule) {
+      localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+      localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.monthSchedule));
     } else {
+      localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
     }
   }
@@ -584,18 +593,36 @@
     if (state.students.length === 0) {
       state.currentSchedule = null;
       state.twoWeekSchedule = null;
+      state.monthSchedule = null;
+      saveSchedule();
       return;
     }
 
-    if (state.students.length > 10) {
-      // Chế độ 2 tuần luân phiên
-      state.twoWeekSchedule = runTwoWeekSchedule(state.students);
-      state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1;
-    } else {
-      state.twoWeekSchedule = null;
-      state.currentSchedule = runAutoSchedule(state.students);
-    }
+    // Xếp ca trọn vẹn 1 tháng (4 tuần)
+    const monthEngine = window.SchedulerEngine?.runMonthSchedule || window.SchedulerEngine?.runTwoWeekSchedule;
+    const monthResult = monthEngine ? monthEngine(state.students) : null;
+    state.monthSchedule = monthResult;
+    state.twoWeekSchedule = monthResult;
+
+    const weekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
+    state.currentSchedule = monthResult?.weeks?.[weekIdx] || monthResult?.week1 || monthResult;
     saveSchedule();
+  }
+
+  function switchAdminWeek(w) {
+    state.viewWeek = w;
+    document.querySelectorAll('#admin-week-selector .filter-btn').forEach(btn => {
+      const btnW = parseInt(btn.getAttribute('data-week'), 10);
+      btn.classList.toggle('active', btnW === w);
+    });
+
+    if (state.monthSchedule?.weeks?.[w - 1]) {
+      state.currentSchedule = state.monthSchedule.weeks[w - 1];
+    } else if (state.twoWeekSchedule) {
+      state.currentSchedule = (w === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1);
+    }
+    renderTimetable();
+    renderFairness();
   }
 
   function bindEvents() {
@@ -619,27 +646,12 @@
       }
     });
 
-    // Tuần 1 / Tuần 2 Toggles
-    elements.btnWeek1?.addEventListener('click', () => {
-      state.viewWeek = 1;
-      elements.btnWeek1.classList.add('active');
-      elements.btnWeek2?.classList.remove('active');
-      if (state.twoWeekSchedule) {
-        state.currentSchedule = state.twoWeekSchedule.week1;
-      }
-      renderTimetable();
-      renderFairness();
-    });
-
-    elements.btnWeek2?.addEventListener('click', () => {
-      state.viewWeek = 2;
-      elements.btnWeek2.classList.add('active');
-      elements.btnWeek1?.classList.remove('active');
-      if (state.twoWeekSchedule) {
-        state.currentSchedule = state.twoWeekSchedule.week2;
-      }
-      renderTimetable();
-      renderFairness();
+    // Bộ chọn Tuần 1 -> Tuần 4 (Lịch 1 Tháng)
+    document.querySelectorAll('#admin-week-selector .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const w = parseInt(btn.getAttribute('data-week'), 10) || 1;
+        switchAdminWeek(w);
+      });
     });
 
     elements.inputSearch?.addEventListener('input', (e) => {
@@ -903,11 +915,11 @@
       `;
     });
 
-    // Sáng
+    // Sáng (07:30 - 11:30)
     gridHtml += `
       <div class="grid-cell period-cell">
         <span class="period-name">☀️ Sáng</span>
-        <span class="period-time">08:00 - 11:30</span>
+        <span class="period-time">07:30 - 11:30</span>
       </div>
     `;
     days.forEach(day => {
@@ -916,11 +928,11 @@
       gridHtml += renderShiftSlotHtml(shiftId, slot);
     });
 
-    // Chiều
+    // Chiều (13:00 - 16:30)
     gridHtml += `
       <div class="grid-cell period-cell">
         <span class="period-name">🌤️ Chiều</span>
-        <span class="period-time">13:30 - 17:00</span>
+        <span class="period-time">13:00 - 16:30</span>
       </div>
     `;
     days.forEach(day => {
@@ -1559,7 +1571,7 @@
 
   function generateUteExportData() {
     const startDateVal = elements.exportStartDate?.value || '2026-07-01';
-    const rangeMode = elements.exportRangeSelect?.value || '14days_full';
+    const rangeMode = elements.exportRangeSelect?.value || '30days_month';
 
     // Parse ngày bắt đầu an toàn
     const parts = startDateVal.split('-');
@@ -1568,11 +1580,17 @@
       curDate = new Date(2026, 6, 1); // 01/07/2026
     }
 
-    let daysToGenerate = 14;
+    let daysToGenerate = 30;
     let onlyWorkdays = false;
     let forceWeek = null;
 
-    if (rangeMode === '14days_full') {
+    if (rangeMode === '30days_month') {
+      daysToGenerate = 30;
+      onlyWorkdays = false;
+    } else if (rangeMode === '20days_4weeks') {
+      daysToGenerate = 20;
+      onlyWorkdays = true;
+    } else if (rangeMode === '14days_full') {
       daysToGenerate = 14;
       onlyWorkdays = false;
     } else if (rangeMode === '10days_2weeks') {
@@ -1586,14 +1604,22 @@
       daysToGenerate = 5;
       onlyWorkdays = true;
       forceWeek = 2;
-    } else if (rangeMode === '7days_w1') {
-      daysToGenerate = 7;
-      onlyWorkdays = false;
-      forceWeek = 1;
+    } else if (rangeMode === '5days_w3') {
+      daysToGenerate = 5;
+      onlyWorkdays = true;
+      forceWeek = 3;
+    } else if (rangeMode === '5days_w4') {
+      daysToGenerate = 5;
+      onlyWorkdays = true;
+      forceWeek = 4;
     }
 
-    const week1Table = state.twoWeekSchedule?.week1?.scheduleTable || state.currentSchedule?.scheduleTable || {};
-    const week2Table = state.twoWeekSchedule?.week2?.scheduleTable || state.currentSchedule?.scheduleTable || {};
+    const weekTables = [
+      state.monthSchedule?.weeks?.[0]?.scheduleTable || state.twoWeekSchedule?.week1?.scheduleTable || state.currentSchedule?.scheduleTable || {},
+      state.monthSchedule?.weeks?.[1]?.scheduleTable || state.twoWeekSchedule?.week2?.scheduleTable || state.currentSchedule?.scheduleTable || {},
+      state.monthSchedule?.weeks?.[2]?.scheduleTable || state.monthSchedule?.weeks?.[0]?.scheduleTable || state.currentSchedule?.scheduleTable || {},
+      state.monthSchedule?.weeks?.[3]?.scheduleTable || state.monthSchedule?.weeks?.[1]?.scheduleTable || state.currentSchedule?.scheduleTable || {}
+    ];
 
     const rows = [];
     let addedCount = 0;
@@ -1601,7 +1627,7 @@
 
     const dayKeyMap = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6' };
 
-    while (addedCount < daysToGenerate && loopGuard < 60) {
+    while (addedCount < daysToGenerate && loopGuard < 70) {
       loopGuard++;
       const dayOfWeek = curDate.getDay(); // 0: CN, 1: T2, ..., 6: T7
 
@@ -1617,10 +1643,15 @@
       const yyyy = curDate.getFullYear();
       const dateStr = `${dd}/${mm}/${yyyy}`;
 
-      let activeTable = week1Table;
-      if (forceWeek === 1) activeTable = week1Table;
-      else if (forceWeek === 2) activeTable = week2Table;
-      else activeTable = (addedCount > 7) ? week2Table : week1Table;
+      let activeTable;
+      if (forceWeek && forceWeek >= 1 && forceWeek <= 4) {
+        activeTable = weekTables[forceWeek - 1];
+      } else {
+        const weekIndex = onlyWorkdays 
+          ? Math.min(3, Math.floor((addedCount - 1) / 5)) 
+          : Math.min(3, Math.floor((addedCount - 1) / 7));
+        activeTable = weekTables[weekIndex] || weekTables[0];
+      }
 
       let morningText = '';
       let afternoonText = '';

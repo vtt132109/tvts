@@ -3,24 +3,25 @@
  * SCHEDULER ENGINE: Thuật toán Tự động Phân bổ Lịch trực Công bằng
  * ==========================================================================
  * Đóng gói trong IIFE.
- * Hỗ trợ xếp ca 1 tuần tiêu chuẩn và chế độ Luân phiên 2 Tuần (Two-Week Rotation)
- * đảm bảo khi có 30 sinh viên đăng ký, 100% (30/30 bạn) đều có lịch trực.
+ * Hỗ trợ xếp ca 1 tuần tiêu chuẩn, luân phiên 2 tuần và XẾP CA TRỌN VẸN 1 THÁNG
+ * (4 Tuần: Tuần 1, Tuần 2, Tuần 3, Tuần 4) đảm bảo 100% sinh viên đều có lịch trực,
+ * mỗi ca đúng 1 Người Cũ (7h30-11h30 hoặc 13h00-16h30) + 1 Người Mới.
  */
 
 (() => {
   'use strict';
 
   const SHIFTS = [
-    { id: 'T2_S', dayKey: 'T2', dayName: 'Thứ 2', period: 'Sáng', time: '08:00 - 11:30' },
-    { id: 'T2_C', dayKey: 'T2', dayName: 'Thứ 2', period: 'Chiều', time: '13:30 - 17:00' },
-    { id: 'T3_S', dayKey: 'T3', dayName: 'Thứ 3', period: 'Sáng', time: '08:00 - 11:30' },
-    { id: 'T3_C', dayKey: 'T3', dayName: 'Thứ 3', period: 'Chiều', time: '13:30 - 17:00' },
-    { id: 'T4_S', dayKey: 'T4', dayName: 'Thứ 4', period: 'Sáng', time: '08:00 - 11:30' },
-    { id: 'T4_C', dayKey: 'T4', dayName: 'Thứ 4', period: 'Chiều', time: '13:30 - 17:00' },
-    { id: 'T5_S', dayKey: 'T5', dayName: 'Thứ 5', period: 'Sáng', time: '08:00 - 11:30' },
-    { id: 'T5_C', dayKey: 'T5', dayName: 'Thứ 5', period: 'Chiều', time: '13:30 - 17:00' },
-    { id: 'T6_S', dayKey: 'T6', dayName: 'Thứ 6', period: 'Sáng', time: '08:00 - 11:30' },
-    { id: 'T6_C', dayKey: 'T6', dayName: 'Thứ 6', period: 'Chiều', time: '13:30 - 17:00' }
+    { id: 'T2_S', dayKey: 'T2', dayName: 'Thứ 2', period: 'Sáng', time: '07:30 - 11:30' },
+    { id: 'T2_C', dayKey: 'T2', dayName: 'Thứ 2', period: 'Chiều', time: '13:00 - 16:30' },
+    { id: 'T3_S', dayKey: 'T3', dayName: 'Thứ 3', period: 'Sáng', time: '07:30 - 11:30' },
+    { id: 'T3_C', dayKey: 'T3', dayName: 'Thứ 3', period: 'Chiều', time: '13:00 - 16:30' },
+    { id: 'T4_S', dayKey: 'T4', dayName: 'Thứ 4', period: 'Sáng', time: '07:30 - 11:30' },
+    { id: 'T4_C', dayKey: 'T4', dayName: 'Thứ 4', period: 'Chiều', time: '13:00 - 16:30' },
+    { id: 'T5_S', dayKey: 'T5', dayName: 'Thứ 5', period: 'Sáng', time: '07:30 - 11:30' },
+    { id: 'T5_C', dayKey: 'T5', dayName: 'Thứ 5', period: 'Chiều', time: '13:00 - 16:30' },
+    { id: 'T6_S', dayKey: 'T6', dayName: 'Thứ 6', period: 'Sáng', time: '07:30 - 11:30' },
+    { id: 'T6_C', dayKey: 'T6', dayName: 'Thứ 6', period: 'Chiều', time: '13:00 - 16:30' }
   ];
 
   const SHIFT_MAP = SHIFTS.reduce((acc, shift) => {
@@ -58,11 +59,12 @@
 
   /**
    * Phân bổ ca cho một nhóm thành viên (Người cũ hoặc Người mới)
+   * Có hỗ trợ tích hợp số ca lũy kế trong tháng (historicalCounts) để xoay vòng công bằng.
    */
-  function scheduleGroupShifts(members, roleName, priorityStudentIds = []) {
+  function scheduleGroupShifts(members, roleName, priorityStudentIds = [], historicalCounts = {}) {
     const result = {
       assignments: {}, // shiftId -> Student
-      counts: {},      // studentId -> number of assigned shifts
+      counts: {},      // studentId -> number of assigned shifts in this week
       unassigned: [],  // ca trống
       warnings: []
     };
@@ -84,9 +86,12 @@
 
     const shiftIds = SHIFTS.map(s => s.id);
 
-    // BƯỚC 1: Nếu có danh sách ưu tiên (những bạn chưa có ca từ tuần trước), ghép trước bằng Bipartite Matching
+    // BƯỚC 1: Nếu có danh sách ưu tiên, sắp xếp ai ít ca tích lũy nhất ghép trước bằng Bipartite Matching
     if (priorityStudentIds.length > 0) {
-      const priorityMembers = members.filter(m => priorityStudentIds.includes(m.id));
+      const priorityMembers = members
+        .filter(m => priorityStudentIds.includes(m.id))
+        .sort((a, b) => ((historicalCounts[a.id] || 0) - (historicalCounts[b.id] || 0)));
+
       if (priorityMembers.length > 0) {
         const priorityMatches = maxBipartiteMatch(priorityMembers, shiftIds);
         for (const [sId, candId] of Object.entries(priorityMatches)) {
@@ -99,7 +104,7 @@
       }
     }
 
-    // BƯỚC 2: Phân bổ các ca còn lại bằng Greedy Heuristic (MRV + Fairness)
+    // BƯỚC 2: Phân bổ các ca còn lại bằng Greedy Heuristic (MRV + Fairness lũy kế)
     const remainingShifts = SHIFTS.filter(s => !result.assignments[s.id]);
 
     const shiftCandidates = {};
@@ -124,11 +129,17 @@
 
       for (const cand of candidates) {
         const currentCount = result.counts[cand.id] || 0;
+        const histCount = historicalCounts[cand.id] || 0;
+        const totalSoFar = histCount + currentCount;
         const sameDayShiftId = shift.id.endsWith('_S') ? `${shift.dayKey}_C` : `${shift.dayKey}_S`;
         const alreadySameDay = result.assignments[sameDayShiftId]?.id === cand.id;
 
-        // Ưu tiên người ít ca nhất, tránh trùng ca trong ngày
-        let score = (currentCount * 1000) + (alreadySameDay ? 300 : 0) + (cand.availableShifts?.length || 0);
+        // Điểm số càng thấp càng ưu tiên:
+        // 1. Tổng số ca trong tháng (trọng số 5000)
+        // 2. Số ca trong tuần này (trọng số 1000)
+        // 3. Tránh 2 ca cùng 1 ngày nếu có thể (trọng số 400)
+        // 4. Số lượng ca rảnh
+        let score = (totalSoFar * 5000) + (currentCount * 1000) + (alreadySameDay ? 400 : 0) + (cand.availableShifts?.length || 0);
 
         if (score < minScore) {
           minScore = score;
@@ -174,14 +185,14 @@
   }
 
   /**
-   * Xếp lịch 1 tuần tiêu chuẩn (có thể nhận danh sách ưu tiên)
+   * Xếp lịch 1 tuần tiêu chuẩn (có thể nhận danh sách ưu tiên và số ca lũy kế)
    */
-  function runAutoSchedule(allStudents, priorityStudentIds = []) {
+  function runAutoSchedule(allStudents, priorityStudentIds = [], historicalCounts = {}) {
     const oldMembers = allStudents.filter(s => s.role === 'old');
     const newMembers = allStudents.filter(s => s.role === 'new');
 
-    const oldResult = scheduleGroupShifts(oldMembers, 'old', priorityStudentIds);
-    const newResult = scheduleGroupShifts(newMembers, 'new', priorityStudentIds);
+    const oldResult = scheduleGroupShifts(oldMembers, 'old', priorityStudentIds, historicalCounts);
+    const newResult = scheduleGroupShifts(newMembers, 'new', priorityStudentIds, historicalCounts);
 
     const scheduleTable = {};
     let fullCount = 0;
@@ -244,43 +255,87 @@
   }
 
   /**
-   * Xếp lịch Luân Phiên 2 Tuần (Tuần 1 & Tuần 2)
-   * Đảm bảo khi số lượng sinh viên lớn (như 30 người), cả 30 bạn đều có lịch trực!
+   * XẾP LỊCH TRỌN VẸN 1 THÁNG (4 TUẦN: Tuần 1, Tuần 2, Tuần 3, Tuần 4)
+   * Tối ưu hóa phân bổ công bằng tuyệt đối:
+   * - Mỗi ca đúng 1 Người Cũ (7h30-11h30 hoặc 13h00-16h30) + 1 Người Mới
+   * - Xoay vòng qua 4 tuần để số ca trong tháng của tất cả sinh viên xấp xỉ bằng nhau
+   * - Đảm bảo mọi sinh viên đăng ký đều được phân công trực
    */
-  function runTwoWeekSchedule(allStudents) {
-    // Tuần 1: Xếp đợt 1
-    const week1 = runAutoSchedule(allStudents);
+  function runMonthSchedule(allStudents) {
+    if (!allStudents || allStudents.length === 0) {
+      return null;
+    }
 
-    // Lấy những bạn chưa có ca ở Tuần 1 để ưu tiên tuyệt đối cho Tuần 2
-    const unassignedInWeek1 = week1.unassignedMembers.map(m => m.id);
+    const historicalCounts = {};
+    allStudents.forEach(s => {
+      historicalCounts[s.id] = 0;
+    });
 
-    // Tuần 2: Xếp đợt 2 với ưu tiên các bạn chưa trực ở Tuần 1
-    const week2 = runAutoSchedule(allStudents, unassignedInWeek1);
+    const weeks = [];
 
-    // Thống kê tổng hợp số ca qua 2 tuần
+    // Lặp qua 4 tuần trong tháng
+    for (let w = 1; w <= 4; w++) {
+      // Ưu tiên những bạn có ít ca lũy kế nhất trong các tuần trước
+      const priorityIds = [...allStudents]
+        .sort((a, b) => (historicalCounts[a.id] || 0) - (historicalCounts[b.id] || 0))
+        .map(s => s.id);
+
+      const weekSchedule = runAutoSchedule(allStudents, priorityIds, historicalCounts);
+      weekSchedule.weekNumber = w;
+      weeks.push(weekSchedule);
+
+      // Cập nhật số ca lũy kế sau tuần này
+      allStudents.forEach(s => {
+        const assignedInWeek = weekSchedule.studentStats[s.id]?.assignedCount || 0;
+        historicalCounts[s.id] = (historicalCounts[s.id] || 0) + assignedInWeek;
+      });
+    }
+
+    const [week1, week2, week3, week4] = weeks;
+
+    // Thống kê tổng hợp số ca qua 4 tuần của 1 tháng
     const combinedStats = {};
     allStudents.forEach(s => {
-      const w1Count = week1.studentStats[s.id]?.assignedCount || 0;
-      const w2Count = week2.studentStats[s.id]?.assignedCount || 0;
+      const w1 = week1.studentStats[s.id]?.assignedCount || 0;
+      const w2 = week2.studentStats[s.id]?.assignedCount || 0;
+      const w3 = week3.studentStats[s.id]?.assignedCount || 0;
+      const w4 = week4.studentStats[s.id]?.assignedCount || 0;
+      const total = w1 + w2 + w3 + w4;
+
       combinedStats[s.id] = {
         student: s,
-        week1Count: w1Count,
-        week2Count: w2Count,
-        totalCount: w1Count + w2Count
+        week1Count: w1,
+        week2Count: w2,
+        week3Count: w3,
+        week4Count: w4,
+        totalTwoWeeks: w1 + w2,
+        totalMonthCount: total,
+        totalCount: total
       };
     });
 
-    const uniqueAssignedCount = Object.values(combinedStats).filter(st => st.totalCount > 0).length;
+    const uniqueAssignedCount = Object.values(combinedStats).filter(st => st.totalMonthCount > 0).length;
 
     return {
       success: true,
       timestamp: Date.now(),
+      weeks,
       week1,
       week2,
+      week3,
+      week4,
       combinedStats,
       totalStudents: allStudents.length,
-      uniqueAssignedCount
+      uniqueAssignedCount,
+      totalShiftsInMonth: 40
     };
+  }
+
+  /**
+   * Xếp lịch Luân Phiên 2 Tuần (tương thích ngược)
+   */
+  function runTwoWeekSchedule(allStudents) {
+    return runMonthSchedule(allStudents);
   }
 
   if (typeof window !== 'undefined') {
@@ -289,7 +344,8 @@
       SHIFT_MAP,
       scheduleGroupShifts,
       runAutoSchedule,
-      runTwoWeekSchedule
+      runTwoWeekSchedule,
+      runMonthSchedule
     };
   }
 })();

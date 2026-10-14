@@ -301,12 +301,14 @@
             <p class="card-desc">Nhấn nút 🔄 trong từng thẻ nhân sự để hoán đổi hoặc chỉ định người trực thủ công</p>
           </div>
           <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-            <!-- Bộ chọn Tuần 1 / Tuần 2 -->
+            <!-- Bộ chọn 4 Tuần Trong Tháng (Lịch 1 Tháng) -->
             <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">Lịch tuần:</span>
-              <div class="filter-group">
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">🗓️ Lịch 1 Tháng:</span>
+              <div class="filter-group" id="admin-week-selector">
                 <button class="filter-btn active" data-week="1" id="btn-admin-week-1">Tuần 1</button>
                 <button class="filter-btn" data-week="2" id="btn-admin-week-2">Tuần 2</button>
+                <button class="filter-btn" data-week="3" id="btn-admin-week-3">Tuần 3</button>
+                <button class="filter-btn" data-week="4" id="btn-admin-week-4">Tuần 4</button>
               </div>
             </div>
 
@@ -705,11 +707,14 @@
           <div class="excel-control-item">
             <label class="excel-control-label" for="export-range-select">⏱️ Phạm Vi Xuất:</label>
             <select id="export-range-select" class="form-input excel-select-range">
-              <option value="14days_full" selected>14 ngày liên tục (01/07 -> 14/07 có T7, CN như mẫu ảnh)</option>
-              <option value="10days_2weeks">10 ngày hành chính (Luân phiên 2 tuần T2 - T6)</option>
+              <option value="30days_month" selected>🗓️ Trọn Vẹn 1 Tháng (30 ngày liên tục có T7, CN chuẩn mẫu)</option>
+              <option value="20days_4weeks">🗓️ 4 Tuần Hành Chính (20 ngày Thứ 2 đến Thứ 6)</option>
+              <option value="14days_full">14 ngày liên tục (2 tuần có T7, CN)</option>
+              <option value="10days_2weeks">10 ngày hành chính (2 tuần T2 - T6)</option>
               <option value="5days_w1">5 ngày hành chính (Tuần 1: Thứ 2 đến Thứ 6)</option>
               <option value="5days_w2">5 ngày hành chính (Tuần 2: Thứ 2 đến Thứ 6)</option>
-              <option value="7days_w1">7 ngày trọn vẹn (Tuần 1 gồm cả Thứ 7, Chủ Nhật)</option>
+              <option value="5days_w3">5 ngày hành chính (Tuần 3: Thứ 2 đến Thứ 6)</option>
+              <option value="5days_w4">5 ngày hành chính (Tuần 4: Thứ 2 đến Thứ 6)</option>
             </select>
           </div>
 
