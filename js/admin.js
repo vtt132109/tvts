@@ -188,10 +188,13 @@
       btnAdminQuickAll: document.getElementById('btn-admin-quick-all'),
       btnAdminQuickClear: document.getElementById('btn-admin-quick-clear'),
 
+      // Hero Action Buttons
+      btnClearSchedule: document.getElementById('btn-clear-schedule'),
+      btnClearStudents: document.getElementById('btn-clear-students'),
+
       // Excel & Google Sheets Export Elements (Mẫu HCM-UTE)
       btnOpenExcelModal: document.getElementById('btn-open-excel-modal'),
       btnQuickCopySheet: document.getElementById('btn-quick-copy-sheet'),
-      btnLoadSampleUte: document.getElementById('btn-load-sample-ute'),
       excelModal: document.getElementById('excel-export-modal'),
       btnCloseExcelModal: document.getElementById('btn-close-excel-modal'),
       exportStartDate: document.getElementById('export-start-date'),
@@ -532,24 +535,31 @@
   function loadData() {
     try {
       const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-      if (rawStudents) {
-        state.students = JSON.parse(rawStudents);
+      if (rawStudents !== null) {
+        state.students = JSON.parse(rawStudents) || [];
       } else {
-        const defaultList = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS;
-        state.students = [...defaultList];
+        state.students = [];
         saveStudents();
       }
 
       const rawTwoWeek = localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+
       if (rawTwoWeek) {
         state.twoWeekSchedule = JSON.parse(rawTwoWeek);
-        state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule.week2 : state.twoWeekSchedule.week1;
+        state.currentSchedule = state.viewWeek === 2 ? state.twoWeekSchedule?.week2 : state.twoWeekSchedule?.week1;
+      } else if (rawSchedule) {
+        state.twoWeekSchedule = null;
+        state.currentSchedule = JSON.parse(rawSchedule);
       } else {
-        runFullSchedule();
+        state.twoWeekSchedule = null;
+        state.currentSchedule = null;
       }
     } catch (err) {
       console.error(err);
-      state.students = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS;
+      state.students = [];
+      state.twoWeekSchedule = null;
+      state.currentSchedule = null;
     }
   }
 
@@ -558,9 +568,15 @@
   }
 
   function saveSchedule() {
-    localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
+    if (state.currentSchedule) {
+      localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+    }
     if (state.twoWeekSchedule) {
       localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.twoWeekSchedule));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
     }
   }
 
@@ -636,43 +652,43 @@
       triggerAutoSchedule(true);
     });
 
-    // Nạp Demo 30 Người
-    elements.btnLoadSample30?.addEventListener('click', () => {
-      const list30 = window.SAMPLE_30_STUDENTS || [];
-      if (list30.length > 0) {
-        state.students = JSON.parse(JSON.stringify(list30));
-        saveStudents();
-        runFullSchedule();
+    // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
+    elements.btnClearSchedule?.addEventListener('click', () => {
+      if (!state.currentSchedule && !state.twoWeekSchedule) {
+        showToast('Hiện tại chưa có bảng phân công nào để xóa!', 'info');
+        return;
+      }
+      if (confirm('Bạn có chắc chắn muốn xóa toàn bộ bảng phân công ca trực không?\n(Lưu ý: Danh sách sinh viên và các ca rảnh đã đăng ký vẫn được giữ nguyên)')) {
+        state.currentSchedule = null;
+        state.twoWeekSchedule = null;
+        saveSchedule();
         renderAll();
-        showToast('Đã nạp 30 sinh viên mẫu & phân bổ luân phiên 2 tuần (100% đều có ca)!', 'success');
+        showToast('Đã xóa bảng phân công! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
       }
     });
 
-    elements.btnLoadSample?.addEventListener('click', () => {
-      state.students = JSON.parse(JSON.stringify(SAMPLE_12_STUDENTS));
-      saveStudents();
-      runFullSchedule();
-      renderAll();
-      showToast('Đã nạp 12 sinh viên mẫu và xếp lịch!', 'success');
-    });
-
-    elements.btnResetData?.addEventListener('click', () => {
-      if (confirm('Bạn có chắc muốn xóa sạch toàn bộ sinh viên và lịch trực đã xếp không?')) {
+    // Xóa toàn bộ sinh viên và lịch trực
+    const handleClearAllStudents = () => {
+      if (state.students.length === 0) {
+        showToast('Danh sách sinh viên hiện đang trống!', 'info');
+        return;
+      }
+      if (confirm(`Bạn có chắc chắn muốn xóa toàn bộ ${state.students.length} sinh viên đã đăng ký không?\nThao tác này sẽ xóa sạch hồ sơ sinh viên và bảng phân công liên quan.`)) {
         state.students = [];
         state.currentSchedule = null;
         state.twoWeekSchedule = null;
         saveStudents();
         saveSchedule();
         renderAll();
-        showToast('Đã làm trống dữ liệu hệ thống!', 'info');
+        showToast('Đã xóa toàn bộ danh sách sinh viên và làm trống hệ thống!', 'info');
       }
-    });
+    };
+
+    elements.btnClearStudents?.addEventListener('click', handleClearAllStudents);
+    elements.btnResetData?.addEventListener('click', handleClearAllStudents);
 
     elements.btnExportCsv?.addEventListener('click', exportScheduleToCsv);
     elements.btnPrintSchedule?.addEventListener('click', () => window.print());
-
-    // Nạp 16 CTV HCM-UTE chuẩn mẫu thực tế
-    elements.btnLoadSampleUte?.addEventListener('click', loadUtePresetStudents);
 
     // Mở modal xuất Excel / Google Sheets
     elements.btnOpenExcelModal?.addEventListener('click', () => {
@@ -808,7 +824,7 @@
             <div class="empty-state">
               <div class="empty-state-icon">📋</div>
               <h3>Không tìm thấy sinh viên nào</h3>
-              <p>Bấm "👥 Nạp Demo 30 Người" hoặc "+ Thêm Sinh Viên Mới" để bắt đầu.</p>
+              <p>Bấm "+ Thêm Sinh Viên Mới" hoặc chờ sinh viên đăng ký từ Cổng Sinh Viên để bắt đầu.</p>
             </div>
           </td>
         </tr>
@@ -1505,6 +1521,9 @@
    * ==========================================================================
    */
   function openExcelModal() {
+    if (!elements.excelModal) {
+      elements.excelModal = document.getElementById('excel-export-modal');
+    }
     if (!elements.excelModal) return;
     if (elements.exportStartDate && !elements.exportStartDate.value) {
       elements.exportStartDate.value = '2026-07-01';
@@ -1514,8 +1533,14 @@
   }
 
   function closeExcelModal() {
+    if (!elements.excelModal) {
+      elements.excelModal = document.getElementById('excel-export-modal');
+    }
     elements.excelModal?.classList.remove('active');
   }
+
+  window.openExcelModal = openExcelModal;
+  window.closeExcelModal = closeExcelModal;
 
   function loadUtePresetStudents() {
     const uteList = window.SAMPLE_HCM_UTE_STUDENTS || [];

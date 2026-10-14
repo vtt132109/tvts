@@ -1930,14 +1930,28 @@ body {
 /* ==========================================================================
    5. BẢNG TÍNH XUẤT EXCEL & SAO CHÉP GOOGLE SHEETS CHUẨN HCM-UTE
    ========================================================================== */
+.excel-modal-overlay {
+  z-index: 1050 !important;
+  background: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+.excel-modal-overlay.active {
+  display: flex !important;
+}
+
+.modal-box.excel-modal-dialog,
 .excel-modal-dialog {
-  width: 96vw;
-  max-width: 1300px;
-  max-height: 94vh;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  width: 96vw !important;
+  max-width: 1300px !important;
+  max-height: 94vh !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #ffffff !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  pointer-events: auto !important;
 }
 
 .excel-controls-bar {
