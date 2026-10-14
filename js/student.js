@@ -949,33 +949,50 @@
 
   // Quản lý Chế độ Sáng / Tối (Dark / Light Theme Switcher)
   function initThemeToggle() {
-    const toggleBtn = document.getElementById('btn-theme-toggle');
-    if (!toggleBtn) return;
+    const btnLight = document.getElementById('btn-theme-light');
+    const btnDark = document.getElementById('btn-theme-dark');
+    const legacyBtn = document.getElementById('btn-theme-toggle');
 
-    function updateBtnVisual(isDark) {
-      const icon = toggleBtn.querySelector('.theme-icon');
-      const text = toggleBtn.querySelector('.theme-text');
-      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
-      if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
-      toggleBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
-    }
-
-    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    updateBtnVisual(currentDark);
-
-    toggleBtn.addEventListener('click', () => {
-      const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const newTheme = isCurrentlyDark ? 'light' : 'dark';
-      if (newTheme === 'dark') {
+    function applyTheme(theme) {
+      if (theme === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       } else {
         document.documentElement.removeAttribute('data-theme');
       }
       try {
-        localStorage.setItem('ts_scheduler_theme', newTheme);
+        localStorage.setItem('ts_scheduler_theme', theme);
       } catch (e) {}
-      updateBtnVisual(newTheme === 'dark');
-    });
+      updateThemeUI(theme === 'dark');
+    }
+
+    function updateThemeUI(isDark) {
+      if (btnLight) btnLight.classList.toggle('active', !isDark);
+      if (btnDark) btnDark.classList.toggle('active', isDark);
+
+      if (legacyBtn) {
+        const icon = legacyBtn.querySelector('.theme-icon');
+        const text = legacyBtn.querySelector('.theme-text');
+        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+        if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
+        legacyBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
+      }
+    }
+
+    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    updateThemeUI(currentDark);
+
+    if (btnLight) {
+      btnLight.addEventListener('click', () => applyTheme('light'));
+    }
+    if (btnDark) {
+      btnDark.addEventListener('click', () => applyTheme('dark'));
+    }
+    if (legacyBtn) {
+      legacyBtn.addEventListener('click', () => {
+        const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        applyTheme(isCurrentlyDark ? 'light' : 'dark');
+      });
+    }
 
     window.addEventListener('storage', (e) => {
       if (e.key === 'ts_scheduler_theme') {
@@ -985,7 +1002,7 @@
         } else {
           document.documentElement.removeAttribute('data-theme');
         }
-        updateBtnVisual(isDark);
+        updateThemeUI(isDark);
       }
     });
   }

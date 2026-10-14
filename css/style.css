@@ -123,6 +123,21 @@
   padding: 0;
 }
 
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
 body {
   font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg-page);
@@ -232,7 +247,7 @@ body {
 }
 
 .tab-btn.active {
-  background: #ffffff;
+  background: var(--bg-card);
   color: var(--primary);
   box-shadow: var(--shadow-sm);
 }
@@ -403,7 +418,7 @@ body {
   font-family: inherit;
   font-size: 0.92rem;
   color: var(--text-main);
-  background: #ffffff;
+  background: var(--bg-card);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -439,7 +454,7 @@ body {
   padding: 0.9rem 0.8rem;
   text-align: center;
   transition: all var(--transition-fast);
-  background: #ffffff;
+  background: var(--bg-card);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -531,7 +546,7 @@ body {
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .matrix-table {
@@ -548,7 +563,7 @@ body {
 }
 
 .matrix-table th {
-  background: #f8fafc;
+  background: var(--bg-card-hover);
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--text-main);
@@ -556,7 +571,7 @@ body {
 
 .matrix-table th.period-header {
   width: 140px;
-  background: #f1f5f9;
+  background: var(--bg-card-hover);
   text-align: left;
   padding-left: 1rem;
 }
@@ -680,13 +695,13 @@ body {
 }
 
 .btn-secondary {
-  background: #ffffff;
+  background: var(--bg-card);
   color: var(--text-main);
   border: 1.5px solid var(--border-color);
 }
 
 .btn-secondary:hover {
-  background: #f8fafc;
+  background: var(--bg-card-hover);
   border-color: #cbd5e1;
 }
 
@@ -743,7 +758,7 @@ body {
 
 .filter-btn {
   border: 1px solid var(--border-color);
-  background: #ffffff;
+  background: var(--bg-card);
   padding: 0.45rem 0.9rem;
   border-radius: var(--radius-sm);
   font-size: 0.82rem;
@@ -781,7 +796,7 @@ body {
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .data-table {
@@ -973,13 +988,13 @@ body {
 }
 
 .grid-cell {
-  background: #ffffff;
+  background: var(--bg-card);
   padding: 0.85rem 0.75rem;
   position: relative;
 }
 
 .grid-header {
-  background: #f8fafc;
+  background: var(--bg-card-hover);
   font-weight: 700;
   text-align: center;
   padding: 0.9rem 0.5rem;
@@ -1001,7 +1016,7 @@ body {
 }
 
 .period-cell {
-  background: #f1f5f9;
+  background: var(--bg-card-hover);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1029,12 +1044,12 @@ body {
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.65rem;
-  background: #ffffff;
+  background: var(--bg-card);
   transition: background var(--transition-fast);
 }
 
 .shift-duty-slot:hover {
-  background: #fafafa;
+  background: var(--bg-card-hover);
 }
 
 .shift-slot-header {
@@ -1232,12 +1247,14 @@ body {
 }
 
 .modal-box {
-  background: #ffffff;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   max-width: 500px;
   width: 100%;
   box-shadow: var(--shadow-xl);
   overflow: hidden;
+  color: var(--text-main);
 }
 
 .modal-header {
@@ -1251,14 +1268,30 @@ body {
 .modal-title {
   font-size: 1.1rem;
   font-weight: 700;
+  color: var(--text-main);
 }
 
 .modal-close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1.3rem;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: var(--text-muted);
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.modal-close-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  border-color: #fca5a5;
+  transform: rotate(90deg);
 }
 
 .modal-body {
@@ -1267,7 +1300,7 @@ body {
 
 .modal-footer {
   padding: 1rem 1.5rem;
-  background: #f8fafc;
+  background: var(--bg-card-hover);
   border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
@@ -1802,7 +1835,7 @@ body {
 .auth-card {
   width: 100%;
   max-width: 460px;
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
@@ -2000,13 +2033,15 @@ body {
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  background: #ffffff !important;
+  background: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-color) !important;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
   pointer-events: auto !important;
 }
 
 .excel-controls-bar {
-  background: #f8fafc;
+  background: var(--bg-card-hover);
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
@@ -2034,7 +2069,8 @@ body {
   font-size: 0.82rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: #ffffff;
+  background: var(--bg-card);
+  color: var(--text-main);
 }
 
 .excel-action-toolbar {
@@ -2188,48 +2224,98 @@ body {
 }
 
 /* ==========================================================================
-   Dark Theme Overrides for Core UI Elements
+   Comprehensive Dark Theme Overrides for Core UI Elements
    ========================================================================== */
 [data-theme="dark"] body {
+  background-color: #080c14;
+  color: #f8fafc;
   background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+}
+
+[data-theme="dark"] .app-header {
+  background: rgba(11, 15, 25, 0.9);
+  border-bottom-color: #1f293d;
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .timetable-card,
+[data-theme="dark"] .duty-board-card,
+[data-theme="dark"] .student-list-container,
+[data-theme="dark"] .admin-config-panel {
+  background: #0f172a;
+  border-color: #1f293d;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .summary-card {
+  background: #0f172a;
+  border-color: #1f293d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .summary-card:hover {
+  background: #172138;
+  border-color: #334155;
 }
 
 [data-theme="dark"] .form-input,
 [data-theme="dark"] .form-select,
 [data-theme="dark"] textarea {
   background-color: #172138 !important;
-  color: #f1f5f9 !important;
-  border-color: #2b3956 !important;
+  color: #f8fafc !important;
+  border-color: #27354f !important;
 }
 
 [data-theme="dark"] .form-input:focus,
 [data-theme="dark"] .form-select:focus {
   background-color: #1c2844 !important;
   border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3) !important;
+}
+
+[data-theme="dark"] .role-card-label {
+  background: #131c31;
+  border-color: #243049;
+}
+
+[data-theme="dark"] .role-card-label:hover {
+  border-color: #4f46e5;
+  background: #1a253e;
+}
+
+[data-theme="dark"] .mode-radio-card {
+  background: #131c31;
+  border-color: #243049;
+}
+
+[data-theme="dark"] .mode-radio-card.active {
+  background: #19243f;
+  border-color: #6366f1;
 }
 
 [data-theme="dark"] .btn-secondary {
-  background: #1c2740 !important;
+  background: #172138 !important;
   color: #cbd5e1 !important;
   border-color: #2c3c60 !important;
 }
 
 [data-theme="dark"] .btn-secondary:hover {
-  background: #253354 !important;
+  background: #223050 !important;
   color: #ffffff !important;
+  border-color: #4b5f8a !important;
 }
 
 [data-theme="dark"] .filter-btn {
-  background: #151d30;
-  border-color: #263452;
+  background: #131c31;
+  border-color: #243049;
   color: #94a3b8;
 }
 
 [data-theme="dark"] .filter-btn:hover {
-  background: #1f2b47;
+  background: #1d2943;
   color: #f1f5f9;
 }
 
@@ -2240,77 +2326,211 @@ body {
 }
 
 [data-theme="dark"] .grid-header {
-  background: #19243d;
-  color: #cbd5e1;
-  border-color: #283758;
-}
-
-[data-theme="dark"] .grid-cell {
-  background: #131b2e;
+  background: #172138;
+  color: #f1f5f9;
   border-color: #222f4b;
 }
 
-[data-theme="dark"] .period-cell {
-  background: #0f1627;
-  border-color: #222f4b;
+[data-theme="dark"] .grid-header .day-name {
+  color: #f8fafc;
 }
 
-[data-theme="dark"] .duty-member-card.empty-member {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: #2c3a57;
+[data-theme="dark"] .grid-header .day-sub {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .table-container table thead tr {
-  background: #19243d;
+[data-theme="dark"] .grid-cell {
+  background: #0f172a;
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .period-cell {
+  background: #131c31;
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .period-cell .period-name {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .shift-duty-slot {
+  background: #0f172a;
+}
+
+[data-theme="dark"] .shift-duty-slot:hover {
+  background: #172138;
+}
+
+[data-theme="dark"] .shift-slot-header {
+  border-bottom-color: #222f4b;
+}
+
+/* Duty Member Badges in Dark Mode */
+[data-theme="dark"] .duty-member-card.member-old {
+  background: linear-gradient(135deg, rgba(67, 56, 202, 0.35), rgba(99, 102, 241, 0.25)) !important;
+  border: 1.5px solid #6366f1 !important;
+  color: #e0e7ff !important;
+}
+
+[data-theme="dark"] .duty-member-card.member-old .member-role-badge {
+  background: #4338ca !important;
+  color: #e0e7ff !important;
+}
+
+[data-theme="dark"] .duty-member-card.member-new {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.35), rgba(16, 185, 129, 0.25)) !important;
+  border: 1.5px solid #10b981 !important;
+  color: #d1fae5 !important;
+}
+
+[data-theme="dark"] .duty-member-card.member-new .member-role-badge {
+  background: #065f46 !important;
+  color: #a7f3d0 !important;
+}
+
+[data-theme="dark"] .duty-member-card.empty-member {
+  background: rgba(245, 158, 11, 0.08) !important;
+  border: 1.5px dashed rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+}
+
+/* Table in Dark Mode */
+[data-theme="dark"] .table-container,
+[data-theme="dark"] .data-table-container {
+  background: #0f172a;
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .table-container table thead tr,
+[data-theme="dark"] .data-table th {
+  background: #172138;
+  color: #e2e8f0;
+  border-bottom-color: #222f4b;
+}
+
+[data-theme="dark"] .table-container table td,
+[data-theme="dark"] .data-table td {
+  border-color: #1f293d;
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .table-container table td {
-  border-color: #222f4b;
-}
-
-[data-theme="dark"] .table-container table tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+[data-theme="dark"] .table-container table tr:hover td,
+[data-theme="dark"] .data-table tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 [data-theme="dark"] .slot-toggle {
-  background: #172138;
-  border-color: #283758;
+  background: #131c31;
+  border-color: #243049;
 }
 
 [data-theme="dark"] .slot-toggle:hover {
-  border-color: #4f46e5;
-  background: #1d2a47;
+  border-color: #6366f1;
+  background: #1b2642;
 }
 
 [data-theme="dark"] .slot-toggle.selected {
-  background: #232252;
-  border-color: #6366f1;
+  background: #1e1e4a;
+  border-color: #818cf8;
 }
 
-[data-theme="dark"] .modal-content {
-  background: #131b2e !important;
-  border: 1px solid #2d3c5e !important;
-  color: #f1f5f9 !important;
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .modal-box {
+  background: #0f172a !important;
+  border: 1px solid #243049 !important;
+  color: #f8fafc !important;
 }
 
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-footer {
-  border-color: #222f4b !important;
+  border-color: #1f293d !important;
+  background: #172138 !important;
 }
 
 [data-theme="dark"] .auth-card {
-  background: #131b2e !important;
-  border-color: #2d3c5e !important;
+  background: #0f172a !important;
+  border-color: #243049 !important;
 }
 
-[data-theme="dark"] .summary-card {
-  background: #131b2e;
-  border-color: #222f4b;
+[data-theme="dark"] .excel-modal-dialog {
+  background: #0b0f19 !important;
+  border-color: #243049 !important;
 }
 
-/* Theme Toggle Button */
+[data-theme="dark"] .excel-controls-bar {
+  background: #131c31 !important;
+  border-color: #243049 !important;
+}
+
+[data-theme="dark"] .excel-input-date,
+[data-theme="dark"] .excel-select-range {
+  background: #0f172a !important;
+  border-color: #2b3956 !important;
+  color: #f8fafc !important;
+}
+
+/* ==========================================================================
+   Dual Segmented Theme Switcher Pill (Task 19)
+   ========================================================================== */
+.theme-switch-pill {
+  display: inline-flex;
+  align-items: center;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 3px;
+  user-select: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.theme-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1.2;
+}
+
+.theme-pill-btn:hover {
+  color: #0f172a;
+}
+
+.theme-pill-btn.active {
+  background: #ffffff;
+  color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .theme-switch-pill {
+  background: #172138;
+  border-color: #27354f;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .theme-pill-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .theme-pill-btn:hover {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .theme-pill-btn.active {
+  background: #0f172a;
+  color: #818cf8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Legacy button compatibility */
 .btn-theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -2334,31 +2554,37 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-.theme-icon {
-  font-size: 1rem;
-  line-height: 1;
-}
-
 /* ==========================================================================
    Sticky Hero Toolbar & Quick Action Bar (Task 17)
+   Cố định ở đỉnh màn hình KHI CUỘN XUỐNG, ẩn mượt mà khi ở đỉnh trang
    ========================================================================== */
 .sticky-hero-bar {
-  position: sticky;
-  top: 72px;
-  z-index: 45;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
   background: var(--bg-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1.5px solid var(--border-color);
-  padding: 0.65rem 1.5rem;
-  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  padding: 0.65rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-110%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+
+.sticky-hero-bar.sticky-active {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sticky-hero-stats {
@@ -2408,7 +2634,7 @@ body {
    ========================================================================== */
 .view-mode-toggle {
   display: inline-flex;
-  background: var(--bg-card);
+  background: var(--bg-card-hover);
   border: 1.5px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 3px;
@@ -2416,7 +2642,7 @@ body {
 }
 
 .view-mode-btn {
-  padding: 0.45rem 0.85rem;
+  padding: 0.42rem 0.85rem;
   font-size: 0.82rem;
   font-weight: 700;
   border-radius: var(--radius-sm);
@@ -2440,6 +2666,11 @@ body {
   box-shadow: 0 2px 8px var(--primary-glow);
 }
 
+[data-theme="dark"] .view-mode-toggle {
+  background: #172138;
+  border-color: #263554;
+}
+
 .master-month-container {
   display: flex;
   flex-direction: column;
@@ -2453,6 +2684,11 @@ body {
   border-radius: var(--radius-md);
   padding: 1.25rem 1.5rem;
   box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .master-week-section {
+  background: #0f172a;
+  border-color: #1f293d;
 }
 
 .master-week-header {
@@ -2481,7 +2717,7 @@ body {
   border-radius: var(--radius-md);
   padding: 2.5rem 1.5rem;
   text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-card-hover);
   cursor: pointer;
   transition: all var(--transition-normal);
   position: relative;
@@ -2491,6 +2727,17 @@ body {
 .import-dropzone.dragover {
   border-color: var(--primary);
   background: var(--primary-light);
+}
+
+[data-theme="dark"] .import-dropzone {
+  border-color: #27354f;
+  background: #131c31;
+}
+
+[data-theme="dark"] .import-dropzone:hover,
+[data-theme="dark"] .import-dropzone.dragover {
+  border-color: #6366f1;
+  background: #1e1e4a;
 }
 
 .import-icon {
@@ -2513,7 +2760,7 @@ body {
 }
 
 .import-preview-table th {
-  background: var(--bg-page);
+  background: var(--bg-card-hover);
   padding: 0.6rem 0.75rem;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
@@ -2528,5 +2775,6 @@ body {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
 }
+
 
 

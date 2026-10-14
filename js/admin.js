@@ -243,7 +243,9 @@
       importPreviewCountLabel: document.getElementById('import-preview-count-label'),
       importFileNameLabel: document.getElementById('import-file-name-label'),
 
-      // Theme toggle button
+      // Theme toggle elements
+      btnThemeLight: document.getElementById('btn-theme-light'),
+      btnThemeDark: document.getElementById('btn-theme-dark'),
       btnThemeToggle: document.getElementById('btn-theme-toggle'),
 
       toastContainer: document.getElementById('toast-container')
@@ -1377,33 +1379,50 @@
    * ==========================================================================
    */
   function initThemeToggle() {
-    const toggleBtn = elements.btnThemeToggle || document.getElementById('btn-theme-toggle');
-    if (!toggleBtn) return;
+    const btnLight = elements.btnThemeLight || document.getElementById('btn-theme-light');
+    const btnDark = elements.btnThemeDark || document.getElementById('btn-theme-dark');
+    const legacyBtn = elements.btnThemeToggle || document.getElementById('btn-theme-toggle');
 
-    function updateBtnVisual(isDark) {
-      const icon = toggleBtn.querySelector('.theme-icon');
-      const text = toggleBtn.querySelector('.theme-text');
-      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
-      if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
-      toggleBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
-    }
-
-    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    updateBtnVisual(currentDark);
-
-    toggleBtn.addEventListener('click', () => {
-      const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const newTheme = isCurrentlyDark ? 'light' : 'dark';
-      if (newTheme === 'dark') {
+    function applyTheme(theme) {
+      if (theme === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       } else {
         document.documentElement.removeAttribute('data-theme');
       }
       try {
-        localStorage.setItem('ts_scheduler_theme', newTheme);
+        localStorage.setItem('ts_scheduler_theme', theme);
       } catch (e) {}
-      updateBtnVisual(newTheme === 'dark');
-    });
+      updateThemeUI(theme === 'dark');
+    }
+
+    function updateThemeUI(isDark) {
+      if (btnLight) btnLight.classList.toggle('active', !isDark);
+      if (btnDark) btnDark.classList.toggle('active', isDark);
+
+      if (legacyBtn) {
+        const icon = legacyBtn.querySelector('.theme-icon');
+        const text = legacyBtn.querySelector('.theme-text');
+        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+        if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
+        legacyBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
+      }
+    }
+
+    const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    updateThemeUI(currentDark);
+
+    if (btnLight) {
+      btnLight.addEventListener('click', () => applyTheme('light'));
+    }
+    if (btnDark) {
+      btnDark.addEventListener('click', () => applyTheme('dark'));
+    }
+    if (legacyBtn) {
+      legacyBtn.addEventListener('click', () => {
+        const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        applyTheme(isCurrentlyDark ? 'light' : 'dark');
+      });
+    }
 
     window.addEventListener('storage', (e) => {
       if (e.key === 'ts_scheduler_theme') {
@@ -1413,7 +1432,7 @@
         } else {
           document.documentElement.removeAttribute('data-theme');
         }
-        updateBtnVisual(isDark);
+        updateThemeUI(isDark);
       }
     });
   }
@@ -1433,6 +1452,19 @@
     elements.btnStickyOpenExcel?.addEventListener('click', () => {
       elements.btnOpenExcelModal?.click();
     });
+
+    // Ẩn khi ở đỉnh trang, hiện mượt mà khi cuộn xuống quá 220px
+    function handleScroll() {
+      if (!elements.stickyHeroBar) return;
+      if (window.scrollY > 220) {
+        elements.stickyHeroBar.classList.add('sticky-active');
+      } else {
+        elements.stickyHeroBar.classList.remove('sticky-active');
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
   }
 
   function updateStickyHeroStats() {

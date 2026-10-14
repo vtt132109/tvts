@@ -12,7 +12,55 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2.2">
+
+  <!-- Inline Critical Theme Styles (Guarantees zero unstyled flash) -->
+  <style>
+    .theme-switch-pill {
+      display: inline-flex;
+      align-items: center;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-radius: 9999px;
+      padding: 3px;
+      gap: 3px;
+      user-select: none;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+    .theme-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.32rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #64748b;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      line-height: 1.2;
+    }
+    .theme-pill-btn:hover { color: #0f172a; }
+    .theme-pill-btn.active {
+      background: #ffffff;
+      color: #4f46e5;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="dark"] .theme-switch-pill {
+      background: #172138;
+      border-color: #27354f;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    [data-theme="dark"] .theme-pill-btn { color: #94a3b8; }
+    [data-theme="dark"] .theme-pill-btn:hover { color: #f8fafc; }
+    [data-theme="dark"] .theme-pill-btn.active {
+      background: #0f172a;
+      color: #818cf8;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+  </style>
 
   <!-- Pre-render Theme Activator (Zero flash) -->
   <script>
@@ -43,11 +91,15 @@
       </div>
 
       <div class="header-actions">
-        <!-- Nút Chuyển Giao Diện Sáng / Tối -->
-        <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Chuyển chế độ Sáng / Tối (Dark Mode)" aria-label="Đổi giao diện Sáng / Tối">
-          <span class="theme-icon">🌙</span>
-          <span class="theme-text">Tối</span>
-        </button>
+        <!-- Bộ Chuyển Giao Diện Sáng / Tối Dạng Pill (Task 19) -->
+        <div class="theme-switch-pill" id="theme-switch-control" role="group" aria-label="Giao diện hiển thị">
+          <button type="button" class="theme-pill-btn" data-theme-val="light" id="btn-theme-light" title="Chuyển sang giao diện Sáng">
+            <span>☀️</span> <span>Sáng</span>
+          </button>
+          <button type="button" class="theme-pill-btn" data-theme-val="dark" id="btn-theme-dark" title="Chuyển sang giao diện Tối (Dark Mode)">
+            <span>🌙</span> <span>Tối</span>
+          </button>
+        </div>
 
         <span style="font-size: 0.82rem; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #10b981; padding: 0.35rem 0.85rem; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 0.35rem;">
           <span>🌱 Cổng Dành Cho Sinh Viên</span>

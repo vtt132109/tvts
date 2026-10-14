@@ -9,3 +9,8 @@ Thumbs.db
 
 # Local logs
 *.log
+
+# Antigravity agent skills
+.agents/
+skills-lock.json
+
