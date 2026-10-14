@@ -16,7 +16,8 @@
     SCHEDULE: 'ts_scheduler_schedule_result',
     TWO_WEEK_SCHEDULE: 'ts_scheduler_two_week_result',
     MONTH_SCHEDULE: 'ts_scheduler_month_result',
-    REG_CONFIG: 'ts_scheduler_reg_config'
+    REG_CONFIG: 'ts_scheduler_reg_config',
+    SWAP_REQUESTS: 'ts_scheduler_swap_requests'
   };
 
   // State
@@ -24,6 +25,8 @@
   let regConfig = null;
   let isRegOpen = true;
   let detectedStudent = null;
+  let currentLookupStudent = null;
+  let currentLookupShifts = [];
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -90,6 +93,19 @@
       inputLookupMssv: document.getElementById('input-lookup-mssv'),
       btnLookup: document.getElementById('btn-lookup'),
       lookupResult: document.getElementById('lookup-result'),
+
+      // Swap Request Modal Elements (Task 26)
+      modalSwap: document.getElementById('modal-student-swap'),
+      formSwap: document.getElementById('form-swap-request'),
+      btnCloseSwap: document.getElementById('btn-close-swap-modal'),
+      btnCancelSwap: document.getElementById('btn-cancel-swap-modal'),
+      inputSwapType: document.getElementById('input-swap-type'),
+      typeOptSwap: document.getElementById('type-opt-swap'),
+      typeOptCover: document.getElementById('type-opt-cover'),
+      selectMyShift: document.getElementById('select-my-shift'),
+      selectTargetStudent: document.getElementById('select-target-student'),
+      inputSwapReason: document.getElementById('input-swap-reason'),
+      swapTargetHint: document.getElementById('swap-target-hint'),
 
       // Toast Container
       toastContainer: document.getElementById('toast-container')
@@ -224,6 +240,18 @@
         handleLookupMySchedule();
       }
     });
+
+    // Sự kiện Modal Đề Xuất Đổi Ca (Task 26)
+    elements.btnCloseSwap?.addEventListener('click', closeSwapModal);
+    elements.btnCancelSwap?.addEventListener('click', closeSwapModal);
+    elements.modalSwap?.addEventListener('click', (e) => {
+      if (e.target === elements.modalSwap) closeSwapModal();
+    });
+
+    elements.typeOptSwap?.addEventListener('click', () => setSwapType('swap'));
+    elements.typeOptCover?.addEventListener('click', () => setSwapType('cover'));
+
+    elements.formSwap?.addEventListener('submit', handleSwapFormSubmit);
   }
 
   function formatVNDateTime(isoStr) {
@@ -832,7 +860,8 @@
   }
 
   /**
-   * Tra cứu ca trực cá nhân (Tìm trong cả Tuần 1 và Tuần 2)
+   * Tra cứu ca trực & Hiển thị Thẻ Lịch Trực Cá Nhân Điện Tử (Task 25)
+   * Không dặn dò trang phục / đồng phục
    */
   function handleLookupMySchedule() {
     const mssv = elements.inputLookupMssv ? elements.inputLookupMssv.value.trim().toLowerCase() : '';
@@ -864,28 +893,53 @@
 
     if (weekTables.length === 0 || weekTables.every(t => !t || Object.keys(t).length === 0)) {
       elements.lookupResult.innerHTML = `
-        <div style="padding: 1rem; background: var(--warning-bg); border: 1px solid #fde68a; border-radius: var(--radius-sm); font-size: 0.88rem; color: #92400e;">
-          ⚠️ Ban điều hành chưa công bố lịch trực. Bạn vui lòng quay lại sau nhé!
+        <div style="padding: 1.25rem; background: var(--warning-bg); border: 1.5px solid #fde68a; border-radius: var(--radius-md); font-size: 0.9rem; color: #92400e;">
+          ⚠️ <strong>Chưa có lịch trực công bố:</strong> Ban điều hành đang hoàn thiện phân công lịch trực. Bạn vui lòng quay lại sau nhé!
         </div>
       `;
       elements.lookupResult.style.display = 'block';
       return;
     }
 
+    // Tìm thông tin sinh viên từ danh sách đăng ký
+    let studentInfo = null;
+    try {
+      const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (rawStudents) {
+        const list = JSON.parse(rawStudents);
+        studentInfo = list.find(s => s.studentId && s.studentId.toLowerCase() === mssv);
+      }
+    } catch (e) {}
+
     const myShifts = [];
 
     function findInTable(table, weekNum) {
       if (!table) return;
-      Object.values(table).forEach(slot => {
+      Object.entries(table).forEach(([shiftId, slot]) => {
         const isOld = slot.oldMember?.studentId?.toLowerCase() === mssv;
         const isNew = slot.newMember?.studentId?.toLowerCase() === mssv;
         if (isOld || isNew) {
+          const self = isOld ? slot.oldMember : slot.newMember;
           const partner = isOld ? slot.newMember : slot.oldMember;
+
+          if (!studentInfo && self) {
+            studentInfo = {
+              studentId: self.studentId,
+              fullName: self.fullName,
+              phone: self.phone || '',
+              role: isOld ? 'old' : 'new'
+            };
+          }
+
           myShifts.push({
+            shiftId,
             weekNum,
             shift: slot.shiftInfo,
             myRole: isOld ? 'Người Cũ (Kinh nghiệm)' : 'Người Mới (Tập sự)',
-            partner: partner ? `${partner.fullName} (${partner.studentId})` : 'Chưa có bạn trực cùng'
+            roleKey: isOld ? 'old' : 'new',
+            partnerName: partner ? partner.fullName : 'Chưa có bạn trực cùng',
+            partnerMssv: partner ? partner.studentId : '',
+            partnerPhone: partner?.phone || ''
           });
         }
       });
@@ -897,35 +951,380 @@
 
     if (myShifts.length === 0) {
       elements.lookupResult.innerHTML = `
-        <div style="padding: 1rem; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.88rem; color: var(--text-muted);">
-          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong tháng này.
+        <div style="padding: 1.25rem; background: var(--bg-card-hover); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem; color: var(--text-muted); text-align: center;">
+          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong tháng này.<br>
+          <span style="font-size: 0.82rem;">(Vui lòng kiểm tra lại MSSV hoặc liên hệ Ban Điều Hành nếu bạn đã đăng ký).</span>
         </div>
       `;
-    } else {
-      elements.lookupResult.innerHTML = `
-        <div style="padding: 1rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-sm);">
-          <h4 style="color: #065f46; font-weight: 700; margin-bottom: 0.5rem;">
-            🎉 Bạn có tổng cộng <strong>${myShifts.length} ca trực trong tháng</strong>:
-          </h4>
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            ${myShifts.map(s => `
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 0.6rem 0.85rem; border-radius: 6px; border: 1px solid #d1fae5; font-size: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-                <div>
-                  <span class="badge" style="background: #e0e7ff; color: #4338ca; margin-right: 0.3rem;">Tuần ${s.weekNum}</span>
-                  <strong style="color: var(--primary);">${escapeHtml(s.shift.dayName)}</strong> (${escapeHtml(s.shift.period)}: ${escapeHtml(s.shift.time)})
-                </div>
-                <div style="font-size: 0.8rem; color: var(--text-muted);">
-                  Trực cùng: <strong style="color: var(--text-main);">${escapeHtml(s.partner)}</strong>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
+      elements.lookupResult.style.display = 'block';
+      return;
     }
 
+    if (!studentInfo) {
+      studentInfo = {
+        studentId: elements.inputLookupMssv.value.trim().toUpperCase(),
+        fullName: 'Cộng Tác Viên Tuyển Sinh',
+        phone: '',
+        role: myShifts[0].roleKey || 'new'
+      };
+    }
+
+    currentLookupStudent = studentInfo;
+    currentLookupShifts = myShifts;
+
+    renderPersonalDutyCard(studentInfo, myShifts);
     elements.lookupResult.style.display = 'block';
+    elements.lookupResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+
+  /**
+   * Render Thẻ Lịch Trực Cá Nhân Điện Tử (Task 25)
+   * Tuyệt đối KHÔNG có dặn dò trang phục / đồng phục
+   */
+  function renderPersonalDutyCard(student, myShifts) {
+    const roleBadgeText = student.role === 'old' ? 'Người Cũ (Kinh nghiệm)' : 'Người Mới (Tập sự)';
+    const roleBadgeClass = student.role === 'old' ? 'member-old' : 'member-new';
+
+    // Lấy danh sách đề xuất đổi ca của sinh viên này
+    let mySwaps = [];
+    try {
+      const rawSwaps = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (rawSwaps) {
+        const allSwaps = JSON.parse(rawSwaps);
+        mySwaps = allSwaps.filter(s => s.studentId?.toLowerCase() === student.studentId?.toLowerCase());
+      }
+    } catch (e) {}
+
+    const shiftsHtml = myShifts.map((s, idx) => `
+      <div class="personal-shift-card">
+        <div class="shift-card-left">
+          <span class="shift-week-chip">Tuần ${s.weekNum}</span>
+          <div class="shift-card-timing">
+            <span class="shift-card-day">${escapeHtml(s.shift.dayName)}</span>
+            <span class="shift-card-period">${escapeHtml(s.shift.period)} (${escapeHtml(s.shift.time)})</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <div class="shift-card-partner">
+            👥 Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>
+            ${s.partnerMssv ? `(${escapeHtml(s.partnerMssv)})` : ''}
+            ${s.partnerPhone ? `<span style="margin-left: 0.35rem; color: var(--text-muted);">📞 ${escapeHtml(s.partnerPhone)}</span>` : ''}
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm btn-swap-shift-trigger" onclick="window.studentOpenSwapForShift('${s.shiftId}', ${s.weekNum})" title="Đề xuất đổi hoặc nhờ trực thay ca này">
+            🔄 Đổi ca
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    const swapsHtml = mySwaps.length > 0 ? `
+      <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color);">
+        <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+          <span>📜</span> Lịch sử đề xuất đổi ca của bạn (${mySwaps.length}):
+        </h4>
+        <div class="my-swap-history-list">
+          ${mySwaps.map(req => {
+            let statusBadge = '';
+            if (req.status === 'approved') {
+              statusBadge = '<span class="swap-status-pill swap-status-approved">✓ Đã Phê Duyệt</span>';
+            } else if (req.status === 'rejected') {
+              statusBadge = '<span class="swap-status-pill swap-status-rejected">✕ Từ Chối</span>';
+            } else {
+              statusBadge = '<span class="swap-status-pill swap-status-pending">⏳ Đang Chờ BĐH Duyệt</span>';
+            }
+            return `
+              <div class="my-swap-item">
+                <div>
+                  <strong>Tuần ${req.weekNum} - ${escapeHtml(req.shiftName || '')}</strong>: 
+                  ${req.swapType === 'cover' ? 'Nhờ bạn' : 'Đổi với bạn'} <strong>${escapeHtml(req.targetStudentName || '')}</strong>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
+                    Lý do: "${escapeHtml(req.reason || '')}"
+                  </div>
+                </div>
+                <div>${statusBadge}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    elements.lookupResult.innerHTML = `
+      <div class="personal-duty-card-wrapper" id="personal-duty-card-print-area">
+        <div class="personal-duty-card">
+          
+          <!-- Header Thẻ Điện Tử -->
+          <div class="personal-card-header">
+            <div class="personal-card-brand">
+              <div class="personal-card-emblem">🎓</div>
+              <div>
+                <div class="personal-card-org-title">Đại Học Sư Phạm Kỹ Thuật TP.HCM - Ban TVTS</div>
+                <div class="personal-card-main-title">THẺ LỊCH TRỰC CỘNG TÁC VIÊN</div>
+              </div>
+            </div>
+            <div class="personal-card-badge-box">
+              <span class="personal-card-month-badge">📅 Lịch 4 Tuần Toàn Tháng</span>
+              <span class="badge" style="background: rgba(255, 255, 255, 0.25); color: #ffffff; font-weight: 700;">
+                Mã thẻ: CTV-${escapeHtml(student.studentId)}
+              </span>
+            </div>
+          </div>
+
+          <!-- Body Thẻ -->
+          <div class="personal-card-body">
+            
+            <!-- Hồ Sơ CTV -->
+            <div class="personal-profile-grid">
+              <div>
+                <div class="profile-field-label">Họ và Tên</div>
+                <div class="profile-field-value">👤 ${escapeHtml(student.fullName)}</div>
+              </div>
+              <div>
+                <div class="profile-field-label">Mã Số Sinh Viên</div>
+                <div class="profile-field-value">🆔 ${escapeHtml(student.studentId)}</div>
+              </div>
+              <div>
+                <div class="profile-field-label">Phân Loại Vai Trò</div>
+                <div class="profile-field-value">
+                  <span class="badge-role-${student.role === 'old' ? 'old' : 'new'}" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; border-radius: var(--radius-full); font-weight: 700;">
+                    ${roleBadgeText}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <div class="profile-field-label">Số Điện Thoại / Zalo</div>
+                <div class="profile-field-value">📞 ${escapeHtml(student.phone || 'Chưa cập nhật')}</div>
+              </div>
+            </div>
+
+            <!-- Thanh Tổng Số Ca -->
+            <div class="personal-shift-summary-bar">
+              <div>
+                🎉 Bạn được phân công trực tổng cộng: <strong style="font-size: 1.05rem; color: var(--primary);">${myShifts.length} ca trực trong tháng</strong>
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-muted);">
+                (Vui lòng theo dõi chi tiết từng ca bên dưới)
+              </div>
+            </div>
+
+            <!-- Danh Sách Ca Trực -->
+            <div class="personal-shifts-list">
+              ${shiftsHtml}
+            </div>
+
+            <!-- Lịch Sử Đổi Ca -->
+            ${swapsHtml}
+
+            <!-- Nút Hành Động Trên Thẻ -->
+            <div class="personal-card-actions">
+              <button type="button" class="btn btn-secondary" onclick="window.studentPrintDutyCard()">
+                <span>🖨️ In Thẻ Cá Nhân</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="window.studentCopyDutySchedule()">
+                <span>📋 Sao Chép Lịch (Zalo)</span>
+              </button>
+              <button type="button" class="btn btn-primary" onclick="window.studentOpenSwapModal()">
+                <span>🔄 Đề Xuất Đổi Ca / Nhờ Trực</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Sao chép tóm tắt lịch trực cá nhân để gửi qua Zalo
+   */
+  function copyDutyScheduleText() {
+    if (!currentLookupStudent || !currentLookupShifts || currentLookupShifts.length === 0) {
+      showToast('Không có dữ liệu ca trực để sao chép!', 'error');
+      return;
+    }
+
+    const lines = [
+      `🎓 LỊCH TRỰC CỘNG TÁC VIÊN TƯ VẤN TUYỂN SINH HCM-UTE`,
+      `👤 CTV: ${currentLookupStudent.fullName} (MSSV: ${currentLookupStudent.studentId})`,
+      `📌 Vai trò: ${currentLookupStudent.role === 'old' ? 'Người Cũ (Kinh nghiệm)' : 'Người Mới (Tập sự)'}`,
+      `📞 SĐT: ${currentLookupStudent.phone || 'N/A'}`,
+      `📅 Tổng số: ${currentLookupShifts.length} ca trực trong tháng`,
+      `---------------------------------------`,
+      ...currentLookupShifts.map(s => 
+        `• Tuần ${s.weekNum}: ${s.shift.dayName} (${s.shift.period}: ${s.shift.time}) | Trực cùng: ${s.partnerName} (${s.partnerMssv})`
+      ),
+      `---------------------------------------`,
+      `Hệ thống xếp lịch tự động Ban TVTS HCM-UTE`
+    ];
+
+    const textToCopy = lines.join('\n');
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      showToast('Đã sao chép lịch trực vào bộ nhớ tạm! Bạn có thể dán vào Zalo ngay.', 'success');
+    }).catch(() => {
+      showToast('Không thể tự động sao chép, vui lòng thử lại!', 'error');
+    });
+  }
+
+  /**
+   * Quản Lý Modal Đề Xuất Đổi Ca (Task 26)
+   */
+  function openSwapModal(preselectedShiftId = null, preselectedWeek = null) {
+    if (!currentLookupStudent || !currentLookupShifts || currentLookupShifts.length === 0) {
+      showToast('Vui lòng tra cứu MSSV của bạn trước khi gửi đề xuất đổi ca!', 'warning');
+      elements.inputLookupMssv?.focus();
+      return;
+    }
+
+    // Nạp danh sách ca của bạn vào select
+    if (elements.selectMyShift) {
+      elements.selectMyShift.innerHTML = currentLookupShifts.map(s => {
+        const val = `${s.weekNum}__${s.shiftId}`;
+        const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
+        return `<option value="${val}" ${isSelected ? 'selected' : ''}>
+          Tuần ${s.weekNum} - ${s.shift.dayName} (${s.shift.period}: ${s.shift.time})
+        </option>`;
+      }).join('');
+    }
+
+    // Nạp danh sách các CTV khác vào select target
+    let allStudents = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (raw) allStudents = JSON.parse(raw);
+    } catch (e) {}
+
+    const otherStudents = allStudents.filter(s => s.studentId?.toLowerCase() !== currentLookupStudent.studentId?.toLowerCase());
+
+    if (elements.selectTargetStudent) {
+      if (otherStudents.length === 0) {
+        elements.selectTargetStudent.innerHTML = `<option value="">-- Chưa có CTV khác trong danh sách --</option>`;
+      } else {
+        elements.selectTargetStudent.innerHTML = `
+          <option value="">-- Chọn bạn CTV nhận đổi hoặc trực thay --</option>
+          ${otherStudents.map(s => `
+            <option value="${escapeHtml(s.studentId)}" data-name="${escapeHtml(s.fullName)}" data-role="${escapeHtml(s.role)}">
+              ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${s.role === 'old' ? 'Người Cũ' : 'Người Mới'}
+            </option>
+          `).join('')}
+        `;
+      }
+    }
+
+    if (elements.inputSwapReason) {
+      elements.inputSwapReason.value = '';
+    }
+
+    setSwapType('swap');
+
+    if (elements.modalSwap) {
+      elements.modalSwap.style.display = 'flex';
+    }
+  }
+
+  function closeSwapModal() {
+    if (elements.modalSwap) {
+      elements.modalSwap.style.display = 'none';
+    }
+  }
+
+  function setSwapType(type) {
+    if (elements.inputSwapType) elements.inputSwapType.value = type;
+    if (elements.typeOptSwap) elements.typeOptSwap.classList.toggle('active', type === 'swap');
+    if (elements.typeOptCover) elements.typeOptCover.classList.toggle('active', type === 'cover');
+    if (elements.swapTargetHint) {
+      elements.swapTargetHint.textContent = type === 'swap' 
+        ? 'Chọn bạn bạn muốn hoán đổi ca cùng.'
+        : 'Chọn bạn CTV bạn nhờ vào trực thay ca này cho mình.';
+    }
+  }
+
+  function handleSwapFormSubmit(e) {
+    e.preventDefault();
+    if (!currentLookupStudent) return;
+
+    const myShiftVal = elements.selectMyShift ? elements.selectMyShift.value : '';
+    const targetStudentId = elements.selectTargetStudent ? elements.selectTargetStudent.value : '';
+    const reason = elements.inputSwapReason ? elements.inputSwapReason.value.trim() : '';
+    const swapType = elements.inputSwapType ? elements.inputSwapType.value : 'swap';
+
+    if (!myShiftVal) {
+      showToast('Vui lòng chọn ca trực của bạn cần đổi!', 'warning');
+      return;
+    }
+    if (!targetStudentId) {
+      showToast('Vui lòng chọn bạn CTV nhận đổi hoặc trực thay!', 'warning');
+      return;
+    }
+    if (!reason) {
+      showToast('Vui lòng điền lý do đổi ca / nhờ trực!', 'warning');
+      elements.inputSwapReason?.focus();
+      return;
+    }
+
+    const [weekNumStr, shiftId] = myShiftVal.split('__');
+    const weekNum = parseInt(weekNumStr, 10) || 1;
+    const targetOpt = elements.selectTargetStudent.selectedOptions[0];
+    const targetName = targetOpt?.getAttribute('data-name') || targetStudentId;
+    const targetRole = targetOpt?.getAttribute('data-role') || 'new';
+
+    const currentShiftObj = currentLookupShifts.find(s => s.shiftId === shiftId && s.weekNum === weekNum);
+    const shiftName = currentShiftObj ? `${currentShiftObj.shift.dayName} (${currentShiftObj.shift.period})` : shiftId;
+
+    const newRequest = {
+      id: 'swap_' + Date.now(),
+      createdAt: new Date().toISOString(),
+      studentId: currentLookupStudent.studentId,
+      studentName: currentLookupStudent.fullName,
+      studentRole: currentLookupStudent.role,
+      swapType, // 'swap' | 'cover'
+      weekNum,
+      shiftId,
+      shiftName,
+      targetStudentId,
+      targetStudentName: targetName,
+      targetStudentRole: targetRole,
+      reason,
+      status: 'pending',
+      adminNote: ''
+    };
+
+    let allSwaps = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) allSwaps = JSON.parse(raw);
+    } catch (e) {}
+
+    allSwaps.unshift(newRequest);
+    localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(allSwaps));
+
+    // Thông báo đồng bộ sang trang Admin
+    window.dispatchEvent(new Event('storage'));
+
+    closeSwapModal();
+    showToast('Đã gửi đề xuất đến Ban Điều Hành! Bạn có thể theo dõi trạng thái ngay tại Thẻ lịch trực.', 'success');
+
+    // Cập nhật lại Thẻ lịch trực để hiện yêu cầu vừa tạo
+    renderPersonalDutyCard(currentLookupStudent, currentLookupShifts);
+  }
+
+  // Khai báo các hàm global phục vụ gọi trực tiếp từ giao diện
+  window.studentPrintDutyCard = () => {
+    window.print();
+  };
+
+  window.studentCopyDutySchedule = () => {
+    copyDutyScheduleText();
+  };
+
+  window.studentOpenSwapModal = () => {
+    openSwapModal();
+  };
+
+  window.studentOpenSwapForShift = (shiftId, weekNum) => {
+    openSwapModal(shiftId, weekNum);
+  };
 
   function showToast(message, type = 'info') {
     if (!elements.toastContainer) return;

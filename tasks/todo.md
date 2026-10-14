@@ -264,5 +264,75 @@
   - [x] F5 trang hoặc chuyển qua lại giữa các tab vẫn giữ nguyên theme đã chọn.
 - **Status:** ✅ Đã hoàn thành
 
+---
+
+## Phase 8: Nâng Cấp Trải Nghiệm & Quản Trị Tuyển Sinh (Kế Hoạch Triển Khai)
+
+### Task 24: Rà Soát & Nâng Cấp Tương Phản Chữ Dark Mode Toàn Diện
+- **Description:**
+  - Tinh chỉnh toàn diện bảng màu chữ và độ tương phản trong chế độ Tối (`[data-theme="dark"]`) theo chuẩn WCAG AA/AAA.
+  - Khắc phục các vị trí chữ chìm, khó đọc:
+    - Nâng cấp `--text-muted` từ `#94a3b8` lên `#cbd5e1` cho các nhãn phụ, ngày tháng, giờ trực, gợi ý input.
+    - Sửa màu chữ vai trò trên thẻ ca trực: Đổi Người cũ (`.role-old .member-role-tag`) từ tím tối `#4338ca` sang tím sáng dạ quang `#a5b4fc` / `#c7d2fe`; Người mới (`.role-new .member-role-tag`) từ xanh tối `#047857` sang xanh ngọc sáng `#6ee7b7` / `#a7f3d0`.
+    - Trạng thái ca trực (`.shift-status-pill`): Đủ 2 bạn (`#a7f3d0` trên nền ngọc đậm), Thiếu người (`#fde68a` trên nền hổ phách đậm), Trống (`#fca5a5` trên nền đỏ rượu).
+    - Thẻ ca chưa lấp đầy (`.empty-member`): Viền nét đứt vàng chanh sáng kèm chữ `#fde047` rõ nét.
+    - Thanh công thức Excel (`.excel-sheet-fx-bar .fx-formula`), tab bảng tính (`.excel-sheet-tab`), hộp code tài khoản demo (`.auth-demo-accounts code`).
+    - Placeholder form input (`::placeholder`) chuyển sang màu xám bạc rõ ràng `#94a3b8`.
+- **Acceptance criteria:**
+  - [x] 100% văn bản, nhãn phụ, thẻ ca trực, bảng tính và modal trong Dark Mode đọc rõ ràng, sắc nét, không bị chìm nền.
+  - [x] Không làm ảnh hưởng đến thẩm mỹ và độ tương phản ở chế độ Sáng (Light Mode).
+- **Files touched:** `css/style.css`
+- **Status:** ✅ Đã hoàn thành
+
+### Task 25: Thẻ Lịch Trực Cá Nhân Điện Tử (Cổng Sinh Viên)
+- **Description:**
+  - Xây dựng Thẻ Lịch Trực CTV điện tử chuyên nghiệp khi sinh viên tra cứu MSSV trên `index.html`.
+  - **Quy tắc đặc thù (theo yêu cầu của Tris):** Tuyệt đối KHÔNG có mục dặn dò trang phục / đồng phục.
+  - Nội dung thẻ bao gồm:
+    - Banner thương hiệu: Ban Tư Vấn Tuyển Sinh HCM-UTE, Mã thẻ CTV, Họ tên, MSSV, Phân loại vai trò, Số điện thoại.
+    - Thống kê tháng: Tổng số ca được phân công trực trong 4 tuần.
+    - Danh sách ca chi tiết: Tuần, Thứ, Buổi (Sáng/Chiều), Khung giờ, và Bạn cùng trực (Tên + MSSV + SĐT để phối hợp).
+    - Thao tác tiện ích:
+      - `🖨️ In Thẻ Cá Nhân`: Định dạng trang in thẻ CTV mini chuẩn A5/A6 hoặc lưu PDF.
+      - `📋 Sao Chép Lịch`: Copy text tóm tắt lịch trực để dán vào Zalo/ghi chú.
+      - `🔄 Đề Xuất Đổi Ca`: Nút chuyển nhanh sang gửi yêu cầu đổi ca nếu bị kẹt lịch.
+- **Acceptance criteria:**
+  - [x] Tra cứu MSSV hiển thị thẻ điện tử trực quan, sang trọng.
+  - [x] Không chứa bất kỳ nội dung dặn dò trang phục nào.
+  - [x] Sao chép lịch và in thẻ hoạt động trơn tru.
+- **Files touched:** `index.html`, `js/student.js`, `css/style.css`
+- **Status:** ✅ Đã hoàn thành
+
+### Task 26: Cổng Đề Xuất Đổi Ca / Nhờ Trực Hộ & Phê Duyệt 1-Click
+- **Description:**
+  - **Phía Sinh Viên (`index.html`):**
+    - Cho phép sinh viên gửi yêu cầu khi bận đột xuất: `Hoán đổi ca với bạn khác` hoặc `Nhờ bạn khác trực hộ`.
+    - Chọn ca cần đổi, chọn bạn CTV muốn đổi cùng (gợi ý bạn đang rảnh ca đó), nhập lý do.
+    - Lưu vào `localStorage['ts_swap_requests']` và theo dõi trạng thái (`⏳ Chờ duyệt`, `✅ Đã duyệt`, `❌ Từ chối`).
+  - **Phía Admin (`admin.html`):**
+    - Badge thông báo số yêu cầu chờ duyệt trên thanh Hero Toolbar và Header (`🔄 Đổi ca (X)`).
+    - Modal Quản Lý Đổi Ca: Xem danh sách yêu cầu kèm nút `✓ Phê Duyệt` (tự động hoán đổi trong `state.monthSchedule` của tuần tương ứng và đồng bộ toàn tháng) và nút `✕ Từ Chối`.
+- **Acceptance criteria:**
+  - [x] Sinh viên gửi đề xuất đổi ca thành công kèm thông báo trạng thái.
+  - [x] Admin thấy badge số lượng đề xuất thời gian thực.
+  - [x] Bấm Duyệt 1-click tự động cập nhật lịch trên bảng phân công cả tháng không cần can thiệp thủ công.
+- **Files touched:** `index.html`, `js/student.js`, `admin.html`, `js/admin.js`, `css/style.css`
+- **Status:** ✅ Đã hoàn thành
+
+### Task 27: Trung Tâm Sao Lưu & Khôi Phục Dữ Liệu (.json) + Khởi Tạo Tháng Mới
+- **Description:**
+  - Tích hợp cụm công cụ Quản lý Dữ liệu trong `admin.html`:
+    - `💾 Tải Bản Sao Lưu (.json)`: Đóng gói toàn bộ cơ sở dữ liệu (`students`, `monthSchedule`, `regConfig`, `adminUsers`, `swapRequests`) tải về máy người dùng.
+    - `📂 Phục Hồi Dữ Liệu (.json)`: Tải lên file backup, kiểm tra tính hợp lệ và khôi phục toàn vẹn hệ thống trong 1 giây.
+    - `🗂️ Khởi Tạo Kỳ Trực Tháng Mới`: Giữ nguyên danh sách sinh viên đăng ký, làm sạch lịch 4 tuần để bắt đầu kỳ tuyển sinh mới.
+- **Acceptance criteria:**
+  - [x] Xuất file JSON đầy đủ dữ liệu cấu hình và lịch phân công.
+  - [x] Nhập file JSON khôi phục chính xác 100% dữ liệu mà không gây lỗi script.
+  - [x] Có xác nhận an toàn trước khi khôi phục hoặc làm mới kỳ trực.
+- **Files touched:** `admin.html`, `js/admin.js`, `css/style.css`
+- **Status:** ✅ Đã hoàn thành
+
+
+
 
 

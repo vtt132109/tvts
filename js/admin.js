@@ -19,7 +19,8 @@
     REG_CONFIG: 'ts_scheduler_reg_config',
     ADMIN_USERS: 'ts_scheduler_admin_users',
     AUTH_TOKEN: 'ts_admin_authenticated',
-    CURRENT_USER: 'ts_admin_user_data'
+    CURRENT_USER: 'ts_admin_user_data',
+    SWAP_REQUESTS: 'ts_scheduler_swap_requests'
   };
 
   // Danh sách tài khoản cán bộ mặc định có quyền quản trị
@@ -253,6 +254,39 @@
       btnThemeDark: document.getElementById('btn-theme-dark'),
       btnThemeToggle: document.getElementById('btn-theme-toggle'),
 
+      // Shift Swap Management Elements (Task 26)
+      btnOpenSwapMgmt: document.getElementById('btn-open-swap-mgmt'),
+      btnStickySwapMgmt: document.getElementById('btn-sticky-swap-mgmt'),
+      badgeSwapCount: document.getElementById('badge-swap-count'),
+      badgeStickySwapCount: document.getElementById('badge-sticky-swap-count'),
+      modalManageSwaps: document.getElementById('modal-manage-swaps'),
+      btnCloseSwapMgmtModal: document.getElementById('btn-close-swap-mgmt-modal'),
+      btnCloseSwapMgmtFooter: document.getElementById('btn-close-swap-mgmt-footer'),
+      btnRefreshSwaps: document.getElementById('btn-refresh-swaps'),
+      swapMgmtCountLabel: document.getElementById('swap-mgmt-count-label'),
+      tbodyManageSwaps: document.getElementById('tbody-manage-swaps'),
+
+      // Backup & Restore Center Elements (Task 27)
+      btnOpenBackupCenter: document.getElementById('btn-open-backup-center'),
+      btnStickyBackupCenter: document.getElementById('btn-sticky-backup-center'),
+      modalBackupCenter: document.getElementById('modal-backup-center'),
+      btnCloseBackupModal: document.getElementById('btn-close-backup-modal'),
+      btnCloseBackupFooter: document.getElementById('btn-close-backup-footer'),
+      backupTabBtns: document.querySelectorAll('.backup-tab-btn'),
+      backupTabContents: document.querySelectorAll('.backup-tab-content'),
+      backupStatStudents: document.getElementById('backup-stat-students'),
+      backupStatWeeks: document.getElementById('backup-stat-weeks'),
+      backupStatSwaps: document.getElementById('backup-stat-swaps'),
+      backupStatAdmins: document.getElementById('backup-stat-admins'),
+      btnDownloadBackupJson: document.getElementById('btn-download-backup-json'),
+      backupFileDropzone: document.getElementById('backup-file-dropzone'),
+      inputBackupFile: document.getElementById('input-backup-file'),
+      backupPreviewBox: document.getElementById('backup-preview-box'),
+      backupPreviewDetails: document.getElementById('backup-preview-details'),
+      btnCancelRestorePreview: document.getElementById('btn-cancel-restore-preview'),
+      btnConfirmRestore: document.getElementById('btn-confirm-restore'),
+      btnStartNewMonth: document.getElementById('btn-start-new-month'),
+
       toastContainer: document.getElementById('toast-container')
     };
   }
@@ -292,6 +326,10 @@
       } else if (e.key === STORAGE_KEYS.ADMIN_USERS) {
         loadAdminUsers();
         renderUserMgmtTable();
+      } else if (e.key === STORAGE_KEYS.SWAP_REQUESTS) {
+        updateSwapCountBadges();
+        renderSwapRequestsTable();
+        showToast('Có đề xuất đổi ca mới từ sinh viên!', 'info');
       }
     });
   }
@@ -309,8 +347,11 @@
     bindStickyHeroEvents();
     bindViewModeEvents();
     bindImportEvents();
+    bindSwapMgmtEvents();
+    bindBackupCenterEvents();
     renderAll();
     renderRegConfigUI();
+    updateSwapCountBadges();
 
     // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây
     setInterval(updateRegLiveStatus, 30000);
@@ -2056,6 +2097,489 @@
     closeImportModal();
     showToast(`Đã nạp thành công ${candidates.length} sinh viên (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success');
   }
+
+  /**
+   * ==========================================================================
+   * 5. QUẢN LÝ & PHÊ DUYỆT ĐỀ XUẤT ĐỔI CA / NHỜ TRỰC HỘ (TASK 26)
+   * ==========================================================================
+   */
+  function bindSwapMgmtEvents() {
+    elements.btnOpenSwapMgmt?.addEventListener('click', openSwapMgmtModal);
+    elements.btnStickySwapMgmt?.addEventListener('click', openSwapMgmtModal);
+    elements.btnCloseSwapMgmtModal?.addEventListener('click', closeSwapMgmtModal);
+    elements.btnCloseSwapMgmtFooter?.addEventListener('click', closeSwapMgmtModal);
+    elements.btnRefreshSwaps?.addEventListener('click', renderSwapRequestsTable);
+
+    elements.modalManageSwaps?.addEventListener('click', (e) => {
+      if (e.target === elements.modalManageSwaps) closeSwapMgmtModal();
+    });
+  }
+
+  function updateSwapCountBadges() {
+    let count = 0;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) {
+        const list = JSON.parse(raw);
+        count = list.filter(r => r.status === 'pending').length;
+      }
+    } catch (e) {}
+
+    if (elements.badgeSwapCount) {
+      elements.badgeSwapCount.textContent = count;
+      elements.badgeSwapCount.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+    if (elements.badgeStickySwapCount) {
+      elements.badgeStickySwapCount.textContent = count;
+      elements.badgeStickySwapCount.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+    if (elements.swapMgmtCountLabel) {
+      elements.swapMgmtCountLabel.textContent = `⏳ Đang chờ duyệt: ${count} yêu cầu`;
+    }
+  }
+
+  function openSwapMgmtModal() {
+    renderSwapRequestsTable();
+    if (elements.modalManageSwaps) elements.modalManageSwaps.style.display = 'flex';
+  }
+
+  function closeSwapMgmtModal() {
+    if (elements.modalManageSwaps) elements.modalManageSwaps.style.display = 'none';
+  }
+
+  function renderSwapRequestsTable() {
+    if (!elements.tbodyManageSwaps) return;
+    let list = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) list = JSON.parse(raw);
+    } catch (e) {}
+
+    updateSwapCountBadges();
+
+    if (list.length === 0) {
+      elements.tbodyManageSwaps.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            🌱 Chưa có đề xuất đổi ca hoặc nhờ trực hộ nào từ sinh viên.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    elements.tbodyManageSwaps.innerHTML = list.map((req, idx) => {
+      let statusBadge = '';
+      let actionButtons = '';
+
+      if (req.status === 'approved') {
+        statusBadge = '<span class="swap-status-pill swap-status-approved">✓ Đã Duyệt</span>';
+        actionButtons = '<span style="font-size: 0.78rem; color: var(--success); font-weight: 700;">Đã cập nhật lịch</span>';
+      } else if (req.status === 'rejected') {
+        statusBadge = '<span class="swap-status-pill swap-status-rejected">✕ Từ Chối</span>';
+        actionButtons = '<span style="font-size: 0.78rem; color: var(--text-muted);">Đã hủy</span>';
+      } else {
+        statusBadge = '<span class="swap-status-pill swap-status-pending">⏳ Chờ Duyệt</span>';
+        actionButtons = `
+          <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
+            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem;" onclick="window.adminApproveSwap('${req.id}')" title="Phê duyệt và tự động đổi lịch 1-click">
+              ✓ Duyệt
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; color: #ef4444;" onclick="window.adminRejectSwap('${req.id}')" title="Từ chối yêu cầu này">
+              ✕
+            </button>
+          </div>
+        `;
+      }
+
+      const typeBadge = req.swapType === 'cover'
+        ? '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700;">🤝 Trực Hộ</span>'
+        : '<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #4f46e5; font-weight: 700;">🔄 Đổi Ca Chéo</span>';
+
+      return `
+        <tr>
+          <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
+          <td>
+            <strong>${escapeHtml(req.studentName)}</strong><br>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(req.studentId)}</span>
+          </td>
+          <td>
+            <span class="badge" style="background: var(--primary-light); color: var(--primary); font-weight: 800; font-size: 0.72rem;">Tuần ${req.weekNum}</span><br>
+            <span style="font-size: 0.82rem; font-weight: 600;">${escapeHtml(req.shiftName)}</span>
+          </td>
+          <td>
+            <strong>${escapeHtml(req.targetStudentName)}</strong><br>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(req.targetStudentId)}</span>
+          </td>
+          <td>${typeBadge}</td>
+          <td style="max-width: 220px; font-size: 0.82rem;" title="${escapeHtml(req.reason)}">
+            ${escapeHtml(req.reason)}
+          </td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">${actionButtons}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function handleApproveSwap(swapId) {
+    let list = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) list = JSON.parse(raw);
+    } catch (e) {}
+
+    const req = list.find(r => r.id === swapId);
+    if (!req) return;
+
+    // Lấy target student object từ danh sách sinh viên
+    const targetStudent = state.students.find(s => s.studentId?.toLowerCase() === req.targetStudentId?.toLowerCase()) || {
+      id: 's_target_' + req.targetStudentId,
+      studentId: req.targetStudentId,
+      fullName: req.targetStudentName,
+      role: req.targetStudentRole || 'new'
+    };
+
+    const senderStudent = state.students.find(s => s.studentId?.toLowerCase() === req.studentId?.toLowerCase()) || {
+      id: 's_sender_' + req.studentId,
+      studentId: req.studentId,
+      fullName: req.studentName,
+      role: req.studentRole || 'old'
+    };
+
+    // Tìm tuần trong state.monthSchedule
+    const weekIdx = (req.weekNum || 1) - 1;
+    if (state.monthSchedule && state.monthSchedule.weeks && state.monthSchedule.weeks[weekIdx]) {
+      const table = state.monthSchedule.weeks[weekIdx].scheduleTable;
+      const slot = table[req.shiftId];
+
+      if (slot) {
+        if (slot.oldMember?.studentId?.toLowerCase() === req.studentId.toLowerCase()) {
+          slot.oldMember = targetStudent;
+        } else if (slot.newMember?.studentId?.toLowerCase() === req.studentId.toLowerCase()) {
+          slot.newMember = targetStudent;
+        }
+
+        // Cập nhật trạng thái slot
+        slot.status = (slot.oldMember && slot.newMember) ? 'full' : 'partial';
+      }
+
+      // Nếu là Tuần 1, đồng bộ sang scheduleResult
+      if (weekIdx === 0 && state.scheduleResult && state.scheduleResult.scheduleTable) {
+        state.scheduleResult.scheduleTable = table;
+        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
+      }
+
+      localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    }
+
+    req.status = 'approved';
+    req.approvedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(list));
+
+    // Đồng bộ sang cổng sinh viên
+    window.dispatchEvent(new Event('storage'));
+
+    renderSwapRequestsTable();
+    renderAll();
+    showToast(`Đã phê duyệt đề xuất của CTV ${req.studentName}! Lịch trực đã được tự động cập nhật.`, 'success');
+  }
+
+  function handleRejectSwap(swapId) {
+    let list = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) list = JSON.parse(raw);
+    } catch (e) {}
+
+    const req = list.find(r => r.id === swapId);
+    if (!req) return;
+
+    req.status = 'rejected';
+    req.rejectedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(list));
+
+    window.dispatchEvent(new Event('storage'));
+    renderSwapRequestsTable();
+    showToast(`Đã từ chối đề xuất của CTV ${req.studentName}.`, 'info');
+  }
+
+  /**
+   * ==========================================================================
+   * 6. TRUNG TÂM SAO LƯU & PHỤC HỒI DỮ LIỆU TUYỂN SINH (TASK 27)
+   * ==========================================================================
+   */
+  let pendingRestoreData = null;
+
+  function bindBackupCenterEvents() {
+    elements.btnOpenBackupCenter?.addEventListener('click', openBackupCenterModal);
+    elements.btnStickyBackupCenter?.addEventListener('click', openBackupCenterModal);
+    elements.btnCloseBackupModal?.addEventListener('click', closeBackupCenterModal);
+    elements.btnCloseBackupFooter?.addEventListener('click', closeBackupCenterModal);
+
+    elements.modalBackupCenter?.addEventListener('click', (e) => {
+      if (e.target === elements.modalBackupCenter) closeBackupCenterModal();
+    });
+
+    elements.backupTabBtns?.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-backup-tab');
+        if (targetTab) switchBackupTab(targetTab);
+      });
+    });
+
+    elements.btnDownloadBackupJson?.addEventListener('click', handleExportBackupJson);
+
+    // Dropzone setup
+    const dropzone = elements.backupFileDropzone;
+    const fileInput = elements.inputBackupFile;
+
+    dropzone?.addEventListener('click', () => fileInput?.click());
+    dropzone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) handleBackupFileSelected(files[0]);
+    });
+    fileInput?.addEventListener('change', (e) => {
+      const files = e.target?.files;
+      if (files && files.length > 0) handleBackupFileSelected(files[0]);
+    });
+
+    elements.btnCancelRestorePreview?.addEventListener('click', () => {
+      pendingRestoreData = null;
+      if (elements.backupPreviewBox) elements.backupPreviewBox.style.display = 'none';
+      if (elements.inputBackupFile) elements.inputBackupFile.value = '';
+    });
+
+    elements.btnConfirmRestore?.addEventListener('click', handleConfirmRestore);
+    elements.btnStartNewMonth?.addEventListener('click', handleStartNewMonth);
+  }
+
+  function openBackupCenterModal() {
+    updateBackupStats();
+    switchBackupTab('tab-export-backup');
+    if (elements.modalBackupCenter) elements.modalBackupCenter.style.display = 'flex';
+  }
+
+  function closeBackupCenterModal() {
+    if (elements.modalBackupCenter) elements.modalBackupCenter.style.display = 'none';
+    pendingRestoreData = null;
+    if (elements.backupPreviewBox) elements.backupPreviewBox.style.display = 'none';
+  }
+
+  function switchBackupTab(targetTabId) {
+    if (elements.backupTabBtns) {
+      elements.backupTabBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-backup-tab') === targetTabId);
+      });
+    }
+    if (elements.backupTabContents) {
+      elements.backupTabContents.forEach(content => {
+        content.style.display = content.id === targetTabId ? 'block' : 'none';
+      });
+    }
+  }
+
+  function updateBackupStats() {
+    if (elements.backupStatStudents) {
+      elements.backupStatStudents.textContent = (state.students || []).length;
+    }
+    if (elements.backupStatWeeks) {
+      const weeks = state.monthSchedule?.weeks?.length || 4;
+      elements.backupStatWeeks.textContent = weeks;
+    }
+    if (elements.backupStatSwaps) {
+      let swapCount = 0;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+        if (raw) swapCount = JSON.parse(raw).length;
+      } catch (e) {}
+      elements.backupStatSwaps.textContent = swapCount;
+    }
+    if (elements.backupStatAdmins) {
+      elements.backupStatAdmins.textContent = (state.adminUsers || []).length;
+    }
+  }
+
+  function handleExportBackupJson() {
+    let swapList = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) swapList = JSON.parse(raw);
+    } catch (e) {}
+
+    const backupPayload = {
+      meta: {
+        appName: 'Hệ Thống Phân Công Lịch Trực Ban TVTS HCM-UTE',
+        version: '2.5',
+        exportedAt: new Date().toISOString(),
+        exportedBy: state.currentUser ? state.currentUser.fullName : 'Admin'
+      },
+      students: state.students || [],
+      monthSchedule: state.monthSchedule || null,
+      scheduleResult: state.scheduleResult || null,
+      regConfig: state.regConfig || null,
+      adminUsers: state.adminUsers || [],
+      swapRequests: swapList
+    };
+
+    const jsonString = JSON.stringify(backupPayload, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+    
+    link = document.createElement('a');
+    link.href = url;
+    link.download = `TVTS_Backup_${dateStr}_${timeStr}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Đã tải xuống bản sao lưu (.json) an toàn thành công!', 'success');
+  }
+
+  function handleBackupFileSelected(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.json')) {
+      showToast('Vui lòng chọn file sao lưu định dạng .json!', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (!parsed || (!parsed.students && !parsed.monthSchedule && !parsed.meta)) {
+          showToast('File JSON không đúng cấu trúc sao lưu của hệ thống!', 'error');
+          return;
+        }
+
+        pendingRestoreData = parsed;
+
+        const studentCount = (parsed.students || []).length;
+        const weekCount = (parsed.monthSchedule?.weeks || []).length;
+        const swapCount = (parsed.swapRequests || []).length;
+        const exportedAt = parsed.meta?.exportedAt ? formatVNDateTime(parsed.meta.exportedAt) : 'Không xác định';
+
+        if (elements.backupPreviewDetails) {
+          elements.backupPreviewDetails.innerHTML = `
+            <div>• <strong>Tên file:</strong> ${escapeHtml(file.name)} (${(file.size / 1024).toFixed(1)} KB)</div>
+            <div>• <strong>Thời gian tạo backup:</strong> ${escapeHtml(exportedAt)}</div>
+            <div>• <strong>Dữ liệu nhận diện:</strong> ${studentCount} CTV, ${weekCount} tuần xếp lịch, ${swapCount} đề xuất đổi ca</div>
+            <div style="margin-top: 0.5rem; color: #b45309; font-weight: 600;">
+              ⚠️ Lưu ý: Khi bấm "Xác Nhận Khôi Phục", toàn bộ dữ liệu hiện tại sẽ được cập nhật đồng bộ theo bản sao lưu này.
+            </div>
+          `;
+        }
+
+        if (elements.backupPreviewBox) elements.backupPreviewBox.style.display = 'block';
+        showToast('Đã đọc và xác thực file sao lưu hợp lệ!', 'info');
+      } catch (err) {
+        showToast('Lỗi khi đọc file sao lưu: File bị hỏng hoặc định dạng JSON sai!', 'error');
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  function handleConfirmRestore() {
+    if (!pendingRestoreData) {
+      showToast('Không có dữ liệu hợp lệ để khôi phục!', 'error');
+      return;
+    }
+
+    try {
+      if (pendingRestoreData.students) {
+        state.students = pendingRestoreData.students;
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+      }
+      if (pendingRestoreData.monthSchedule) {
+        state.monthSchedule = pendingRestoreData.monthSchedule;
+        localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+      }
+      if (pendingRestoreData.scheduleResult) {
+        state.scheduleResult = pendingRestoreData.scheduleResult;
+        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
+      }
+      if (pendingRestoreData.regConfig) {
+        state.regConfig = pendingRestoreData.regConfig;
+        localStorage.setItem(STORAGE_KEYS.REG_CONFIG, JSON.stringify(state.regConfig));
+      }
+      if (pendingRestoreData.adminUsers && pendingRestoreData.adminUsers.length > 0) {
+        state.adminUsers = pendingRestoreData.adminUsers;
+        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
+      }
+      if (pendingRestoreData.swapRequests) {
+        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(pendingRestoreData.swapRequests));
+      }
+
+      window.dispatchEvent(new Event('storage'));
+
+      renderAll();
+      renderRegConfigUI();
+      updateBackupStats();
+      updateSwapCountBadges();
+      closeBackupCenterModal();
+
+      showToast('Khôi phục toàn bộ hệ thống từ bản sao lưu thành công 100%!', 'success');
+    } catch (err) {
+      showToast('Đã có lỗi xảy ra trong quá trình ghi dữ liệu khôi phục!', 'error');
+    }
+  }
+
+  function handleStartNewMonth() {
+    const confirmMsg = 'BẠN CÓ CHẮC CHẮN MUỐN KHỞI TẠO LỊCH THÁNG MỚI?\\n\\n• Hệ thống sẽ tự động xuất 1 file dự phòng kỳ cũ về máy bạn.\\n• Bảng lịch 4 tuần sẽ được làm sạch để xếp lịch mới.\\n• Toàn bộ danh sách CTV đã đăng ký VẪN ĐƯỢC GIỮ NGUYÊN 100%.';
+    if (!confirm(confirmMsg)) return;
+
+    // Tự động tải 1 bản snapshot trước khi reset
+    handleExportBackupJson();
+
+    // Làm sạch bảng 4 tuần
+    const cleanWeeks = [1, 2, 3, 4].map(w => ({
+      weekNum: w,
+      weekLabel: `Tuần ${w}`,
+      scheduleTable: {},
+      stats: { totalAssignedShifts: 0, fullyFilledCount: 0, emptyCount: 10 },
+      isClean: true
+    }));
+
+    state.monthSchedule = {
+      createdAt: Date.now(),
+      totalWeeks: 4,
+      weeks: cleanWeeks
+    };
+
+    state.scheduleResult = {
+      createdAt: Date.now(),
+      scheduleTable: {},
+      stats: { totalAssignedShifts: 0, fullyFilledCount: 0, emptyCount: 10 }
+    };
+
+    localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
+    localStorage.removeItem(STORAGE_KEYS.SWAP_REQUESTS);
+
+    window.dispatchEvent(new Event('storage'));
+
+    renderAll();
+    updateBackupStats();
+    updateSwapCountBadges();
+    closeBackupCenterModal();
+
+    showToast('Đã khởi tạo kỳ trực tháng mới thành công! Danh sách sinh viên vẫn được bảo toàn nguyên vẹn.', 'success');
+  }
+
+  window.adminApproveSwap = (swapId) => handleApproveSwap(swapId);
+  window.adminRejectSwap = (swapId) => handleRejectSwap(swapId);
 
   /**
    * ==========================================================================

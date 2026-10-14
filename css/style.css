@@ -88,7 +88,7 @@
 
   /* Typography */
   --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1;
   --text-inverse: #0b0f19;
 
   /* Role Colors */
@@ -2365,33 +2365,94 @@ body {
   border-bottom-color: #222f4b;
 }
 
-/* Duty Member Badges in Dark Mode */
+/* Duty Member Badges in Dark Mode (Task 24) */
+[data-theme="dark"] .duty-member-card.role-old,
 [data-theme="dark"] .duty-member-card.member-old {
-  background: linear-gradient(135deg, rgba(67, 56, 202, 0.35), rgba(99, 102, 241, 0.25)) !important;
-  border: 1.5px solid #6366f1 !important;
-  color: #e0e7ff !important;
+  background: rgba(67, 56, 202, 0.28) !important;
+  border: 1.5px solid #818cf8 !important;
+  color: #f8fafc !important;
 }
 
+[data-theme="dark"] .duty-member-card.role-old .member-role-tag,
+[data-theme="dark"] .duty-member-card.role-old .member-role-badge,
+[data-theme="dark"] .duty-member-card.member-old .member-role-tag,
 [data-theme="dark"] .duty-member-card.member-old .member-role-badge {
-  background: #4338ca !important;
-  color: #e0e7ff !important;
+  background: #3730a3 !important;
+  color: #c7d2fe !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem !important;
+  border-radius: var(--radius-sm);
+  display: inline-block;
 }
 
+[data-theme="dark"] .duty-member-card.role-old .member-name,
+[data-theme="dark"] .duty-member-card.member-old .member-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .duty-member-card.role-old .member-mssv,
+[data-theme="dark"] .duty-member-card.member-old .member-mssv {
+  color: #cbd5e1 !important;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .duty-member-card.role-new,
 [data-theme="dark"] .duty-member-card.member-new {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.35), rgba(16, 185, 129, 0.25)) !important;
-  border: 1.5px solid #10b981 !important;
-  color: #d1fae5 !important;
+  background: rgba(5, 150, 105, 0.28) !important;
+  border: 1.5px solid #34d399 !important;
+  color: #f8fafc !important;
 }
 
+[data-theme="dark"] .duty-member-card.role-new .member-role-tag,
+[data-theme="dark"] .duty-member-card.role-new .member-role-badge,
+[data-theme="dark"] .duty-member-card.member-new .member-role-tag,
 [data-theme="dark"] .duty-member-card.member-new .member-role-badge {
-  background: #065f46 !important;
-  color: #a7f3d0 !important;
+  background: #064e3b !important;
+  color: #6ee7b7 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem !important;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+[data-theme="dark"] .duty-member-card.role-new .member-name,
+[data-theme="dark"] .duty-member-card.member-new .member-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .duty-member-card.role-new .member-mssv,
+[data-theme="dark"] .duty-member-card.member-new .member-mssv {
+  color: #cbd5e1 !important;
+  font-weight: 600;
 }
 
 [data-theme="dark"] .duty-member-card.empty-member {
-  background: rgba(245, 158, 11, 0.08) !important;
-  border: 1.5px dashed rgba(245, 158, 11, 0.4) !important;
-  color: #fbbf24 !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  border: 1.5px dashed #f59e0b !important;
+  color: #fde047 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .shift-status-pill.full {
+  background: #064e3b !important;
+  color: #a7f3d0 !important;
+  border: 1px solid #059669 !important;
+}
+
+[data-theme="dark"] .shift-status-pill.warning {
+  background: #451a03 !important;
+  color: #fde68a !important;
+  border: 1px solid #d97706 !important;
+}
+
+[data-theme="dark"] .shift-status-pill.empty {
+  background: #450a0a !important;
+  color: #fca5a5 !important;
+  border: 1px solid #dc2626 !important;
 }
 
 /* Table in Dark Mode */
@@ -2467,6 +2528,77 @@ body {
   background: #0f172a !important;
   border-color: #2b3956 !important;
   color: #f8fafc !important;
+}
+
+[data-theme="dark"] .excel-sheet-fx-bar {
+  background: #172138 !important;
+  border-color: #27354f !important;
+}
+
+[data-theme="dark"] .excel-sheet-fx-bar .fx-icon {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .excel-sheet-fx-bar .fx-formula {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .excel-sheet-tab {
+  background: #172138 !important;
+  color: #f8fafc !important;
+  border-color: #27354f !important;
+}
+
+[data-theme="dark"] ::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+[data-theme="dark"] .form-hint,
+[data-theme="dark"] .card-desc,
+[data-theme="dark"] .section-desc,
+[data-theme="dark"] .mode-info-sub,
+[data-theme="dark"] .period-cell .period-time,
+[data-theme="dark"] .day-sub,
+[data-theme="dark"] .app-subtitle {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .auth-demo-accounts code {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #334155 !important;
+}
+
+[data-theme="dark"] .btn-reset-form {
+  border-color: #475569 !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .btn-reset-form:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: #ef4444 !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .fairness-stat-name {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .fairness-stat-row {
+  border-bottom-color: #1f293d !important;
+}
+
+[data-theme="dark"] .badge-role-old {
+  background: rgba(99, 102, 241, 0.25) !important;
+  color: #c7d2fe !important;
+  border: 1px solid #6366f1 !important;
+}
+
+[data-theme="dark"] .badge-role-new {
+  background: rgba(16, 185, 129, 0.25) !important;
+  color: #a7f3d0 !important;
+  border: 1px solid #10b981 !important;
 }
 
 /* ==========================================================================
@@ -2921,6 +3053,538 @@ body {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
 }
+
+/* ==========================================================================
+   Task 25: Thẻ Lịch Trực Cá Nhân Điện Tử (Personal Duty Card - Cổng Sinh Viên)
+   Không chứa bất kỳ dặn dò trang phục / đồng phục nào
+   ========================================================================== */
+.personal-duty-card-wrapper {
+  margin-top: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.personal-duty-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.12), 0 4px 10px -3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  position: relative;
+  transition: all var(--transition-normal);
+}
+
+[data-theme="dark"] .personal-duty-card {
+  background: #0f172a;
+  border-color: #243049;
+  box-shadow: 0 16px 35px -8px rgba(0, 0, 0, 0.5);
+}
+
+.personal-card-header {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+  color: #ffffff;
+  padding: 1.5rem 1.75rem;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.personal-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.personal-card-emblem {
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.personal-card-org-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a5b4fc;
+  margin-bottom: 0.2rem;
+}
+
+.personal-card-main-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.personal-card-badge-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.personal-card-month-badge {
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.personal-card-body {
+  padding: 1.5rem 1.75rem;
+}
+
+.personal-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  background: var(--bg-card-hover);
+  padding: 1.2rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+[data-theme="dark"] .personal-profile-grid {
+  background: #172138;
+  border-color: #27354f;
+}
+
+.profile-field-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.profile-field-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.personal-shift-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(79, 70, 229, 0.08);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+[data-theme="dark"] .personal-shift-summary-bar {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.personal-shifts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.personal-shift-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1.15rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-card);
+  transition: all var(--transition-fast);
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.personal-shift-card:hover {
+  transform: translateX(3px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .personal-shift-card {
+  background: #131c31;
+  border-color: #243049;
+}
+
+[data-theme="dark"] .personal-shift-card:hover {
+  background: #1a253e;
+  border-color: #6366f1;
+}
+
+.shift-card-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.shift-week-chip {
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+[data-theme="dark"] .shift-week-chip {
+  background: #1e1b4b;
+  color: #a5b4fc;
+}
+
+.shift-card-timing {
+  display: flex;
+  flex-direction: column;
+}
+
+.shift-card-day {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.shift-card-period {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.shift-card-partner {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .shift-card-partner {
+  background: #172138;
+  border-color: #27354f;
+  color: #e2e8f0;
+}
+
+.shift-card-partner strong {
+  color: var(--primary);
+}
+
+[data-theme="dark"] .shift-card-partner strong {
+  color: #818cf8;
+}
+
+.personal-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 1.25rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+/* ==========================================================================
+   Task 26: Cổng Đề Xuất Đổi Ca / Nhờ Trực Hộ (Shift Swap Portal)
+   ========================================================================== */
+.swap-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: #ffffff;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-left: 0.35rem;
+  animation: pulse 2s infinite;
+}
+
+.swap-type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.swap-type-card {
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.swap-type-card:hover {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+}
+
+.swap-type-card.active {
+  border-color: var(--primary);
+  background: rgba(79, 70, 229, 0.08);
+}
+
+[data-theme="dark"] .swap-type-card {
+  background: #131c31;
+  border-color: #243049;
+}
+
+[data-theme="dark"] .swap-type-card.active {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: #818cf8;
+}
+
+.swap-type-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.2rem;
+}
+
+.swap-type-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.swap-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.swap-status-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+[data-theme="dark"] .swap-status-pending {
+  background: #451a03;
+  color: #fde68a;
+  border-color: #b45309;
+}
+
+.swap-status-approved {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme="dark"] .swap-status-approved {
+  background: #064e3b;
+  color: #a7f3d0;
+  border-color: #059669;
+}
+
+.swap-status-rejected {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+[data-theme="dark"] .swap-status-rejected {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #991b1b;
+}
+
+.my-swap-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.my-swap-item {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+[data-theme="dark"] .my-swap-item {
+  background: #172138;
+  border-color: #27354f;
+}
+
+/* ==========================================================================
+   Task 27: Trung Tâm Sao Lưu & Phục Hồi Dữ Liệu (Backup & Restore Center)
+   ========================================================================== */
+.backup-tabs-nav {
+  display: flex;
+  border-bottom: 2px solid var(--border-color);
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.backup-tab-btn {
+  padding: 0.65rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--transition-fast);
+}
+
+.backup-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.backup-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+[data-theme="dark"] .backup-tab-btn.active {
+  color: #818cf8;
+  border-bottom-color: #818cf8;
+}
+
+.backup-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.backup-stat-card {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+[data-theme="dark"] .backup-stat-card {
+  background: #172138;
+  border-color: #27354f;
+}
+
+.backup-stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 0.2rem;
+}
+
+[data-theme="dark"] .backup-stat-num {
+  color: #818cf8;
+}
+
+.backup-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.backup-dropzone {
+  border: 2px dashed #94a3b8;
+  border-radius: var(--radius-md);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-card-hover);
+  transition: all var(--transition-fast);
+  margin-bottom: 1.25rem;
+}
+
+.backup-dropzone:hover,
+.backup-dropzone.dragover {
+  border-color: var(--primary);
+  background: rgba(79, 70, 229, 0.05);
+}
+
+[data-theme="dark"] .backup-dropzone {
+  background: #172138;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .backup-dropzone:hover,
+[data-theme="dark"] .backup-dropzone.dragover {
+  border-color: #818cf8;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Print Styles for Duty Card */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #personal-duty-card-print-area,
+  #personal-duty-card-print-area * {
+    visibility: visible;
+  }
+
+  #personal-duty-card-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .personal-card-header {
+    background: #1e1b4b !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .personal-card-actions,
+  .btn-swap-shift-trigger {
+    display: none !important;
+  }
+}
+
 
 
 

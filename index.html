@@ -430,6 +430,70 @@
 
   </main>
 
+  <!-- Modal Đề Xuất Đổi Ca / Nhờ Trực Hộ (Task 26) -->
+  <div class="modal-backdrop" id="modal-student-swap" style="display: none;">
+    <div class="modal-box" style="max-width: 560px;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">🔄 Đề Xuất Đổi Ca / Nhờ Trực Hộ</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Gửi yêu cầu hoán đổi ca hoặc nhờ CTV khác trực thay lên Ban Điều Hành
+          </p>
+        </div>
+        <button type="button" class="btn-close" id="btn-close-swap-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-swap-request">
+          <!-- Hình thức -->
+          <div class="form-group">
+            <label class="form-label">Hình thức đề xuất <span class="required">*</span></label>
+            <div class="swap-type-toggle">
+              <div class="swap-type-card active" data-type="swap" id="type-opt-swap">
+                <div class="swap-type-title">🔄 Đổi Ca Chéo</div>
+                <div class="swap-type-desc">Hoán đổi ca của bạn lấy ca khác của bạn cùng đội</div>
+              </div>
+              <div class="swap-type-card" data-type="cover" id="type-opt-cover">
+                <div class="swap-type-title">🤝 Nhờ Trực Hộ</div>
+                <div class="swap-type-desc">Nhờ bạn khác vào trực thay ca này cho bạn</div>
+              </div>
+            </div>
+            <input type="hidden" id="input-swap-type" value="swap">
+          </div>
+
+          <!-- Ca trực của bạn cần đổi -->
+          <div class="form-group">
+            <label class="form-label" for="select-my-shift">Ca của bạn cần đổi <span class="required">*</span></label>
+            <select id="select-my-shift" class="form-select" required>
+              <!-- Options populated by JS -->
+            </select>
+          </div>
+
+          <!-- Chọn bạn CTV muốn đổi cùng / nhờ trực -->
+          <div class="form-group">
+            <label class="form-label" for="select-target-student">CTV nhận đổi / trực thay <span class="required">*</span></label>
+            <select id="select-target-student" class="form-select" required>
+              <!-- Options populated by JS -->
+            </select>
+            <div class="form-hint" id="swap-target-hint">Hệ thống ưu tiên gợi ý các bạn có thể tham gia ca này.</div>
+          </div>
+
+          <!-- Lý do -->
+          <div class="form-group">
+            <label class="form-label" for="input-swap-reason">Lý do đổi ca / nhờ trực <span class="required">*</span></label>
+            <textarea id="input-swap-reason" class="form-input" rows="3" placeholder="Ví dụ: Trùng lịch thi kết thúc học phần, gia đình có việc bận đột xuất..." required></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-swap-modal">Hủy Bỏ</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-swap">
+              <span>🚀 Gửi Đề Xuất Đến BĐH</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Chân trang kín đáo dành cho Ban Điều Hành Tuyển Sinh -->
   <footer class="app-footer">
     <div class="footer-container">

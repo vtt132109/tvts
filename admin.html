@@ -252,6 +252,16 @@
             <span>🔑 Cấp Quyền & Đổi MK</span>
           </button>
 
+          <!-- Nút Quản lý Đổi Ca (Task 26) -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-swap-mgmt" title="Quản lý và phê duyệt đề xuất đổi ca" style="font-weight: 700; position: relative;">
+            <span>🔄 Đổi Ca</span>
+            <span class="swap-badge-count" id="badge-swap-count" style="display: none;">0</span>
+          </button>
+
+          <!-- Nút Trung Tâm Sao Lưu & Dữ Liệu (Task 27) -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-backup-center" title="Sao lưu và Phục hồi cơ sở dữ liệu (.json)" style="font-weight: 700;">
+            <span>💾 Sao Lưu & Dữ Liệu</span>
+          </button>
 
           <!-- Thông tin người dùng đăng nhập & Nút Đăng xuất -->
           <div class="admin-user-profile" id="admin-user-profile">
@@ -285,6 +295,13 @@
     <div class="sticky-hero-actions">
       <button type="button" class="btn btn-primary btn-sm" id="btn-sticky-auto-schedule" style="font-weight: 700; box-shadow: 0 2px 8px var(--primary-glow);">
         <span>⚡ Xếp Ca Nhanh</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-swap-mgmt" style="font-weight: 700;" title="Quản lý đề xuất đổi ca">
+        <span>🔄 Đổi Ca</span>
+        <span class="swap-badge-count" id="badge-sticky-swap-count" style="display: none;">0</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-backup-center" style="font-weight: 700;" title="Trung tâm sao lưu dữ liệu">
+        <span>💾 Sao Lưu</span>
       </button>
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-quick-copy" style="font-weight: 700;" title="Sao chép nhanh sang Google Sheets">
         <span>📋 Copy Google Sheets</span>
@@ -1055,6 +1072,184 @@
         <button type="button" class="btn btn-primary" id="btn-confirm-import" disabled style="opacity: 0.6;">
           <span>✓ Xác Nhận Nạp Sinh Viên</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL QUẢN LÝ & PHÊ DUYỆT ĐỔI CA (TASK 26)
+       ==================================================================== -->
+  <div class="modal-backdrop" id="modal-manage-swaps" style="display: none;">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>🔄 Quản Lý & Phê Duyệt Đề Xuất Đổi Ca / Nhờ Trực Hộ</span>
+        </h3>
+        <button type="button" class="modal-close-btn" id="btn-close-swap-mgmt-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Danh sách các yêu cầu hoán đổi ca hoặc nhờ trực hộ từ sinh viên. Khi bạn bấm <strong>✓ Phê Duyệt</strong>, hệ thống sẽ tự động hoán đổi lịch trong tuần tương ứng và đồng bộ toàn tháng ngay lập tức.
+        </p>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="font-weight: 700; font-size: 0.92rem;" id="swap-mgmt-count-label">
+            ⏳ Đang chờ duyệt: 0 yêu cầu
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-swaps" style="font-size: 0.78rem;">
+            <span>🔄 Làm mới danh sách</span>
+          </button>
+        </div>
+
+        <div class="table-container" style="max-height: 380px; overflow-y: auto;">
+          <table class="data-table" id="table-manage-swaps">
+            <thead>
+              <tr>
+                <th style="width: 40px;">STT</th>
+                <th>Người Gửi (Đổi)</th>
+                <th>Ca Cần Đổi</th>
+                <th>Người Nhận / Trực Thay</th>
+                <th>Hình Thức</th>
+                <th>Lý Do</th>
+                <th>Trạng Thái</th>
+                <th style="text-align: right; width: 140px;">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-manage-swaps">
+              <!-- Render swap requests here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" id="btn-close-swap-mgmt-footer">Đóng Hộp Thoại</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL TRUNG TÂM SAO LƯU & PHỤC HỒI DỮ LIỆU (TASK 27)
+       ==================================================================== -->
+  <div class="modal-backdrop" id="modal-backup-center" style="display: none;">
+    <div class="modal-content" style="max-width: 820px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>💾 Trung Tâm Sao Lưu & Khôi Phục Dữ Liệu Tuyển Sinh</span>
+        </h3>
+        <button type="button" class="modal-close-btn" id="btn-close-backup-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Tab chuyển đổi chức năng sao lưu -->
+        <div class="backup-tabs-nav">
+          <button type="button" class="backup-tab-btn active" data-backup-tab="tab-export-backup" id="btn-tab-export-backup">
+            💾 Xuất Bản Sao Lưu (.json)
+          </button>
+          <button type="button" class="backup-tab-btn" data-backup-tab="tab-restore-backup" id="btn-tab-restore-backup">
+            📂 Phục Hồi Dữ Liệu (.json)
+          </button>
+          <button type="button" class="backup-tab-btn" data-backup-tab="tab-new-month-reset" id="btn-tab-new-month-reset">
+            🗂️ Quản Lý Kỳ Trực Tháng Mới
+          </button>
+        </div>
+
+        <!-- Tab 1: Xuất Bản Sao Lưu -->
+        <div class="backup-tab-content" id="tab-export-backup">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Tải về toàn bộ cơ sở dữ liệu hệ thống (Danh sách sinh viên, Cấu hình cổng, Bảng phân công 4 tuần, Đề xuất đổi ca và Tài khoản cán bộ) thành 1 file <code>.json</code> an toàn để lưu trữ dự phòng định kỳ.
+          </p>
+
+          <div class="backup-stat-grid" id="backup-current-stats">
+            <div class="backup-stat-card">
+              <div class="backup-stat-num" id="backup-stat-students">0</div>
+              <div class="backup-stat-label">Sinh Viên Đăng Ký</div>
+            </div>
+            <div class="backup-stat-card">
+              <div class="backup-stat-num" id="backup-stat-weeks">4</div>
+              <div class="backup-stat-label">Tuần Lịch Trực</div>
+            </div>
+            <div class="backup-stat-card">
+              <div class="backup-stat-num" id="backup-stat-swaps">0</div>
+              <div class="backup-stat-label">Đề Xuất Đổi Ca</div>
+            </div>
+            <div class="backup-stat-card">
+              <div class="backup-stat-num" id="backup-stat-admins">2</div>
+              <div class="backup-stat-label">Tài Khoản Cán Bộ</div>
+            </div>
+          </div>
+
+          <div style="background: var(--bg-card-hover); padding: 1rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">Tải về Snapshot Dữ Liệu Hệ Thống</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Định dạng chuẩn JSON, mã hóa UTF-8 tiếng Việt đầy đủ</div>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-download-backup-json" style="font-weight: 700;">
+              <span>⬇️ Tải Về File Sao Lưu (.json)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Phục Hồi Dữ Liệu -->
+        <div class="backup-tab-content" id="tab-restore-backup" style="display: none;">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Chọn file backup <code>.json</code> đã tải về trước đó để khôi phục lại dữ liệu toàn hệ thống. Hệ thống sẽ kiểm tra tính toàn vẹn của file trước khi ghi đè.
+          </p>
+
+          <div class="backup-dropzone" id="backup-file-dropzone">
+            <input type="file" id="input-backup-file" accept=".json,application/json" style="display: none;">
+            <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">📂</div>
+            <div style="font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">
+              Kéo thả file sao lưu (.json) vào đây hoặc <span style="color: var(--primary); text-decoration: underline;">chọn file từ máy tính</span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">
+              File sao lưu định dạng .json do Hệ thống Ban Tư Vấn Tuyển Sinh tạo ra
+            </div>
+          </div>
+
+          <div id="backup-preview-box" style="display: none; background: var(--bg-card-hover); padding: 1.25rem; border-radius: var(--radius-md); border: 1.5px solid var(--primary); margin-bottom: 1.25rem;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary); margin-bottom: 0.5rem;" id="backup-preview-title">
+              ✓ File Hợp Lệ Sẵn Sàng Khôi Phục
+            </div>
+            <div style="font-size: 0.85rem; line-height: 1.6;" id="backup-preview-details">
+              <!-- File summary injected here -->
+            </div>
+            <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-restore-preview">Hủy Bỏ</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-restore" style="font-weight: 700;">
+                <span>🚀 Xác Nhận Khôi Phục Ngay</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Khởi Tạo Tháng Mới -->
+        <div class="backup-tab-content" id="tab-new-month-reset" style="display: none;">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Khi bước sang kỳ tuyển sinh tháng mới, bạn có thể lưu trữ lịch trực tháng cũ và làm sạch bảng 4 tuần để chuẩn bị phân công mới, <strong>trong khi vẫn bảo tồn 100% danh sách sinh viên đăng ký</strong>.
+          </p>
+
+          <div style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid #f59e0b; padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+            <h4 style="color: #b45309; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.4rem;">
+              ⚠️ Thao Tác Khởi Tạo Kỳ Trực Mới:
+            </h4>
+            <ul style="font-size: 0.85rem; color: var(--text-main); margin-left: 1.25rem; line-height: 1.6;">
+              <li>Tự động tạo 1 bản sao lưu dự phòng kỳ cũ trước khi đặt lại.</li>
+              <li>Xóa sạch lịch phân công 4 tuần để xếp ca từ đầu.</li>
+              <li>Xóa các đề xuất đổi ca của kỳ cũ.</li>
+              <li><strong>Giữ nguyên:</strong> Toàn bộ danh sách CTV đã đăng ký và cấu hình tài khoản Admin.</li>
+            </ul>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="button" class="btn btn-warning" id="btn-start-new-month" style="font-weight: 700;">
+              <span>🗂️ Khởi Tạo Lịch Tháng Mới</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" id="btn-close-backup-footer">Đóng Hộp Thoại</button>
       </div>
     </div>
   </div>
