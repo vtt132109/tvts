@@ -113,6 +113,13 @@
       swapMyHistorySection: document.getElementById('swap-my-history-section'),
       swapMyHistoryList: document.getElementById('swap-my-history-list'),
 
+      // Sections & Visibility Containers
+      sectionRegistration: document.getElementById('section-student-registration'),
+      sectionLookup: document.getElementById('section-student-lookup'),
+      sectionTimetable: document.getElementById('section-student-timetable'),
+      schedulePendingNotice: document.getElementById('student-schedule-pending-notice'),
+      swapCallout: document.getElementById('section-student-swap-callout') || document.querySelector('.swap-action-callout'),
+
       // Toast Container
       toastContainer: document.getElementById('toast-container')
     };
@@ -409,6 +416,59 @@
 
     // Cập nhật nhãn nút Submit nếu cổng đóng
     updateSubmitButtonState();
+
+    // Cập nhật ẩn/hiện các phân hệ theo trạng thái cổng và quyền Admin
+    updatePortalViewVisibility();
+  }
+
+  /**
+   * Điều chỉnh hiển thị các phân hệ trên Cổng Sinh Viên theo yêu cầu:
+   * 1. Nếu cổng ĐÃ KHÓA: Khóa toàn bộ và ẩn form đăng ký, chỉ để lại ca trực tuần và tìm kiếm ca trực bằng MSSV.
+   * 2. Nếu cổng CÒN MỞ: Form đăng ký hiển thị, ẩn lịch trực đi (chỉ hiển thị khi Admin cho phép / công bố).
+   * 3. Chức năng Đổi ca trực: Luôn giữ nguyên ở mọi trạng thái.
+   */
+  function updatePortalViewVisibility() {
+    const isSchedulePublished = regConfig?.publishSchedule === true;
+
+    if (!isRegOpen) {
+      // 1. CỔNG ĐÃ KHÓA:
+      // Khóa toàn bộ và ẩn form đăng ký
+      if (elements.sectionRegistration) {
+        elements.sectionRegistration.style.display = 'none';
+      }
+      // Chỉ để lại ca trực tuần và tìm kiếm ca trực bằng MSSV
+      if (elements.sectionTimetable) {
+        elements.sectionTimetable.style.display = 'block';
+      }
+      if (elements.sectionLookup) {
+        elements.sectionLookup.style.display = 'block';
+      }
+      if (elements.schedulePendingNotice) {
+        elements.schedulePendingNotice.style.display = 'none';
+      }
+    } else {
+      // 2. CỔNG CÒN MỞ ĐĂNG KÝ:
+      // Form đăng ký hiển thị để sinh viên điền thông tin và chọn ca rảnh
+      if (elements.sectionRegistration) {
+        elements.sectionRegistration.style.display = 'block';
+      }
+
+      // Ẩn lịch trực đi, bao giờ bên admin cho hiển thị thì mới được hiển thị
+      if (isSchedulePublished) {
+        if (elements.sectionTimetable) elements.sectionTimetable.style.display = 'block';
+        if (elements.sectionLookup) elements.sectionLookup.style.display = 'block';
+        if (elements.schedulePendingNotice) elements.schedulePendingNotice.style.display = 'none';
+      } else {
+        if (elements.sectionTimetable) elements.sectionTimetable.style.display = 'none';
+        if (elements.sectionLookup) elements.sectionLookup.style.display = 'none';
+        if (elements.schedulePendingNotice) elements.schedulePendingNotice.style.display = 'block';
+      }
+    }
+
+    // 3. ĐỔI CA TRỰC THÌ GIỮ NGUYÊN (luôn hiển thị)
+    if (elements.swapCallout) {
+      elements.swapCallout.style.display = 'flex';
+    }
   }
 
   function updateSubmitButtonState() {
