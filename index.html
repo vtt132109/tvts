@@ -186,7 +186,7 @@
                   Mã Số Sinh Viên (MSSV) <span class="required">*</span>
                   <span id="mssv-live-tag" style="margin-left: 0.5rem; display: none;"></span>
                 </label>
-                <input type="text" id="input-studentid" class="form-input" placeholder="Ví dụ: 2102001 (Nhập để tự kiểm tra đăng ký)" required autocomplete="off">
+                <input type="text" id="input-studentid" class="form-input" placeholder="Ví dụ: 2102001 (Nhập để tự kiểm tra đăng ký)" required autocomplete="off" aria-label="Mã Số Sinh Viên (MSSV)">
                 <div class="form-hint" id="mssv-input-hint">Nhập MSSV hệ thống sẽ tự nhận diện nếu bạn đã đăng ký trước đó.</div>
               </div>
 
@@ -194,14 +194,14 @@
                 <label class="form-label" for="input-fullname">
                   Họ và Tên Sinh Viên <span class="required">*</span>
                 </label>
-                <input type="text" id="input-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required>
+                <input type="text" id="input-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required aria-label="Họ và Tên Sinh Viên">
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="input-phone">
                   Số Điện Thoại (Zalo liên hệ)
                 </label>
-                <input type="tel" id="input-phone" class="form-input" placeholder="Ví dụ: 0912345678">
+                <input type="tel" id="input-phone" class="form-input" placeholder="Ví dụ: 0912345678" aria-label="Số Điện Thoại Zalo liên hệ">
               </div>
 
               <div class="form-group" role="group" aria-labelledby="label-role-group">
@@ -211,7 +211,7 @@
                 <div class="role-cards">
                   <!-- Người cũ -->
                   <label class="role-card-label" for="role-old">
-                    <input type="radio" id="role-old" name="studentRole" value="old">
+                    <input type="radio" id="role-old" name="studentRole" value="old" aria-label="Người Cũ - Đã có kinh nghiệm trực">
                     <span class="role-icon">🎓</span>
                     <span class="role-name">Người Cũ</span>
                     <span class="role-sub">Đã có kinh nghiệm trực</span>
@@ -219,7 +219,7 @@
 
                   <!-- Người mới -->
                   <label class="role-card-label" for="role-new">
-                    <input type="radio" id="role-new" name="studentRole" value="new" checked>
+                    <input type="radio" id="role-new" name="studentRole" value="new" checked aria-label="Người Mới - Tập sự / Mới tham gia">
                     <span class="role-icon">🌱</span>
                     <span class="role-name">Người Mới</span>
                     <span class="role-sub">Tập sự / Mới tham gia</span>
@@ -292,35 +292,35 @@
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T2_S">
-                        <input type="checkbox" id="cb-T2_S" class="slot-checkbox" value="T2_S">
+                        <input type="checkbox" id="cb-T2_S" class="slot-checkbox" value="T2_S" aria-label="Rảnh Sáng Thứ Hai">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Sáng T2</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T3_S">
-                        <input type="checkbox" id="cb-T3_S" class="slot-checkbox" value="T3_S">
+                        <input type="checkbox" id="cb-T3_S" class="slot-checkbox" value="T3_S" aria-label="Rảnh Sáng Thứ Ba">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Sáng T3</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T4_S">
-                        <input type="checkbox" id="cb-T4_S" class="slot-checkbox" value="T4_S">
+                        <input type="checkbox" id="cb-T4_S" class="slot-checkbox" value="T4_S" aria-label="Rảnh Sáng Thứ Tư">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Sáng T4</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T5_S">
-                        <input type="checkbox" id="cb-T5_S" class="slot-checkbox" value="T5_S">
+                        <input type="checkbox" id="cb-T5_S" class="slot-checkbox" value="T5_S" aria-label="Rảnh Sáng Thứ Năm">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Sáng T5</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T6_S">
-                        <input type="checkbox" id="cb-T6_S" class="slot-checkbox" value="T6_S">
+                        <input type="checkbox" id="cb-T6_S" class="slot-checkbox" value="T6_S" aria-label="Rảnh Sáng Thứ Sáu">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Sáng T6</span>
                       </label>
@@ -335,35 +335,35 @@
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T2_C">
-                        <input type="checkbox" id="cb-T2_C" class="slot-checkbox" value="T2_C">
+                        <input type="checkbox" id="cb-T2_C" class="slot-checkbox" value="T2_C" aria-label="Rảnh Chiều Thứ Hai">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Chiều T2</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T3_C">
-                        <input type="checkbox" id="cb-T3_C" class="slot-checkbox" value="T3_C">
+                        <input type="checkbox" id="cb-T3_C" class="slot-checkbox" value="T3_C" aria-label="Rảnh Chiều Thứ Ba">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Chiều T3</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T4_C">
-                        <input type="checkbox" id="cb-T4_C" class="slot-checkbox" value="T4_C">
+                        <input type="checkbox" id="cb-T4_C" class="slot-checkbox" value="T4_C" aria-label="Rảnh Chiều Thứ Tư">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Chiều T4</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T5_C">
-                        <input type="checkbox" id="cb-T5_C" class="slot-checkbox" value="T5_C">
+                        <input type="checkbox" id="cb-T5_C" class="slot-checkbox" value="T5_C" aria-label="Rảnh Chiều Thứ Năm">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Chiều T5</span>
                       </label>
                     </td>
                     <td>
                       <label class="slot-toggle" for="cb-T6_C">
-                        <input type="checkbox" id="cb-T6_C" class="slot-checkbox" value="T6_C">
+                        <input type="checkbox" id="cb-T6_C" class="slot-checkbox" value="T6_C" aria-label="Rảnh Chiều Thứ Sáu">
                         <span class="slot-icon">✓</span>
                         <span class="slot-state-text">Rảnh Chiều T6</span>
                       </label>
@@ -410,6 +410,7 @@
         </div>
       </div>
       <div class="card-body">
+        <label for="input-lookup-mssv" class="sr-only">Mã Số Sinh Viên (MSSV) tra cứu ca trực</label>
         <div style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
           <input type="text" id="input-lookup-mssv" class="form-input" style="flex: 1; min-width: 220px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)" aria-label="Nhập MSSV của bạn để tra cứu ca trực">
           <button type="button" id="btn-lookup" class="btn btn-primary">
@@ -485,7 +486,7 @@
             <span id="swap-sender-role-badge" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-weight: 700;"></span>
           </label>
           <div style="display: flex; gap: 0.5rem;">
-            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)..." style="flex: 1; font-weight: 600;" required autocomplete="off">
+            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)..." style="flex: 1; font-weight: 600;" required autocomplete="off" aria-label="Mã Số Sinh Viên của bạn">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-swap-load-shifts" style="white-space: nowrap; font-weight: 700; border-color: var(--primary); color: var(--primary);">
               <span>🔍 Tải Ca Trực</span>
             </button>
@@ -515,7 +516,7 @@
           <!-- Ca trực của bạn cần đổi -->
           <div class="form-group">
             <label class="form-label" for="select-my-shift" style="font-weight: 700;">3. Ca của bạn cần đổi / cần nhờ trực <span class="required">*</span></label>
-            <select id="select-my-shift" class="form-select" required style="font-weight: 600;">
+            <select id="select-my-shift" class="form-select" required style="font-weight: 600;" aria-label="Ca của bạn cần đổi hoặc cần nhờ trực">
               <option value="">-- Vui lòng nhập MSSV và bấm Tải Ca Trực ở trên --</option>
             </select>
           </div>
@@ -523,7 +524,7 @@
           <!-- Chọn bạn CTV muốn đổi cùng / nhờ trực -->
           <div class="form-group">
             <label class="form-label" for="select-target-student" style="font-weight: 700;">4. CTV nhận đổi / trực thay <span class="required">*</span></label>
-            <select id="select-target-student" class="form-select" required>
+            <select id="select-target-student" class="form-select" required aria-label="Cộng tác viên nhận đổi hoặc trực thay">
               <option value="">-- Chọn CTV nhận đổi hoặc trực thay --</option>
             </select>
             <div class="form-hint" id="swap-target-hint">Hệ thống liệt kê các bạn cùng vai trò (Người Cũ hoặc Người Mới) để đảm bảo chất lượng ca trực.</div>
@@ -532,7 +533,7 @@
           <!-- Lý do -->
           <div class="form-group">
             <label class="form-label" for="input-swap-reason" style="font-weight: 700;">5. Lý do đổi ca / nhờ trực <span class="required">*</span></label>
-            <textarea id="input-swap-reason" class="form-input" rows="2" placeholder="Ví dụ: Trùng lịch thi thực hành, gia đình có việc bận đột xuất..." required></textarea>
+            <textarea id="input-swap-reason" class="form-input" rows="2" placeholder="Ví dụ: Trùng lịch thi thực hành, gia đình có việc bận đột xuất..." required aria-label="Lý do đổi ca hoặc nhờ trực"></textarea>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">

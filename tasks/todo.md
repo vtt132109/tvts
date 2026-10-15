@@ -342,6 +342,22 @@
 - **Files touched:** `admin.html`, `js/admin.js`, `css/style.css`
 - **Status:** ✅ Đã hoàn thành
 
+### Task 28: Mở Rộng & Tối Ưu Hóa Bộ Kiểm Thử Tự Động (QA CI Test Harness)
+- **Description:**
+  - Rà soát toàn diện các bộ kiểm thử tự động trong `tests/`, mở rộng độ phủ cho các tính năng mới và trường hợp biên (edge cases).
+  - Bổ sung test cases kiểm tra xử lý biên của Scheduler khi số lượng người cũ = 0 hoặc người mới = 0 (hệ thống không bị crash).
+  - Bổ sung test cases kiểm tra bảo mật mã PIN và hàm `escapeHtml()` loại bỏ các ký tự độc hại `<script>`, `"`, `'`, `&`.
+  - Xây dựng suite kiểm thử mới `tests/portal.test.js` kiểm tra tính năng đóng/mở cổng, cờ `publishSchedule` và tra cứu MSSV khi lịch mở vs đóng.
+  - Nâng cấp `tests/run_all_tests.js` điều phối chạy tuần tự và in bảng tổng hợp toàn hệ thống.
+- **Acceptance criteria:**
+  - [x] Đầy đủ 3 bộ kiểm thử: `scheduler.test.js` (8 tests), `auth.test.js` (15 tests), `portal.test.js` (11 tests).
+  - [x] Hàm `escapeHtml()` được kiểm tra toàn diện với payload XSS thực tế và các giá trị biên.
+  - [x] Lõi xếp ca không bị crash khi nhóm người cũ = 0 hoặc người mới = 0.
+  - [x] Chạy `node tests/run_all_tests.js` đạt chuẩn 100% PASS (34/34 tests).
+- **Files touched:** `tests/scheduler.test.js`, `tests/auth.test.js`, `tests/portal.test.js`, `tests/run_all_tests.js`, `tasks/todo.md`
+- **Status:** ✅ Đã hoàn thành (34/34 Tests PASS - 100%)
+
+
 
 
 
