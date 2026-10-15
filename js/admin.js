@@ -438,6 +438,11 @@
       }
     });
 
+    // Tự động ẩn lỗi khi người dùng bắt đầu gõ lại
+    elements.inputAuthUsername?.addEventListener('input', hideAuthError);
+    elements.inputAuthPassword?.addEventListener('input', hideAuthError);
+    elements.inputAuthPin?.addEventListener('input', hideAuthError);
+
     // Đăng xuất an toàn
     elements.btnAdminLogout?.addEventListener('click', () => {
       if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc Quản Trị?')) {
@@ -449,6 +454,40 @@
         showToast('Đã đăng xuất khỏi hệ thống an toàn!', 'info');
       }
     });
+
+    // Xuất API xác thực cho kiểm thử và tích hợp
+    window.AdminAuth = {
+      login: (username, password) => {
+        const uStr = (username || '').trim().toLowerCase();
+        const matched = state.adminUsers.find(u => u.username.toLowerCase() === uStr && u.password === password);
+        if (matched) {
+          authenticateSuccess(matched);
+          return { success: true, user: matched };
+        }
+        showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
+        return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
+      },
+      loginPin: (pin) => {
+        const pStr = (pin || '').trim();
+        const matched = state.adminUsers.find(u => u.pin && u.pin === pStr);
+        if (matched) {
+          authenticateSuccess(matched);
+          return { success: true, user: matched };
+        }
+        showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
+        return { success: false, message: 'Mã PIN không đúng!' };
+      },
+      logout: () => {
+        sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+        sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        lockAdminDashboard();
+      },
+      isAuthenticated: () => state.isAuthenticated,
+      getCurrentUser: () => state.currentUser,
+      getAdminUsers: () => [...state.adminUsers]
+    };
   }
 
   function authenticateSuccess(user) {
