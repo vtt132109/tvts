@@ -101,6 +101,11 @@
           </button>
         </div>
 
+        <!-- Nút Đổi Ca Nhanh Trên Thanh Header -->
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-header-open-swap" onclick="window.studentOpenSwapDirectly && window.studentOpenSwapDirectly()" title="Gửi đề xuất hoán đổi ca hoặc nhờ bạn khác trực thay" style="font-weight: 700; color: var(--primary); border: 1.5px solid var(--primary); background: var(--bg-card); display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+          <span>🔄</span> <span>Đổi Ca / Trực Hộ</span>
+        </button>
+
         <span style="font-size: 0.82rem; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #10b981; padding: 0.35rem 0.85rem; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 0.35rem;">
           <span>🌱 Cổng Dành Cho Sinh Viên</span>
         </span>
@@ -123,6 +128,20 @@
       <div class="reg-status-countdown" id="student-reg-countdown" style="display: none;">
         <span>⌛ Hạn chót:</span> <span id="student-reg-countdown-time">--</span>
       </div>
+    </div>
+
+    <!-- Banner Nổi Bật: Hỗ Trợ Đổi Ca & Nhờ Trực Hộ Cho Sinh Viên (Task 26) -->
+    <div class="swap-action-callout" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.08)); border: 1.5px solid var(--primary-light, #818cf8); border-radius: var(--radius-md); padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem; box-shadow: var(--shadow-sm);">
+      <div style="display: flex; align-items: center; gap: 0.85rem;">
+        <span style="font-size: 1.8rem; line-height: 1;">🔄</span>
+        <div>
+          <div style="font-weight: 700; color: var(--text-main); font-size: 0.96rem;">Bạn Bận Lịch Học Đột Xuất Hoặc Cần Đổi Ca Trực?</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.15rem;">Nhấp để gửi yêu cầu hoán đổi ca chéo hoặc nhờ bạn CTV khác trực thay gửi lên Ban Điều Hành.</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="window.studentOpenSwapDirectly && window.studentOpenSwapDirectly()" style="font-weight: 700; padding: 0.6rem 1.25rem; box-shadow: 0 2px 8px var(--primary-glow); display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+        <span>🔄 Gửi Đề Xuất Đổi Ca Ngay</span>
+      </button>
     </div>
 
     <!-- Thông báo đăng ký thành công -->
@@ -431,8 +450,8 @@
   </main>
 
   <!-- Modal Đề Xuất Đổi Ca / Nhờ Trực Hộ (Task 26) -->
-  <div class="modal-backdrop" id="modal-student-swap" style="display: none;">
-    <div class="modal-box" style="max-width: 560px;">
+  <div class="modal-overlay modal-backdrop" id="modal-student-swap" style="display: none;">
+    <div class="modal-box" style="max-width: 620px;">
       <div class="modal-header">
         <div>
           <h3 class="modal-title">🔄 Đề Xuất Đổi Ca / Nhờ Trực Hộ</h3>
@@ -443,10 +462,28 @@
         <button type="button" class="btn-close" id="btn-close-swap-modal">&times;</button>
       </div>
       <div class="modal-body">
+        
+        <!-- Bước 1: Nhập MSSV của người gửi để nạp ca trực -->
+        <div class="form-group" style="background: var(--bg-card-hover); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1.5px solid var(--border-color); margin-bottom: 1.25rem;">
+          <label class="form-label" for="input-swap-sender-mssv" style="font-weight: 700; margin-bottom: 0.35rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>1. Mã Số Sinh Viên (MSSV) của bạn <span class="required">*</span></span>
+            <span id="swap-sender-role-badge" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-weight: 700;"></span>
+          </label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)..." style="flex: 1; font-weight: 600;" required autocomplete="off">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-swap-load-shifts" style="white-space: nowrap; font-weight: 700; border-color: var(--primary); color: var(--primary);">
+              <span>🔍 Tải Ca Trực</span>
+            </button>
+          </div>
+          <div id="swap-sender-status-msg" style="font-size: 0.8rem; margin-top: 0.45rem; color: var(--text-muted); line-height: 1.4;">
+            💡 Nhập MSSV và bấm <strong>Tải Ca Trực</strong> để hệ thống tự động lọc các ca bạn được phân công.
+          </div>
+        </div>
+
         <form id="form-swap-request">
           <!-- Hình thức -->
           <div class="form-group">
-            <label class="form-label">Hình thức đề xuất <span class="required">*</span></label>
+            <label class="form-label" style="font-weight: 700;">2. Hình thức đề xuất <span class="required">*</span></label>
             <div class="swap-type-toggle">
               <div class="swap-type-card active" data-type="swap" id="type-opt-swap">
                 <div class="swap-type-title">🔄 Đổi Ca Chéo</div>
@@ -462,34 +499,45 @@
 
           <!-- Ca trực của bạn cần đổi -->
           <div class="form-group">
-            <label class="form-label" for="select-my-shift">Ca của bạn cần đổi <span class="required">*</span></label>
-            <select id="select-my-shift" class="form-select" required>
-              <!-- Options populated by JS -->
+            <label class="form-label" for="select-my-shift" style="font-weight: 700;">3. Ca của bạn cần đổi / cần nhờ trực <span class="required">*</span></label>
+            <select id="select-my-shift" class="form-select" required style="font-weight: 600;">
+              <option value="">-- Vui lòng nhập MSSV và bấm Tải Ca Trực ở trên --</option>
             </select>
           </div>
 
           <!-- Chọn bạn CTV muốn đổi cùng / nhờ trực -->
           <div class="form-group">
-            <label class="form-label" for="select-target-student">CTV nhận đổi / trực thay <span class="required">*</span></label>
+            <label class="form-label" for="select-target-student" style="font-weight: 700;">4. CTV nhận đổi / trực thay <span class="required">*</span></label>
             <select id="select-target-student" class="form-select" required>
-              <!-- Options populated by JS -->
+              <option value="">-- Chọn CTV nhận đổi hoặc trực thay --</option>
             </select>
-            <div class="form-hint" id="swap-target-hint">Hệ thống ưu tiên gợi ý các bạn có thể tham gia ca này.</div>
+            <div class="form-hint" id="swap-target-hint">Hệ thống liệt kê các bạn cùng vai trò (Người Cũ hoặc Người Mới) để đảm bảo chất lượng ca trực.</div>
           </div>
 
           <!-- Lý do -->
           <div class="form-group">
-            <label class="form-label" for="input-swap-reason">Lý do đổi ca / nhờ trực <span class="required">*</span></label>
-            <textarea id="input-swap-reason" class="form-input" rows="3" placeholder="Ví dụ: Trùng lịch thi kết thúc học phần, gia đình có việc bận đột xuất..." required></textarea>
+            <label class="form-label" for="input-swap-reason" style="font-weight: 700;">5. Lý do đổi ca / nhờ trực <span class="required">*</span></label>
+            <textarea id="input-swap-reason" class="form-input" rows="2" placeholder="Ví dụ: Trùng lịch thi thực hành, gia đình có việc bận đột xuất..." required></textarea>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
             <button type="button" class="btn btn-secondary" id="btn-cancel-swap-modal">Hủy Bỏ</button>
-            <button type="submit" class="btn btn-primary" id="btn-submit-swap">
+            <button type="submit" class="btn btn-primary" id="btn-submit-swap" style="font-weight: 700;">
               <span>🚀 Gửi Đề Xuất Đến BĐH</span>
             </button>
           </div>
         </form>
+
+        <!-- Lịch sử đề xuất của bạn -->
+        <div id="swap-my-history-section" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--border-color); display: none;">
+          <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.5rem; color: var(--text-main);">
+            📋 Lịch sử đề xuất gần đây của bạn:
+          </div>
+          <div id="swap-my-history-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 180px; overflow-y: auto;">
+            <!-- Render recent swap history -->
+          </div>
+        </div>
+
       </div>
     </div>
   </div>

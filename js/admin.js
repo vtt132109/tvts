@@ -297,6 +297,8 @@
     loadAdminUsers();
     bindAuthEvents();
     bindUserMgmtEvents();
+    bindSwapMgmtEvents();
+    bindBackupCenterEvents();
 
     // Kiểm tra phiên đăng nhập quản trị trong sessionStorage
     const isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
@@ -2139,12 +2141,20 @@
   }
 
   function openSwapMgmtModal() {
+    const modal = elements.modalManageSwaps || document.getElementById('modal-manage-swaps');
     renderSwapRequestsTable();
-    if (elements.modalManageSwaps) elements.modalManageSwaps.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
   }
 
   function closeSwapMgmtModal() {
-    if (elements.modalManageSwaps) elements.modalManageSwaps.style.display = 'none';
+    const modal = elements.modalManageSwaps || document.getElementById('modal-manage-swaps');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
   }
 
   function renderSwapRequestsTable() {
@@ -2362,13 +2372,21 @@
   }
 
   function openBackupCenterModal() {
+    const modal = elements.modalBackupCenter || document.getElementById('modal-backup-center');
     updateBackupStats();
     switchBackupTab('tab-export-backup');
-    if (elements.modalBackupCenter) elements.modalBackupCenter.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
   }
 
   function closeBackupCenterModal() {
-    if (elements.modalBackupCenter) elements.modalBackupCenter.style.display = 'none';
+    const modal = elements.modalBackupCenter || document.getElementById('modal-backup-center');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
     pendingRestoreData = null;
     if (elements.backupPreviewBox) elements.backupPreviewBox.style.display = 'none';
   }
@@ -2580,6 +2598,10 @@
 
   window.adminApproveSwap = (swapId) => handleApproveSwap(swapId);
   window.adminRejectSwap = (swapId) => handleRejectSwap(swapId);
+  window.adminOpenSwapModal = () => openSwapMgmtModal();
+  window.adminCloseSwapModal = () => closeSwapMgmtModal();
+  window.adminOpenBackupModal = () => openBackupCenterModal();
+  window.adminCloseBackupModal = () => closeBackupCenterModal();
 
   /**
    * ==========================================================================

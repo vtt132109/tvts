@@ -106,6 +106,12 @@
       selectTargetStudent: document.getElementById('select-target-student'),
       inputSwapReason: document.getElementById('input-swap-reason'),
       swapTargetHint: document.getElementById('swap-target-hint'),
+      inputSwapSenderMssv: document.getElementById('input-swap-sender-mssv'),
+      btnSwapLoadShifts: document.getElementById('btn-swap-load-shifts'),
+      swapSenderStatusMsg: document.getElementById('swap-sender-status-msg'),
+      swapSenderRoleBadge: document.getElementById('swap-sender-role-badge'),
+      swapMyHistorySection: document.getElementById('swap-my-history-section'),
+      swapMyHistoryList: document.getElementById('swap-my-history-list'),
 
       // Toast Container
       toastContainer: document.getElementById('toast-container')
@@ -252,6 +258,25 @@
     elements.typeOptCover?.addEventListener('click', () => setSwapType('cover'));
 
     elements.formSwap?.addEventListener('submit', handleSwapFormSubmit);
+
+    // Tải ca trực của người gửi đề xuất đổi ca
+    elements.btnSwapLoadShifts?.addEventListener('click', () => {
+      const mssv = elements.inputSwapSenderMssv ? elements.inputSwapSenderMssv.value.trim() : '';
+      if (!mssv) {
+        showToast('Vui lòng nhập MSSV của bạn trước khi bấm tải ca!', 'warning');
+        elements.inputSwapSenderMssv?.focus();
+        return;
+      }
+      loadStudentShiftsForSwap(mssv);
+    });
+
+    elements.inputSwapSenderMssv?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const mssv = elements.inputSwapSenderMssv ? elements.inputSwapSenderMssv.value.trim() : '';
+        if (mssv) loadStudentShiftsForSwap(mssv);
+      }
+    });
   }
 
   function formatVNDateTime(isoStr) {
@@ -1168,24 +1193,139 @@
   }
 
   /**
-   * Quản Lý Modal Đề Xuất Đổi Ca (Task 26)
+   * Quản Lý Modal Đề Xuất Đổi Ca & Nhờ Trực Hộ (Task 26)
    */
-  function openSwapModal(preselectedShiftId = null, preselectedWeek = null) {
-    if (!currentLookupStudent || !currentLookupShifts || currentLookupShifts.length === 0) {
-      showToast('Vui lòng tra cứu MSSV của bạn trước khi gửi đề xuất đổi ca!', 'warning');
-      elements.inputLookupMssv?.focus();
+  function findStudentAndShiftsByMssv(inputMssv) {
+    const mssv = (inputMssv || '').trim().toLowerCase();
+    if (!mssv) return { studentInfo: null, myShifts: [] };
+
+    let weekTables = [];
+    try {
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      if (rawMonth) {
+        const parsed = JSON.parse(rawMonth);
+        if (parsed.weeks && parsed.weeks.length > 0) {
+          weekTables = parsed.weeks.map(w => w.scheduleTable);
+        } else {
+          if (parsed.week1) weekTables.push(parsed.week1.scheduleTable);
+          if (parsed.week2) weekTables.push(parsed.week2.scheduleTable);
+        }
+      } else {
+        const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+        if (raw) weekTables.push(JSON.parse(raw)?.scheduleTable);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    let studentInfo = null;
+    try {
+      const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (rawStudents) {
+        const list = JSON.parse(rawStudents);
+        studentInfo = list.find(s => s.studentId && s.studentId.toLowerCase() === mssv) || null;
+      }
+    } catch (e) {}
+
+    const myShifts = [];
+    function findInTable(table, weekNum) {
+      if (!table) return;
+      Object.entries(table).forEach(([shiftId, slot]) => {
+        const isOld = slot.oldMember?.studentId?.toLowerCase() === mssv;
+        const isNew = slot.newMember?.studentId?.toLowerCase() === mssv;
+        if (isOld || isNew) {
+          const self = isOld ? slot.oldMember : slot.newMember;
+          const partner = isOld ? slot.newMember : slot.oldMember;
+
+          if (!studentInfo && self) {
+            studentInfo = {
+              studentId: self.studentId,
+              fullName: self.fullName,
+              phone: self.phone || '',
+              role: isOld ? 'old' : 'new'
+            };
+          }
+
+          myShifts.push({
+            shiftId,
+            weekNum,
+            shift: slot.shiftInfo,
+            myRole: isOld ? 'Người Cũ (Kinh nghiệm)' : 'Người Mới (Tập sự)',
+            roleKey: isOld ? 'old' : 'new',
+            partnerName: partner ? partner.fullName : 'Chưa có bạn trực cùng',
+            partnerMssv: partner ? partner.studentId : '',
+            partnerPhone: partner?.phone || ''
+          });
+        }
+      });
+    }
+
+    weekTables.forEach((table, idx) => {
+      findInTable(table, idx + 1);
+    });
+
+    return { studentInfo, myShifts };
+  }
+
+  function loadStudentShiftsForSwap(mssv, preselectedShiftId = null, preselectedWeek = null) {
+    if (!mssv) return;
+    const { studentInfo, myShifts } = findStudentAndShiftsByMssv(mssv);
+
+    if (elements.inputSwapSenderMssv) {
+      elements.inputSwapSenderMssv.value = mssv;
+    }
+
+    if (!studentInfo && myShifts.length === 0) {
+      if (elements.swapSenderStatusMsg) {
+        elements.swapSenderStatusMsg.innerHTML = `<span style="color: #ef4444; font-weight: 600;">⚠️ Không tìm thấy sinh viên hoặc ca trực nào với MSSV: <strong>${escapeHtml(mssv)}</strong>. Bạn vui lòng kiểm tra lại mã số.</span>`;
+      }
+      if (elements.swapSenderRoleBadge) elements.swapSenderRoleBadge.style.display = 'none';
+      if (elements.selectMyShift) {
+        elements.selectMyShift.innerHTML = `<option value="">-- Không có ca trực khả dụng để đổi --</option>`;
+      }
+      if (elements.swapMyHistorySection) elements.swapMyHistorySection.style.display = 'none';
       return;
     }
 
-    // Nạp danh sách ca của bạn vào select
-    if (elements.selectMyShift) {
-      elements.selectMyShift.innerHTML = currentLookupShifts.map(s => {
-        const val = `${s.weekNum}__${s.shiftId}`;
-        const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
-        return `<option value="${val}" ${isSelected ? 'selected' : ''}>
-          Tuần ${s.weekNum} - ${s.shift.dayName} (${s.shift.period}: ${s.shift.time})
-        </option>`;
-      }).join('');
+    currentLookupStudent = studentInfo || { studentId: mssv, fullName: 'Sinh viên ' + mssv, role: myShifts[0]?.roleKey || 'new' };
+    currentLookupShifts = myShifts;
+
+    if (elements.swapSenderRoleBadge) {
+      elements.swapSenderRoleBadge.style.display = 'inline-block';
+      if (currentLookupStudent.role === 'old') {
+        elements.swapSenderRoleBadge.textContent = 'Người Cũ (Hướng dẫn)';
+        elements.swapSenderRoleBadge.style.background = '#e0e7ff';
+        elements.swapSenderRoleBadge.style.color = '#3730a3';
+        elements.swapSenderRoleBadge.style.border = '1px solid #c7d2fe';
+      } else {
+        elements.swapSenderRoleBadge.textContent = 'Người Mới (Tập sự)';
+        elements.swapSenderRoleBadge.style.background = '#d1fae5';
+        elements.swapSenderRoleBadge.style.color = '#065f46';
+        elements.swapSenderRoleBadge.style.border = '1px solid #a7f3d0';
+      }
+    }
+
+    if (myShifts.length === 0) {
+      if (elements.swapSenderStatusMsg) {
+        elements.swapSenderStatusMsg.innerHTML = `<span style="color: #b45309; font-weight: 600;">ℹ️ Chào <strong>${escapeHtml(currentLookupStudent.fullName)}</strong>! Bạn chưa được xếp ca trực nào trong lịch 4 tuần nên chưa thể đổi ca.</span>`;
+      }
+      if (elements.selectMyShift) {
+        elements.selectMyShift.innerHTML = `<option value="">-- Bạn chưa có ca trực nào để đổi --</option>`;
+      }
+    } else {
+      if (elements.swapSenderStatusMsg) {
+        elements.swapSenderStatusMsg.innerHTML = `<span style="color: #047857; font-weight: 600;">✓ Chào <strong>${escapeHtml(currentLookupStudent.fullName)}</strong>! Đã tìm thấy <strong>${myShifts.length}</strong> ca trực sẵn sàng hoán đổi.</span>`;
+      }
+
+      if (elements.selectMyShift) {
+        elements.selectMyShift.innerHTML = myShifts.map(s => {
+          const val = `${s.weekNum}__${s.shiftId}`;
+          const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
+          return `<option value="${val}" ${isSelected ? 'selected' : ''}>
+            Tuần ${s.weekNum} - ${s.shift?.dayName || ''} (${s.shift?.period || ''}: ${s.shift?.time || ''}) | Trực cùng: ${s.partnerName || 'Chưa có bạn'}
+          </option>`;
+        }).join('');
+      }
     }
 
     // Nạp danh sách các CTV khác vào select target
@@ -1195,8 +1335,7 @@
       if (raw) allStudents = JSON.parse(raw);
     } catch (e) {}
 
-    const otherStudents = allStudents.filter(s => s.studentId?.toLowerCase() !== currentLookupStudent.studentId?.toLowerCase());
-
+    const otherStudents = allStudents.filter(s => s.studentId && s.studentId.toLowerCase() !== mssv.toLowerCase());
     if (elements.selectTargetStudent) {
       if (otherStudents.length === 0) {
         elements.selectTargetStudent.innerHTML = `<option value="">-- Chưa có CTV khác trong danh sách --</option>`;
@@ -1212,20 +1351,86 @@
       }
     }
 
-    if (elements.inputSwapReason) {
-      elements.inputSwapReason.value = '';
+    // Hiển thị lịch sử đề xuất của sinh viên này
+    renderMySwapHistory(mssv);
+  }
+
+  function renderMySwapHistory(mssv) {
+    if (!elements.swapMyHistorySection || !elements.swapMyHistoryList) return;
+    let allSwaps = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) allSwaps = JSON.parse(raw);
+    } catch (e) {}
+
+    const myRequests = allSwaps.filter(r => r.studentId && r.studentId.toLowerCase() === mssv.toLowerCase());
+    if (myRequests.length === 0) {
+      elements.swapMyHistorySection.style.display = 'none';
+      return;
+    }
+
+    elements.swapMyHistorySection.style.display = 'block';
+    elements.swapMyHistoryList.innerHTML = myRequests.map(r => {
+      let statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-size: 0.72rem; font-weight: 700;">⏳ Đang chờ BĐH duyệt</span>';
+      if (r.status === 'approved') {
+        statusBadge = '<span style="background: #d1fae5; color: #065f46; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-size: 0.72rem; font-weight: 700;">✓ Đã phê duyệt</span>';
+      } else if (r.status === 'rejected') {
+        statusBadge = '<span style="background: #fee2e2; color: #991b1b; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-size: 0.72rem; font-weight: 700;">✕ Đã từ chối</span>';
+      }
+
+      return `
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <div>
+            <div style="font-weight: 700; color: var(--text-main);">
+              ${r.swapType === 'cover' ? '🤝 Nhờ trực hộ' : '🔄 Đổi ca'}: Tuần ${r.weekNum} (${escapeHtml(r.shiftName)})
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.75rem;">
+              Người nhận: <strong>${escapeHtml(r.targetStudentName || r.targetStudentId)}</strong> | Lý do: ${escapeHtml(r.reason)}
+            </div>
+          </div>
+          <div>${statusBadge}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openSwapModal(preselectedShiftId = null, preselectedWeek = null, specificMssv = null) {
+    if (elements.modalSwap) {
+      elements.modalSwap.style.display = 'flex';
+      elements.modalSwap.classList.add('active');
     }
 
     setSwapType('swap');
+    if (elements.inputSwapReason) elements.inputSwapReason.value = '';
 
-    if (elements.modalSwap) {
-      elements.modalSwap.style.display = 'flex';
+    const targetMssv = (specificMssv || 
+      elements.inputSwapSenderMssv?.value.trim() || 
+      currentLookupStudent?.studentId || 
+      elements.inputStudentId?.value.trim() || 
+      elements.inputLookupMssv?.value.trim() || '').trim();
+
+    if (targetMssv) {
+      loadStudentShiftsForSwap(targetMssv, preselectedShiftId, preselectedWeek);
+    } else {
+      if (elements.inputSwapSenderMssv) {
+        elements.inputSwapSenderMssv.value = '';
+        setTimeout(() => elements.inputSwapSenderMssv?.focus(), 100);
+      }
+      if (elements.swapSenderStatusMsg) {
+        elements.swapSenderStatusMsg.innerHTML = `💡 Vui lòng nhập MSSV của bạn và bấm <strong>Tải Ca Trực</strong> để tiếp tục.`;
+      }
+      if (elements.swapSenderRoleBadge) elements.swapSenderRoleBadge.style.display = 'none';
+      if (elements.selectMyShift) {
+        elements.selectMyShift.innerHTML = `<option value="">-- Vui lòng nhập MSSV và bấm Tải Ca Trực ở trên --</option>`;
+      }
+      if (elements.swapMyHistorySection) elements.swapMyHistorySection.style.display = 'none';
     }
   }
 
   function closeSwapModal() {
     if (elements.modalSwap) {
       elements.modalSwap.style.display = 'none';
+      elements.modalSwap.classList.remove('active');
     }
   }
 
@@ -1242,7 +1447,11 @@
 
   function handleSwapFormSubmit(e) {
     e.preventDefault();
-    if (!currentLookupStudent) return;
+    if (!currentLookupStudent) {
+      showToast('Vui lòng nhập MSSV và bấm "Tải Ca Trực" trước!', 'warning');
+      elements.inputSwapSenderMssv?.focus();
+      return;
+    }
 
     const myShiftVal = elements.selectMyShift ? elements.selectMyShift.value : '';
     const targetStudentId = elements.selectTargetStudent ? elements.selectTargetStudent.value : '';
@@ -1305,8 +1514,10 @@
     closeSwapModal();
     showToast('Đã gửi đề xuất đến Ban Điều Hành! Bạn có thể theo dõi trạng thái ngay tại Thẻ lịch trực.', 'success');
 
-    // Cập nhật lại Thẻ lịch trực để hiện yêu cầu vừa tạo
-    renderPersonalDutyCard(currentLookupStudent, currentLookupShifts);
+    // Cập nhật lại Thẻ lịch trực để hiện yêu cầu vừa tạo nếu đang xem
+    if (elements.lookupResult && elements.lookupResult.style.display !== 'none') {
+      renderPersonalDutyCard(currentLookupStudent, currentLookupShifts);
+    }
   }
 
   // Khai báo các hàm global phục vụ gọi trực tiếp từ giao diện
@@ -1318,8 +1529,12 @@
     copyDutyScheduleText();
   };
 
-  window.studentOpenSwapModal = () => {
-    openSwapModal();
+  window.studentOpenSwapModal = (shiftId = null, weekNum = null, specificMssv = null) => {
+    openSwapModal(shiftId, weekNum, specificMssv);
+  };
+
+  window.studentOpenSwapDirectly = (specificMssv = null) => {
+    openSwapModal(null, null, specificMssv);
   };
 
   window.studentOpenSwapForShift = (shiftId, weekNum) => {
