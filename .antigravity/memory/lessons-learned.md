@@ -75,6 +75,18 @@
 
 ---
 
+### 5. Lỗi Thiếu Thẻ Đóng `</div>` Làm Lồng Modal Con Vào Modal Cha Bị Ẩn (`display: none`)
+- **Ngày phát hiện:** 2026-10-15
+- **Hiện tượng:** Nút bấm gọi Modal ở ngoài trang web (ví dụ nút Thêm Sự Kiện / Tour `#btn-hero-add-event`) khi click không thấy modal xuất hiện trên màn hình, dù code JS vẫn chạy và gán `style.display = 'flex'`.
+- **Nguyên nhân gốc rễ (Root Cause):**
+  Trong file HTML, thẻ container của một modal khác (như `#modal-backup-center`) bị thiếu 1 thẻ đóng `</div>`. Trình duyệt tự động gom các modal khai báo bên dưới thành thẻ con của modal trên. Do modal cha có `display: none` nên toàn bộ các modal con dù có kích hoạt `display: flex` cũng đều bị ẩn hoàn toàn khỏi viewport.
+- **Cách phòng tránh & Khắc phục:**
+  - Luôn đảm bảo tất cả các Modal trong HTML phải là thẻ con trực tiếp (`direct children`) của thẻ `<body>`, tách bạch hoàn toàn với nhau.
+  - Sử dụng công cụ kiểm tra tính toàn vẹn cú pháp HTML hoặc Chrome DevTools Inspect DOM Tree để kiểm tra phân cấp DOM sau mỗi lần chỉnh sửa modal.
+  - Khi thiết kế tính năng, tách biệt rõ ràng khu vực cấu hình hệ thống (như Sao lưu/Khôi phục) khỏi các công cụ tác nghiệp hàng ngày (như Quản lý Sự kiện & Chấm công).
+
+---
+
 ## 📝 Mẫu Thêm Bài Học Mới (Template Khi Ghi Nhận Sự Cố)
 ```markdown
 ### <Số thứ tự>. <Tên Sự Cố Ngắn Gọn>
