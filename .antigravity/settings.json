@@ -1,0 +1,38 @@
+{
+  "$schema": "https://antigravity.google/schemas/settings.json",
+  "autoApprove": {
+    "readFiles": true,
+    "writeFilesInAllowedPaths": true,
+    "spawnSubagents": true
+  },
+  "terminalCommands": {
+    "policy": "allowlist",
+    "allowed": [
+      "npm run *",
+      "npx *",
+      "node *",
+      "pytest*",
+      "gcc *",
+      "g++ *",
+      "git status*",
+      "git diff*",
+      "git log*",
+      "git add .",
+      "git commit -m \"chore(checkpoint):*\"",
+      "git checkout -b agent/*",
+      "git switch -c agent/*",
+      "git stash push -u -m \"agent-checkpoint*\""
+    ],
+    "denied": [
+      "rm -rf *",
+      "del /f /s /q *",
+      "git push --force*",
+      "git reset --hard*",
+      "git clean -fd*",
+      "git branch -D main",
+      "git branch -D master",
+      "drop table *",
+      "supabase db reset*"
+    ]
+  }
+}
