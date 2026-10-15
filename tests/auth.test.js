@@ -210,6 +210,154 @@ runTest('Quy trình Đăng Xuất (Logout) xóa sạch phiên và khóa hệ th�
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_user_data'), null);
 });
 
+// ============================================================================
+// TEST GROUP: BẢO MẬT MÃ PIN NÂNG CAO (PIN SECURITY & HARDENING)
+// ============================================================================
+runTest('Bảo mật mã PIN: Từ chối các mã PIN rỗng, null, khoảng trắng hoặc ký tự chữ cái', () => {
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  // Test PIN rỗng
+  const emptyRes = AdminAuth.loginPin('');
+  assert.strictEqual(emptyRes.success, false, 'PIN rỗng phải bị từ chối');
+  assert.strictEqual(AdminAuth.isAuthenticated(), false);
+
+  // Test PIN chỉ chứa khoảng trắng
+  const spaceRes = AdminAuth.loginPin('   ');
+  assert.strictEqual(spaceRes.success, false, 'PIN khoảng trắng phải bị từ chối');
+
+  // Test PIN null hoặc undefined
+  const nullRes = AdminAuth.loginPin(null);
+  assert.strictEqual(nullRes.success, false, 'PIN null phải bị từ chối');
+  const undefRes = AdminAuth.loginPin(undefined);
+  assert.strictEqual(undefRes.success, false, 'PIN undefined phải bị từ chối');
+
+  // Test PIN chứa chữ cái hoặc độ dài bất thường
+  const textRes = AdminAuth.loginPin('admin');
+  assert.strictEqual(textRes.success, false, 'PIN chữ cái phải bị từ chối');
+  const longRes = AdminAuth.loginPin('999999999999');
+  assert.strictEqual(longRes.success, false, 'PIN sai độ dài phải bị từ chối');
+});
+
+runTest('Bảo mật mã PIN: Phân quyền chính xác và lưu phiên an toàn trong sessionStorage', () => {
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  // Đăng nhập PIN 9999
+  const pinAdminRes = AdminAuth.loginPin('9999');
+  assert.strictEqual(pinAdminRes.success, true);
+  assert.strictEqual(pinAdminRes.user.role, 'Trưởng ban điều hành');
+  assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), 'true');
+
+  // Dữ liệu người dùng trong session
+  const storedUserJson = mockSessionStorage.getItem('ts_admin_user_data');
+  assert.ok(storedUserJson, 'Phải có dữ liệu người dùng trong session');
+  const storedUser = JSON.parse(storedUserJson);
+  assert.strictEqual(storedUser.username, 'admin');
+
+  // Logout và kiểm tra lại
+  AdminAuth.logout();
+  assert.strictEqual(AdminAuth.isAuthenticated(), false);
+  assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), null);
+  assert.strictEqual(mockSessionStorage.getItem('ts_admin_user_data'), null);
+});
+
+// ============================================================================
+// TEST GROUP: LÀM SẠCH DỮ LIỆU & PHÒNG CHỐNG XSS (ESCAPEHTML SANITIZATION)
+// ============================================================================
+// Trích xuất hàm escapeHtml từ admin.js và student.js để kiểm thử bảo mật
+const adminEscapeMatch = adminJsContent.match(/function escapeHtml\(str\) \{[\s\S]*?\n  \}/);
+assert.ok(adminEscapeMatch, 'Hàm escapeHtml phải được định nghĩa trong admin.js');
+const escapeHtmlAdmin = eval(`(${adminEscapeMatch[0]})`);
+
+const studentJsPath = path.resolve(__dirname, '../js/student.js');
+const studentJsContent = fs.readFileSync(studentJsPath, 'utf8');
+const studentEscapeMatch = studentJsContent.match(/function escapeHtml\(str\) \{[\s\S]*?\n  \}/);
+assert.ok(studentEscapeMatch, 'Hàm escapeHtml phải được định nghĩa trong student.js');
+const escapeHtmlStudent = eval(`(${studentEscapeMatch[0]})`);
+
+runTest('escapeHtml: Loại bỏ các thẻ độc hại <script> và đóng thẻ </script>', () => {
+  const payload = '<script>alert("Hacked!");</script>';
+  const sanitized = escapeHtmlAdmin(payload);
+  assert.strictEqual(
+    sanitized,
+    '&lt;script&gt;alert(&quot;Hacked!&quot;);&lt;/script&gt;',
+    'Phải mã hóa toàn bộ thẻ script và dấu ngoặc kép'
+  );
+  assert.strictEqual(sanitized.includes('<script>'), false, 'Không được còn thẻ mở script');
+  assert.strictEqual(sanitized.includes('</script>'), false, 'Không được còn thẻ đóng script');
+});
+
+runTest('escapeHtml: Mã hóa dấu ngoặc kép " và dấu nháy đơn \' ngăn chặn attribute injection', () => {
+  const quotePayload = '"><img src=x onerror=alert(1)>';
+  const sanitizedQuotes = escapeHtmlAdmin(quotePayload);
+  assert.strictEqual(sanitizedQuotes.includes('"'), false, 'Dấu ngoặc kép phải được chuyển thành &quot;');
+  assert.strictEqual(sanitizedQuotes.includes('&quot;'), true);
+
+  const singleQuotePayload = "' onfocus='alert(2)";
+  const sanitizedSingle = escapeHtmlAdmin(singleQuotePayload);
+  assert.strictEqual(sanitizedSingle.includes("'"), false, "Dấu nháy đơn phải được chuyển thành &#039;");
+  assert.strictEqual(sanitizedSingle.includes('&#039;'), true);
+});
+
+runTest('escapeHtml: Mã hóa ký tự & thành &amp; tránh nhầm lẫn thực thể HTML', () => {
+  const ampersandPayload = 'Ban Tuyển Sinh & Tư Vấn Hướng Nghiệp';
+  const sanitized = escapeHtmlAdmin(ampersandPayload);
+  assert.strictEqual(sanitized, 'Ban Tuyển Sinh &amp; Tư Vấn Hướng Nghiệp');
+
+  const multipleAmpersands = 'A & B && C & D';
+  const multiSanitized = escapeHtmlAdmin(multipleAmpersands);
+  assert.strictEqual(multiSanitized, 'A &amp; B &amp;&amp; C &amp; D');
+});
+
+runTest('escapeHtml: Phòng chống payload XSS phức hợp kết hợp script, event handlers, img, svg', () => {
+  const complexPayload = `<script src="http://evil.com/xss.js" id='hack' test="a&b"></script><svg onload=alert(document.cookie)>`;
+  const sanitized = escapeHtmlAdmin(complexPayload);
+
+  // Không còn bất kỳ ký tự raw nguy hiểm nào: <, >, ", '
+  assert.strictEqual(sanitized.includes('<'), false);
+  assert.strictEqual(sanitized.includes('>'), false);
+  assert.strictEqual(sanitized.includes('"'), false);
+  assert.strictEqual(sanitized.includes("'"), false);
+
+  assert.strictEqual(
+    sanitized,
+    '&lt;script src=&quot;http://evil.com/xss.js&quot; id=&#039;hack&#039; test=&quot;a&amp;b&quot;&gt;&lt;/script&gt;&lt;svg onload=alert(document.cookie)&gt;'
+  );
+});
+
+runTest('escapeHtml: Xử lý an toàn các giá trị biên (chuỗi rỗng, null, undefined, số)', () => {
+  assert.strictEqual(escapeHtmlAdmin(''), '', 'Chuỗi rỗng trả về chuỗi rỗng');
+  assert.strictEqual(escapeHtmlAdmin(null), '', 'null trả về chuỗi rỗng');
+  assert.strictEqual(escapeHtmlAdmin(undefined), '', 'undefined trả về chuỗi rỗng');
+  assert.strictEqual(escapeHtmlAdmin(0), '', 'Giá trị falsy 0 trả về chuỗi rỗng an toàn');
+  assert.strictEqual(escapeHtmlAdmin(2026), '2026', 'Số 2026 trả về chuỗi "2026"');
+  assert.strictEqual(escapeHtmlAdmin('HCM-UTE Tuyển Sinh'), 'HCM-UTE Tuyển Sinh', 'Văn bản thuần túy không đổi');
+});
+
+runTest('escapeHtml: Tính đồng nhất tuyệt đối giữa triển khai trong admin.js và student.js', () => {
+  const testInputs = [
+    '<script>alert("test")</script>',
+    'SV: Nguyễn Văn A & Trần B <cũ>',
+    `"><svg/onload=alert('xss')>`,
+    'MSSV: 2102001',
+    '',
+    null,
+    undefined,
+    12345
+  ];
+
+  testInputs.forEach((input) => {
+    const adminOutput = escapeHtmlAdmin(input);
+    const studentOutput = escapeHtmlStudent(input);
+    assert.strictEqual(
+      adminOutput,
+      studentOutput,
+      `Kết quả escapeHtml cho input "${input}" giữa admin.js và student.js phải hoàn toàn giống nhau`
+    );
+  });
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');
