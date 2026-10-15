@@ -3771,3 +3771,366 @@ body {
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+/* ==========================================================================
+   Task: BẢNG CHẤM CÔNG THÁNG & QUẢN LÝ SỰ KIỆN ĐI TOUR (PAYROLL-01)
+   ========================================================================== */
+
+/* Dialog & Containers */
+.payroll-modal-dialog {
+  max-width: 1100px !important;
+  width: 95vw !important;
+  max-height: 92vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  box-shadow: var(--shadow-xl), 0 0 35px rgba(30, 27, 75, 0.3) !important;
+  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.payroll-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.payroll-modal-body {
+  background: var(--bg-page);
+}
+
+/* 4 Thống kê chỉ số (4 Stats Cards) */
+.payroll-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .payroll-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .payroll-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.payroll-stat-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.payroll-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.payroll-stat-card.card-total-highlight {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.08)) !important;
+  border: 2px solid #10b981 !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2) !important;
+}
+
+/* Toolbar & Filters */
+.payroll-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  background: var(--bg-card);
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Bảng Chấm Công Table Styling */
+.payroll-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.88rem;
+}
+
+.payroll-table th {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  font-weight: 700;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 2px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.payroll-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.payroll-table tbody tr:hover td {
+  background-color: var(--bg-card-hover);
+}
+
+/* Badge Tổng Công Nổi Bật */
+.badge-total-work {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+  letter-spacing: 0.02em;
+}
+
+.badge-office-shifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  background: #ede9fe;
+  color: #4338ca;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid #c7d2fe;
+}
+
+.badge-event-shifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  background: #fdf2f8;
+  color: #db2777;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid #fbcfe8;
+}
+
+/* Event Student Checkbox Picker */
+.event-student-picker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event-student-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.event-student-item:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary-light);
+}
+
+.event-student-item.selected {
+  background: #fdf2f8;
+  border-color: #f472b6;
+}
+
+.event-student-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.event-student-cb {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: #db2777;
+  cursor: pointer;
+}
+
+.event-student-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.event-student-mssv {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Backup table link to payroll */
+.backup-payroll-link {
+  color: var(--text-main);
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.backup-payroll-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.btn-view-payroll-highlight {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1.5px solid #a7f3d0 !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-view-payroll-highlight:hover {
+  background: #d1fae5 !important;
+  color: #047857 !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Dark Mode Overrides */
+[data-theme="dark"] .payroll-modal-body {
+  background: #0b0f19 !important;
+}
+
+[data-theme="dark"] .payroll-stat-card {
+  background: #131b2e !important;
+  border-color: #243049 !important;
+}
+
+[data-theme="dark"] .payroll-stat-card.card-total-highlight {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(5, 150, 105, 0.25)) !important;
+  border-color: #10b981 !important;
+}
+
+[data-theme="dark"] .payroll-toolbar {
+  background: #131b2e !important;
+  border-color: #243049 !important;
+}
+
+[data-theme="dark"] .payroll-table th {
+  background: #172138 !important;
+  border-bottom-color: #27354f !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .payroll-table td {
+  border-bottom-color: #243049 !important;
+}
+
+[data-theme="dark"] .badge-office-shifts {
+  background: #1e1b4b !important;
+  color: #c7d2fe !important;
+  border-color: #3730a3 !important;
+}
+
+[data-theme="dark"] .badge-event-shifts {
+  background: #4a044e !important;
+  color: #fbcfe8 !important;
+  border-color: #831843 !important;
+}
+
+[data-theme="dark"] .event-student-item {
+  background: #131b2e !important;
+  border-color: #243049 !important;
+}
+
+[data-theme="dark"] .event-student-item:hover {
+  background: #1b253d !important;
+}
+
+[data-theme="dark"] .event-student-item.selected {
+  background: #3b0764 !important;
+  border-color: #a855f7 !important;
+}
+
+[data-theme="dark"] .btn-view-payroll-highlight {
+  background: #064e3b !important;
+  color: #a7f3d0 !important;
+  border-color: #059669 !important;
+}
+
+/* Print Styles for Month Payroll Modal */
+@media print {
+  body.printing-payroll > *:not(#modal-month-payroll) {
+    display: none !important;
+  }
+  
+  body.printing-payroll #modal-month-payroll {
+    display: block !important;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  body.printing-payroll .payroll-modal-dialog {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.printing-payroll .payroll-toolbar,
+  body.printing-payroll .modal-close-btn,
+  body.printing-payroll .payroll-modal-footer,
+  body.printing-payroll .payroll-actions {
+    display: none !important;
+  }
+
+  body.printing-payroll .payroll-modal-header {
+    background: #1e1b4b !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.printing-payroll .payroll-table {
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  body.printing-payroll .payroll-table th,
+  body.printing-payroll .payroll-table td {
+    border: 1px solid #cbd5e1 !important;
+    color: #000000 !important;
+  }
+}
