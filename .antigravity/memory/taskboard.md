@@ -15,9 +15,9 @@
 ---
 
 ## 🎯 Tác Vụ Hiện Tại (Active Task Session)
-- **Tên phiên làm việc:** Kiểm Thử Toàn Diện & Trạm Thẩm Định Gộp Nhánh (Comprehensive Audit & Final Release Gate)
-- **Nhánh Git phụ trách:** `main` (Đã gộp an toàn và xóa nhánh `agent/comprehensive-audit-20261015-1445`)
-- **Thời điểm khởi tạo:** 2026-10-15 14:48
+- **Tên phiên làm việc:** Tính Năng Sao Lưu Trực Tiếp Trên Web (Tối Đa 6 Tháng)
+- **Nhánh Git phụ trách:** `agent/web-backup-6months-20261015-1808`
+- **Thời điểm khởi tạo:** 2026-10-15 18:08
 - **Tiến độ tổng thể:** `[x] 100%`
 
 ---
@@ -26,21 +26,19 @@
 
 | ID | Đầu Việc / Tính Năng | Agent Phụ Trách | Phạm Vi Files (`allowed_paths`) | Trạng Thái | Ghi Chú & Bằng Chứng |
 |---|---|---|---|:---:|---|
-| AUDIT-01 | Rà soát thuật toán Bipartite Matching 4 tuần, xử lý edge case (thiếu người, trùng ca) | `@backend-agent` | `js/scheduler.js`, `js/sample30.js`, `data/` | `[x]` | **Hoàn thành xuất sắc**: Tối ưu O(1) Map, xử lý 5 trường hợp biên, 8/8 test scheduler PASS |
-| AUDIT-02 | Rà soát giao diện UI/UX, sửa lỗi Accessibility (form label), kiểm tra ẩn/hiện cổng & modal | `@frontend-agent` | `index.html`, `admin.html`, `css/`, `js/student.js`, `js/admin.js` | `[x]` | **Hoàn thành xuất sắc**: Bổ sung aria-label, .sr-only, phím ESC đóng mọi modal, bọc escapeHtml() chống XSS |
-| AUDIT-03 | Bổ sung test cases cho tính năng ẩn lịch & tra cứu MSSV, chạy toàn bộ CI Harness | `@qa-agent` | `tests/`, `tasks/`, `scripts/` | `[x]` | **Hoàn thành xuất sắc**: 34/34 tests PASS 100% (Scheduler 8/8, Auth/PIN/XSS 15/15, Portal/MSSV 11/11) |
-| AUDIT-05 | Kiểm tra trực quan trên trình duyệt (Console, Network 404, Responsive, UI Flow) | `@browser-inspector` | Trình duyệt thật (`http://localhost:8000`) | `[x]` | **Hoàn thành xuất sắc**: Đã test chuyển tuần 1-4, tra cứu MSSV, Auth guard, dark/light theme, không tràn màn hình |
-| AUDIT-04 | **Trạm Kiểm Soát Tối Hậu: Rà soát toàn bộ diff, 100% CI PASS, gộp nhánh an toàn (/merge-clean) & push origin** | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | **Hoàn thành xuất sắc**: Thẩm định 5 chiều, thực thi /merge-clean, đồng bộ remote main sạch sẽ |
+| BACKUP-00 | Đặc tả hợp đồng dữ liệu `WebBackupItem` & chính sách lưu trữ 6 tháng | Parent Agent | `.antigravity/memory/api-contracts.md` | `[x]` | Hoàn thành Section 7 trong api-contracts.md |
+| BACKUP-01 | Xây dựng giao diện Tab Sao Lưu Trên Web & bảng quản lý trong `admin.html` | `@frontend-agent` | `admin.html`, `css/style.css` | `[x]` | Đã thêm tab, badge đếm bản lưu, thanh dung lượng & bảng thao tác 1-click |
+| BACKUP-02 | Hiện thực hóa logic quản lý snapshot, auto-prune 6 tháng (180 ngày) và khôi phục 1-click trong `js/admin.js` | `@backend-agent` | `js/admin.js` | `[x]` | Triển khai hoàn thiện WebBackupManager, auto-prune 180d, max 6 bản, 1-click restore |
+| BACKUP-03 | Xây dựng bộ test cases tự động cho tính năng sao lưu web & auto-prune 6 tháng | `@qa-agent` | `tests/backup.test.js`, `tests/run_all_tests.js` | `[x]` | Hoàn thành 7/7 test cases đạt chuẩn (100% PASS) |
+| BACKUP-04 | Thẩm định 5 chiều, chạy toàn bộ CI Harness 100% PASS và thực thi `/merge-clean` | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | 41/41 test cases toàn hệ thống PASS 100%, sẵn sàng merge-clean |
 
 ---
 
 ## 📝 Nhật Ký Hoạt Động (Activity Log)
-- `14:45`: Khởi tạo nhánh cô lập an toàn `agent/comprehensive-audit-20261015-1445`.
-- `14:46`: Phân công nhiệm vụ song song cho 3 Subagents theo đúng `allowed_paths`.
-- `14:47`: Kích hoạt `@browser-inspector` phụ trách duyệt trực quan trên trình duyệt thật qua Chrome DevTools.
-- `14:48`: Kích hoạt `@release-gatekeeper` đảm nhận trạm kiểm soát chất lượng tối hậu.
-- `14:49`: `@backend-agent` hoàn thành AUDIT-01.
-- `14:56`: `@qa-agent` hoàn thành AUDIT-03 (mở rộng toàn bộ bộ test đạt 34/34 tests PASS 100%).
-- `14:58`: `@release-gatekeeper` thẩm định 5 chiều, gộp nhánh phát hành `--no-ff` vào `main`.
-- `15:02`: `@frontend-agent` hoàn tất 100% việc gắn nhãn A11y, phím ESC và phủ escapeHtml() chống XSS.
-- `15:03`: Hoàn tất đợt tổng kiểm thử, toàn bộ hệ thống đạt chuẩn xuất sắc 100%.
+- `18:07`: Khởi tạo nhánh cô lập an toàn `agent/web-backup-6months-20261015-1808`.
+- `18:08`: Bổ sung Hợp đồng dữ liệu `WebBackupItem` vào `.antigravity/memory/api-contracts.md`.
+- `18:09`: Triển khai giao diện tab sao lưu web và logic lưu trữ 6 tháng (180 ngày).
+- `18:11`: Viết bộ kiểm thử tự động `tests/backup.test.js` bao quát 7 kịch bản lưu trữ, dọn dẹp và khôi phục.
+- `18:12`: Phát hiện và sửa lỗi thiếu từ khóa `const` biến `link` trong `handleExportBackupJson`.
+- `18:13`: Tích hợp vào `tests/run_all_tests.js`, chạy toàn bộ 4 suites đạt 41/41 PASS (100% SUCCESS).
+- `18:14`: Chuẩn bị gộp nhánh `/merge-clean` vào nhánh `main`.

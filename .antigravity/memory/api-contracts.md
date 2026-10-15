@@ -145,3 +145,41 @@ window.dispatchEvent(new Event('storage'));
 Các tab còn lại lắng nghe sự kiện `storage`:
 - Key `ts_scheduler_schedule_result` / `ts_scheduler_month_result`: Tự động gọi `renderCommonSchedule()`.
 - Key `ts_scheduler_reg_config`: Tự động gọi `evaluateRegistrationWindow()` và cập nhật ẩn/hiện phân hệ.
+- Key `ts_scheduler_web_backups_v1`: Tự động đồng bộ danh sách bản sao lưu trên web.
+
+---
+
+## 7. 🗄️ Mô Hình Sao Lưu Trực Tiếp Trên Web (Tối Đa 6 Tháng) (`WebBackupItem`)
+
+Lưu trữ trong `localStorage.getItem('ts_scheduler_web_backups_v1')` dưới dạng JSON array:
+
+```typescript
+interface WebBackupItem {
+  id: string;               // Mã định danh bản sao lưu (vd: 'wbk_1729000000_abc')
+  name: string;             // Tên hiển thị (vd: 'Sao lưu định kỳ Tháng 10/2026')
+  monthKey: string;         // Khóa tháng (vd: '2026-10')
+  monthLabel: string;       // Nhãn tháng tiếng Việt (vd: 'Tháng 10/2026')
+  createdAt: number;        // Timestamp tạo bản sao lưu (epoch ms)
+  expiresAt: number;        // Timestamp hết hạn (createdAt + 180 ngày)
+  sizeBytes: number;        // Kích thước chuỗi JSON (bytes)
+  stats: {
+    studentCount: number;   // Số lượng CTV trong bản lưu
+    weekCount: number;      // Số tuần lịch trực
+    swapCount: number;      // Số lượng đề xuất đổi ca
+    adminCount: number;     // Số tài khoản cán bộ
+  };
+  payload: {
+    students: Student[];
+    monthSchedule: MonthSchedule;
+    scheduleResult: any;
+    regConfig: RegConfig;
+    adminUsers: AdminUser[];
+    swapRequests: SwapRequest[];
+  };
+}
+```
+
+### Quy tắc lưu trữ & Giới hạn vòng đời (Retention Policy):
+- **Thời hạn lưu trữ tối đa:** 6 tháng (~180 ngày).
+- **Giới hạn số bản lưu:** Tối đa 6 bản sao lưu gần nhất.
+- **Tự động dọn dẹp (Auto-Prune):** Khi khởi tạo hoặc khi lưu bản mới, hệ thống tự động lọc bỏ các bản sao lưu có `createdAt < Date.now() - 180*24*60*60*1000` hoặc vượt quá 6 bản.

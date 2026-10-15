@@ -1170,8 +1170,11 @@
         
         <!-- Tab chuyển đổi chức năng sao lưu -->
         <div class="backup-tabs-nav">
-          <button type="button" class="backup-tab-btn active" data-backup-tab="tab-export-backup" id="btn-tab-export-backup">
-            💾 Xuất Bản Sao Lưu (.json)
+          <button type="button" class="backup-tab-btn active" data-backup-tab="tab-web-backups" id="btn-tab-web-backups">
+            🗄️ Sao Lưu Trên Web (Lưu 6 Tháng)
+          </button>
+          <button type="button" class="backup-tab-btn" data-backup-tab="tab-export-backup" id="btn-tab-export-backup">
+            💾 Tải File Sao Lưu (.json)
           </button>
           <button type="button" class="backup-tab-btn" data-backup-tab="tab-restore-backup" id="btn-tab-restore-backup">
             📂 Phục Hồi Dữ Liệu (.json)
@@ -1181,8 +1184,61 @@
           </button>
         </div>
 
+        <!-- Tab 0: Sao Lưu Trực Tiếp Trên Web (Tối Đa 6 Tháng) -->
+        <div class="backup-tab-content" id="tab-web-backups">
+          <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.08)); border: 1.5px solid var(--primary-light, #818cf8); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.98rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                <span>🗄️ Cơ Chế Sao Lưu Trực Tiếp Trên Trình Duyệt Web</span>
+                <span class="badge" style="background: #10b981; color: #fff; font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-full);">Tối đa 6 Tháng</span>
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.45;">
+                Dữ liệu được lưu trữ tự động an toàn trong trình duyệt web. Khôi phục nhanh 1-click bất kỳ lúc nào. Hệ thống tự động dọn dẹp các bản sao lưu cũ quá 6 tháng (180 ngày).
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-create-web-backup" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
+              <span>💾 Tạo Bản Sao Lưu Trên Web Ngay</span>
+            </button>
+          </div>
+
+          <!-- Thanh Thống Kê Dung Lượng & Bản Sao Lưu -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; font-size: 0.84rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+              <span>📋 Danh Sách Các Bản Sao Lưu Đã Lưu (Tối Đa 6 Bản):</span>
+              <span id="web-backup-count-badge" class="badge" style="background: var(--bg-card-hover); border: 1px solid var(--border-color); color: var(--text-main); font-size: 0.76rem; padding: 0.15rem 0.55rem; border-radius: var(--radius-full);">0 / 6 bản</span>
+            </div>
+            <div style="color: var(--text-muted);" id="web-backup-storage-info">
+              Dung lượng đã dùng: 0 KB | Hạn lưu: 180 ngày gần nhất
+            </div>
+          </div>
+
+          <!-- Bảng Danh Sách Bản Sao Lưu Trên Web -->
+          <div class="web-backup-table-wrapper" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; background: var(--bg-card);">
+            <table class="user-mgmt-table" style="margin: 0; min-width: 650px;" aria-label="Danh sách bản sao lưu trên web">
+              <thead>
+                <tr>
+                  <th style="width: 45px; text-align: center;">STT</th>
+                  <th>Tên Bản Sao Lưu & Kỳ Trực</th>
+                  <th>Thời Gian Tạo & Hạn Lưu</th>
+                  <th>Dữ Liệu Nhận Diện</th>
+                  <th style="width: 85px; text-align: center;">Dung Lượng</th>
+                  <th style="width: 170px; text-align: center;">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody id="web-backup-table-body">
+                <!-- Danh sách bản sao lưu sẽ render tại đây -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Hộp hướng dẫn & gợi ý -->
+          <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+            💡 <em><strong>Mẹo an toàn:</strong> Khi bạn bấm "Khôi Phục Nhanh", toàn bộ hệ thống (danh sách sinh viên, lịch phân công 4 tuần, cấu hình cổng và tài khoản cán bộ) sẽ được đưa về chính xác trạng thái của thời điểm sao lưu đó. Khi bạn bấm "Khởi Tạo Lịch Tháng Mới", hệ thống cũng sẽ tự động lưu 1 snapshot vào danh sách này.</em>
+          </div>
+        </div>
+
         <!-- Tab 1: Xuất Bản Sao Lưu -->
-        <div class="backup-tab-content" id="tab-export-backup">
+        <div class="backup-tab-content" id="tab-export-backup" style="display: none;">
           <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
             Tải về toàn bộ cơ sở dữ liệu hệ thống (Danh sách sinh viên, Cấu hình cổng, Bảng phân công 4 tuần, Đề xuất đổi ca và Tài khoản cán bộ) thành 1 file <code>.json</code> an toàn để lưu trữ dự phòng định kỳ.
           </p>
