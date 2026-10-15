@@ -1,5 +1,6 @@
 ---
 name: backend-agent
+model: pro
 description: "TỰ ĐỘNG GỌI / PROACTIVELY invoke subagent này ngay khi yêu cầu có liên quan đến: logic thuật toán xếp ca (Bipartite Matching, luân phiên 4 tuần), xử lý và chuyển đổi dữ liệu (CSV/Excel/JSON), quản lý schema và cấu trúc dữ liệu trong data/, tối ưu độ phức tạp thuật toán, hoặc tích hợp API/backend."
 tools:
   - read_file

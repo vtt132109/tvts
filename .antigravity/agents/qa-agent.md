@@ -1,5 +1,6 @@
 ---
 name: qa-agent
+model: flash
 description: "TỰ ĐỘNG GỌI / PROACTIVELY invoke subagent này ngay khi yêu cầu có liên quan đến: viết unit tests, thiết kế test suites, kiểm tra tính toàn vẹn dữ liệu, chạy kiểm thử tự động (node tests/run_all_tests.js), rà soát linter/cú pháp, phát hiện regression bugs, hoặc ghi nhật ký chất lượng mã nguồn trong tasks/ và tests/."
 tools:
   - read_file

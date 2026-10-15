@@ -1,5 +1,6 @@
 ---
 name: frontend-agent
+model: inherit
 description: "TỰ ĐỘNG GỌI / PROACTIVELY invoke subagent này ngay khi yêu cầu có liên quan đến: cấu trúc giao diện HTML5, stylesheet CSS, thiết kế Responsive mobile/desktop, Dark/Light Mode, các components UI (modals, toasts, bảng phân công, ma trận ca trực), quản lý trạng thái hiển thị (DOM State Management), ẩn/hiện phân hệ đăng ký và lịch trực trong index.html, admin.html, js/student.js hoặc js/admin.js."
 tools:
   - read_file
