@@ -1,73 +1,95 @@
-# Antigravity Multi-Agent Orchestration & Safety Rules
+# Antigravity Advanced Autonomous Multi-Agent Rules
 
-Hệ thống quy chuẩn điều phối và an toàn dành riêng cho **Parent Agent (Agent Chính)** và các **Subagents** hoạt động trong dự án Hệ Thống Quản Lý Phân Công Lịch Trực Ban Tuyển Sinh HCM-UTE.
+Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomous Architecture) và bảo đảm an toàn dành riêng cho **Parent Agent (Agent Chính)** và các **Subagents** hoạt động trong dự án Hệ Thống Quản Lý Phân Công Lịch Trực Ban Tuyển Sinh HCM-UTE.
 
 ---
 
-## 🚀 GIAO THỨC 1: AUTO-DELEGATION & PARALLEL SPAWN (ĐIỀU PHỐI TỰ ĐỘNG & CHẠY SONG SONG)
+## 🧠 GIAO THỨC 1: BỘ NHỚ DÙNG CHUNG (SHARED MEMORY PROTOCOL)
 
 > [!IMPORTANT]
-> Parent Agent **KHÔNG TỰ Ý ÔM ĐỒM** viết toàn bộ code cho các tác vụ phức tạp hoặc đa phân hệ. Phải tuân thủ nghiêm ngặt cơ chế phân rã công việc và ủy quyền tự động:
+> Nhằm tiết kiệm token ngữ cảnh, bảo toàn tri thức dự án và ngăn ngừa hiện tượng hallucination (ảo giác kiến trúc):
+
+1. **Đọc Bộ Nhớ Bắt Buộc Trước Khi Thực Thi (Pre-Execution Memory Read):**
+   - Trước khi bắt tay vào phân tích hoặc chỉnh sửa bất kỳ dòng code nào, **tất cả mọi Agent** (Parent Agent và các Subagents) **BẮT BUỘC PHẢI ĐỌC** 2 file tri thức trong `.antigravity/memory/`:
+     - [`.antigravity/memory/project-context.md`](file:///d:/New%20folder%20(236)/.antigravity/memory/project-context.md): Nắm vững kiến trúc Client-side, quy ước đóng gói IIFE, cấu trúc thư mục, quy ước `STORAGE_KEYS` và Shift IDs.
+     - [`.antigravity/memory/api-contracts.md`](file:///d:/New%20folder%20(236)/.antigravity/memory/api-contracts.md): Nắm vững định dạng dữ liệu giao tiếp (`Student`, `ShiftSlot`, `WeekSchedule`, `MonthSchedule`, `RegConfig`, `SwapRequest`).
+2. **Cập Nhật Ngược Lại Tri Thức Sau Khi Hoàn Thành (Post-Execution Memory Sync):**
+   - Khi triển khai xong một tính năng mới, thêm bảng dữ liệu mới, hoặc sửa đổi format lưu trữ, Agent phụ trách **BẮT BUỘC PHẢI CẬP NHẬT LẠI** nội dung thay đổi vào 2 file trên trước khi báo cáo hoàn thành cho người dùng.
+
+---
+
+## 📜 GIAO THỨC 2: CONTRACT-FIRST (CHỐNG LỆCH DỮ LIỆU KHI CHẠY SONG SONG)
+
+> [!CAUTION]
+> Khi một tác vụ yêu cầu cả `@backend-agent` (xử lý dữ liệu/thuật toán) và `@frontend-agent` (xây dựng giao diện/DOM) chạy song song, việc lệch cấu trúc dữ liệu sẽ phá vỡ hệ thống:
+
+1. **Quy Trình Contract-First Bắt Buộc:**
+   - **Bước 1 (Parent Agent tạo hợp đồng):** Parent Agent **BẮT BUỘC PHẢI ĐẶT BÚT** định nghĩa chi tiết cấu trúc dữ liệu (Data Schema / TypeScript Interface / Payload định dạng) và ghi vào [`.antigravity/memory/api-contracts.md`](file:///d:/New%20folder%20(236)/.antigravity/memory/api-contracts.md) **TRƯỚC**.
+   - **Bước 2 (Khởi chạy song song):** Sau khi Hợp đồng dữ liệu đã được ghi nhận, Parent Agent mới đồng thời kích hoạt `backend-agent` và `frontend-agent`.
+   - **Bước 3 (Bám sát hợp đồng):** Cả hai subagent chỉ được phép code bám sát 100% theo schema đã thỏa thuận trong `api-contracts.md`, nghiêm cấm tự ý đổi tên trường dữ liệu hoặc kiểu dữ liệu.
+
+---
+
+## 🚀 GIAO THỨC 3: AUTO-DELEGATION & PARALLEL SPAWN (ỦY QUYỀN TỰ ĐỘNG)
 
 1. **Nhận Diện Ý Định Ngữ Nghĩa (Semantic Trigger):**
    - Khi nhận yêu cầu từ người dùng, Parent Agent tự động đối chiếu nội dung với trường `description` của 3 Subagents trong `.antigravity/agents/`:
-     - **`backend-agent`**: Logic thuật toán xếp ca, cấu trúc dữ liệu, xử lý file JSON/CSV/Excel, schema trong `data/`.
+     - **`backend-agent`**: Logic thuật toán xếp ca Bipartite Matching, luân phiên 4 tuần, cấu trúc JSON/CSV/Excel, schema trong `data/`.
      - **`frontend-agent`**: Giao diện HTML5, CSS3, Responsive, Dark/Light Mode, components UI, ẩn/hiện phân hệ đăng ký & lịch trực.
      - **`qa-agent`**: Viết test cases, chạy kiểm thử tự động `node tests/run_all_tests.js`, kiểm tra hồi quy và ghi nhận nhật ký chất lượng.
-   - **Tuyệt đối không yêu cầu người dùng phải gõ cú pháp `@tên-agent`**. Parent Agent chủ động tự kích hoạt dựa trên ngữ cảnh.
-
-2. **Khởi Chạy Song Song (Concurrent Spawn):**
-   - Khi yêu cầu chạm vào từ 2 mảng nghiệp vụ trở lên (ví dụ: vừa thêm tính năng UI, vừa cập nhật thuật toán, vừa cần test), Parent Agent phải khởi chạy đồng thời các Subagent qua một lượt gọi `invoke_subagent` duy nhất với danh sách `Subagents: [...]`.
-   - Mỗi Subagent vận hành độc lập trong phạm vi `allowed_paths` của mình để triệt tiêu hoàn toàn rủi ro xung đột ghi file (Race Condition).
-
-3. **Tổng Hợp & Hợp Nhất Đồng Bộ (Synthesizer & Verification Gate):**
-   - Sau khi các Subagents hoàn thành và phản hồi kết quả, Parent Agent có trách nhiệm kiểm tra chéo:
-     - Giao diện có khớp với dữ liệu backend vừa cập nhật không?
-     - Toàn bộ các bộ test tự động (`node tests/run_all_tests.js`) có đạt 100% PASS không?
-   - Sau khi xác nhận tính toàn vẹn và đồng bộ, Parent Agent mới lập báo cáo tổng hợp cuối cùng gửi người dùng.
+   - **Tuyệt đối không bắt người dùng phải gõ cú pháp `@tên-agent`**. Parent Agent chủ động tự kích hoạt dựa trên ngữ cảnh.
+2. **Khởi Chạy Song Song Không Xung Đột (Race-Free Concurrency):**
+   - Khi yêu cầu chạm vào từ 2 mảng nghiệp vụ trở lên, Parent Agent gọi `invoke_subagent` một lần duy nhất chứa mảng các Subagent.
+   - Mỗi Subagent chỉ thao tác trong `allowed_paths` của mình:
+     - `backend-agent`: `js/scheduler.js`, `js/sample30.js`, `data/`
+     - `frontend-agent`: `index.html`, `admin.html`, `css/`, `js/student.js`, `js/admin.js`
+     - `qa-agent`: `tests/`, `tasks/`, `scripts/`
+3. **Tổng Hợp & Hợp Nhất Đồng Bộ (Verification Gate):**
+   - Sau khi các Subagents hoàn thành, Parent Agent kiểm tra chéo tính tương thích và bảo đảm **100% tests PASS** trước khi bàn giao.
 
 ---
 
-## 🛡️ GIAO THỨC 2: PRE-EXECUTION GIT SAFETY GUARD (BẢO HIỂM GIT TỰ ĐỘNG)
+## 🛡️ GIAO THỨC 4: PRE-EXECUTION GIT SAFETY GUARD (BẢO HIỂM GIT TỰ ĐỘNG)
+
+> [!IMPORTANT]
+> Trước khi gọi các Subagent hoặc sửa đổi từ **2 files trở lên**, Parent Agent **BẮT BUỘC** phải bảo hiểm theo 4 bước:
+
+1. **Kiểm tra trạng thái:** `git status --porcelain`.
+2. **Lưu Checkpoint an toàn:** Nếu có code dở dang, chạy:  
+   `git add . && git commit -m "chore(checkpoint): save user state before agent task"`.
+3. **Tách nhánh cách ly:**  
+   `git checkout -b agent/<ten-tac-vu-ngan-gon>-<YYYYMMDD-HHMM>`.
+4. **Thực thi trong nhánh cách ly:** Mọi Subagent chỉ làm việc trên nhánh `agent/*`. Khi hoàn tất, in rõ hướng dẫn gộp nhánh (`/merge-clean`) hoặc hủy bỏ (`/rollback`).
+
+---
+
+## ⚡ GIAO THỨC 5: CIRCUIT BREAKER (CẦU CHÌ CHỐNG LẶP VÔ TẬN - MAX RETRY = 3)
+
+> [!WARNING]
+> Để bảo vệ hạn ngạch API (Quota) và ngăn chặn tình trạng Agent bị "kẹt vòng lặp tự sửa lỗi" (Infinite Retry Loop):
+
+1. **Ngưỡng Kích Hoạt Cầu Chì (Max Consecutive Failures = 3):**
+   - Nếu bất kỳ Agent nào thực thi lệnh build / test (`node tests/run_all_tests.js`) / linter mà **thất bại 3 lần liên tiếp** trên cùng một lỗi hoặc cùng một nguyên nhân:
+   - **BẮT BUỘC DỪNG NGAY LẬP TỨC (HALT EXECUTION)**.
+2. **Hành Động Khi Ngắt Cầu Chì:**
+   - **TUYỆT ĐỐI KHÔNG TỰ Ý CHẠY THỬ LẦN THỨ 4**.
+   - Agent phải lập tức dừng tool calls, chuyển sang xuất văn bản báo cáo cho người dùng:
+     1. Mô tả chính xác lỗi phát sinh và log lỗi cụ thể.
+     2. Phân tích Nguyên nhân gốc rễ (Root Cause Analysis).
+     3. Đề xuất 2-3 phương án giải quyết để người dùng lựa chọn.
+
+---
+
+## 🔒 GIAO THỨC 6: SECRET SHIELD (BẢO VỆ TẬP TIN NHẠY CẢM)
 
 > [!CAUTION]
-> Để bảo vệ 100% mã nguồn và tiến độ công việc của người dùng, trước khi gọi các Subagent hoặc sửa đổi từ **2 files trở lên**, Parent Agent **BẮT BUỘC** phải thực hiện tuần tự 4 bước bảo hiểm sau:
+> Nghiêm cấm mọi hành vi rò rỉ bí mật, khóa mật mã và lịch sử Git nội bộ:
 
-### Bước 1: Kiểm Tra Trạng Thái Working Tree
-Chạy lệnh kiểm tra xem người dùng có thay đổi dở dang chưa commit không:
-```powershell
-git status --porcelain
-```
-
-### Bước 2: Tự Động Lưu Checkpoint Người Dùng (Nếu Có Thay Đổi Dở Dang)
-Nếu đầu ra của `git status --porcelain` có chứa file chưa commit hoặc untracked, tự động lưu lại một checkpoint an toàn:
-```powershell
-git add .
-git commit -m "chore(checkpoint): save user state before agent task"
-```
-
-### Bước 3: Tự Động Phân Nhánh Làm Việc Riêng Biệt (`agent/*`)
-Tạo và chuyển sang nhánh riêng biệt theo đúng quy ước đặt tên:
-```powershell
-# Định dạng: agent/<ten-tac-vu-ngan-gon>-<YYYYMMDD-HHMM>
-# Ví dụ:
-git checkout -b agent/hide-schedule-20261015-1145
-```
-
-### Bước 4: Thi Hành Code Trong Nhánh Cách Ly & Bàn Giao
-- Toàn bộ công việc sửa đổi code của các Subagents và Parent Agent **CHỈ ĐƯỢC PHÉP THỰC THI TRÊN NHÁNH `agent/*` NÀY**.
-- Nhánh gốc (thường là `main` hoặc nhánh ban đầu của người dùng) được giữ nguyên vẹn an toàn tuyệt đối.
-- **Yêu cầu kết thúc bắt buộc:** Ở cuối mỗi câu trả lời sau khi hoàn thành nhiệm vụ, Parent Agent phải in rõ:
-  1. Tên nhánh gốc ban đầu (ví dụ: `main`).
-  2. Tên nhánh agent vừa làm việc (ví dụ: `agent/ten-tac-vu-...`).
-  3. Lệnh hướng dẫn gộp nhánh vào nhánh chính:
-     ```powershell
-     git checkout main
-     git merge agent/<ten-tac-vu>
-     ```
-  4. Lệnh hướng dẫn hủy bỏ thay đổi (Rollback nhanh):
-     ```powershell
-     git checkout main
-     git branch -D agent/<ten-tac-vu>
-     # hoặc gõ lệnh /rollback
-     ```
+1. **Danh Sách Tệp & Thư Mục Cấm Tuyệt Đối (`denied_paths`):**
+   - Mọi file môi trường bí mật: `.env`, `.env.local`, `.env.*`.
+   - Mọi chứng chỉ và khóa riêng tư: `*.pem`, `*.key`, `*.pfx`, `*.crt`.
+   - Thư mục dữ liệu phiên bản nội bộ: `.git/`.
+2. **Chế Tài Thực Thi:**
+   - **CẤM ĐỌC (`view_file`, `read_file`):** Tuyệt đối không đọc nội dung các file trên.
+   - **CẤM IN RA MÀN HÌNH:** Không hiển thị giá trị secret, private key trong bất kỳ log hay tin nhắn chat nào.
+   - **CẤM CHỈNH SỬA / XÓA:** Không cho phép bất kỳ tool chỉnh sửa hay lệnh terminal nào sửa đổi hoặc xóa các tệp này.

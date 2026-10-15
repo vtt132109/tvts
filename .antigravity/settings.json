@@ -5,6 +5,23 @@
     "writeFilesInAllowedPaths": true,
     "spawnSubagents": true
   },
+  "circuitBreaker": {
+    "enabled": true,
+    "maxRetries": 3,
+    "onThresholdExceeded": "halt_and_report_root_cause"
+  },
+  "secretShield": {
+    "enabled": true,
+    "deniedPaths": [
+      ".env*",
+      "*.pem",
+      "*.key",
+      ".git/**"
+    ],
+    "denyRead": true,
+    "denyWrite": true,
+    "denyEcho": true
+  },
   "terminalCommands": {
     "policy": "allowlist",
     "allowed": [
