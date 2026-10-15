@@ -533,6 +533,12 @@
       if (elements.userMgmtModal) elements.userMgmtModal.classList.remove('active');
     });
 
+    elements.userMgmtModal?.addEventListener('click', (e) => {
+      if (e.target === elements.userMgmtModal) {
+        elements.userMgmtModal.classList.remove('active');
+      }
+    });
+
     // Chuyển tab trong modal
     elements.tabBtnUserList?.addEventListener('click', () => switchUserMgmtTab('list'));
     elements.tabBtnAddUser?.addEventListener('click', () => switchUserMgmtTab('add'));
@@ -922,6 +928,42 @@
     });
 
     elements.btnLoadUtePreset?.addEventListener('click', loadUtePresetStudents);
+
+    // Hỗ trợ phím tắt Escape để đóng nhanh các modal quản trị (Task 3)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        // 1. Modal Cấp quyền & Đổi mật khẩu
+        if (elements.userMgmtModal?.classList.contains('active')) {
+          elements.userMgmtModal.classList.remove('active');
+        }
+        // 2. Modal Quản lý Đổi ca
+        const swapModal = elements.modalManageSwaps || document.getElementById('modal-manage-swaps');
+        if (swapModal && (swapModal.classList.contains('active') || swapModal.style.display === 'flex')) {
+          closeSwapMgmtModal();
+        }
+        // 3. Modal Tinh chỉnh phân công ca trực
+        if (elements.reassignModal?.classList.contains('active')) {
+          closeReassignModal();
+        }
+        // 4. Modal Thêm / Sửa sinh viên
+        if (elements.studentModal?.classList.contains('active')) {
+          closeStudentModal();
+        }
+        // 5. Modal Bảng tính Excel / Google Sheets
+        if (elements.excelModal?.classList.contains('active')) {
+          closeExcelModal();
+        }
+        // 6. Modal Nhập Excel / CSV
+        if (elements.importModal?.classList.contains('active')) {
+          closeImportModal();
+        }
+        // 7. Modal Sao lưu & Phục hồi dữ liệu
+        const backupModal = elements.modalBackupCenter || document.getElementById('modal-backup-center');
+        if (backupModal && (backupModal.classList.contains('active') || backupModal.style.display === 'flex')) {
+          closeBackupCenterModal();
+        }
+      }
+    });
   }
 
   function switchTab(tabId) {
