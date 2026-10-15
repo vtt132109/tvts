@@ -1569,10 +1569,12 @@
 
     // Nút cuộn trái / phải
     elements.btnMasterScrollLeft?.addEventListener('click', () => {
-      elements.adminMasterMonthContainer?.scrollBy({ left: -900, behavior: 'smooth' });
+      const scrollStep = (elements.adminMasterMonthContainer?.querySelector('.master-week-section')?.offsetWidth || 1180) + 24;
+      elements.adminMasterMonthContainer?.scrollBy({ left: -scrollStep, behavior: 'smooth' });
     });
     elements.btnMasterScrollRight?.addEventListener('click', () => {
-      elements.adminMasterMonthContainer?.scrollBy({ left: 900, behavior: 'smooth' });
+      const scrollStep = (elements.adminMasterMonthContainer?.querySelector('.master-week-section')?.offsetWidth || 1180) + 24;
+      elements.adminMasterMonthContainer?.scrollBy({ left: scrollStep, behavior: 'smooth' });
     });
 
     // Chuyển kiểu hiển thị: Cuộn Ngang ↔ Xếp Dọc

@@ -968,14 +968,21 @@ body {
   margin-bottom: 2rem;
 }
 
+.timetable-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .timetable-grid {
   display: grid;
-  grid-template-columns: 120px repeat(5, 1fr);
+  grid-template-columns: 110px repeat(5, minmax(190px, 1fr));
   gap: 1px;
   background: var(--border-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  min-width: 1060px;
+  width: 100%;
 }
 
 @media (max-width: 1024px) {
@@ -983,7 +990,7 @@ body {
     overflow-x: auto;
   }
   .timetable-grid {
-    min-width: 900px;
+    min-width: 1000px;
   }
 }
 
@@ -991,6 +998,7 @@ body {
   background: var(--bg-card);
   padding: 0.85rem 0.75rem;
   position: relative;
+  min-width: 0;
 }
 
 .grid-header {
@@ -1046,6 +1054,7 @@ body {
   padding: 0.65rem;
   background: var(--bg-card);
   transition: background var(--transition-fast);
+  min-width: 0;
 }
 
 .shift-duty-slot:hover {
@@ -1060,6 +1069,7 @@ body {
   color: var(--text-muted);
   border-bottom: 1px dashed #e2e8f0;
   padding-bottom: 0.35rem;
+  min-width: 0;
 }
 
 .shift-status-pill {
@@ -1094,6 +1104,7 @@ body {
   gap: 0.4rem;
   border: 1px solid transparent;
   transition: transform var(--transition-fast);
+  min-width: 0;
 }
 
 .duty-member-card:hover {
@@ -1124,6 +1135,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .member-role-tag {
@@ -2948,9 +2961,9 @@ body {
 }
 
 .master-month-container.layout-horizontal .master-week-section {
-  flex: 0 0 980px;
-  max-width: 980px;
-  min-width: 980px;
+  flex: 0 0 1180px;
+  max-width: 1180px;
+  min-width: 1180px;
 }
 
 .master-month-container.layout-vertical {
