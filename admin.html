@@ -374,6 +374,12 @@
           <button class="btn btn-primary" id="btn-open-excel-modal" style="background: linear-gradient(135deg, #107c41, #185a37); color: #ffffff; border: none; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 124, 65, 0.35);" title="Mở bảng tính xuất Excel & Copy sang Google Sheets chuẩn mẫu HCM-UTE">
             <span>📊 Xuất Excel Mẫu HCM-UTE</span>
           </button>
+          <button class="btn btn-secondary" id="btn-hero-add-event" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="font-weight: 700; background: #fdf2f8; color: #db2777; border: 1.5px solid #fbcfe8;" title="Thêm sự kiện đi tour tuyển sinh, ngoại kiểm tính công tự động">
+            <span>🎟️ Thêm Sự Kiện / Tour</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-hero-view-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;" title="Xem Bảng Chấm Công tháng hiện tại">
+            <span>📋 Bảng Chấm Công Tháng</span>
+          </button>
           <button class="btn btn-secondary" id="btn-toggle-publish-schedule" style="background: #eef2ff; color: #4338ca; border: 1.5px solid #a5b4fc; font-weight: 700;" title="Bật/Tắt hiển thị lịch trực trên Cổng Sinh Viên">
             <span id="btn-publish-schedule-icon">📢</span> <span id="btn-publish-schedule-text">Công Bố Lịch Cho SV</span>
           </button>
@@ -1181,9 +1187,6 @@
           <button type="button" class="backup-tab-btn active" data-backup-tab="tab-web-backups" id="btn-tab-web-backups">
             🗄️ Sao Lưu Trên Web (Lưu 6 Tháng)
           </button>
-          <button type="button" class="backup-tab-btn" data-backup-tab="tab-events-mgmt" id="btn-tab-events-mgmt">
-            🎟️ Quản Lý Sự Kiện & Đi Tour
-          </button>
           <button type="button" class="backup-tab-btn" data-backup-tab="tab-export-backup" id="btn-tab-export-backup">
             💾 Tải File Sao Lưu (.json)
           </button>
@@ -1213,12 +1216,6 @@
               </button>
               <button type="button" class="btn btn-secondary" id="btn-quick-backup-current-month" onclick="window.adminQuickBackupCurrentMonth && window.adminQuickBackupCurrentMonth()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #eef2ff; color: #4338ca; border: 1.5px solid #a5b4fc;" title="Tạo ngay bản sao lưu cho tháng hiện tại chỉ với 1-click">
                 <span>⚡ Tạo Bản Sao Lưu Tháng Này</span>
-              </button>
-              <button type="button" class="btn btn-secondary" id="btn-backup-open-add-event" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #fdf2f8; color: #db2777; border: 1.5px solid #fbcfe8;" title="Thêm sự kiện đi tour tuyển sinh, ngoại kiểm tính công">
-                <span>🎟️ Thêm Sự Kiện</span>
-              </button>
-              <button type="button" class="btn btn-secondary" id="btn-backup-view-current-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;" title="Xem bảng chấm công tháng hiện tại">
-                <span>📋 Xem Bảng Công Tháng Này</span>
               </button>
             </div>
           </div>
@@ -1256,49 +1253,6 @@
           <!-- Hộp hướng dẫn & gợi ý -->
           <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
             💡 <em><strong>Mẹo an toàn:</strong> Khi bạn bấm "Khôi Phục Nhanh", toàn bộ hệ thống (danh sách sinh viên, lịch phân công 4 tuần, cấu hình cổng và tài khoản cán bộ) sẽ được đưa về chính xác trạng thái của thời điểm sao lưu đó. Khi bạn bấm "Khởi Tạo Lịch Tháng Mới", hệ thống cũng sẽ tự động lưu 1 snapshot vào danh sách này.</em>
-          </div>
-        </div>
-
-        <!-- Tab 0.5: Quản Lý Sự Kiện Đi Tour / Ngoại Kiểm (PAYROLL-01) -->
-        <div class="backup-tab-content" id="tab-events-mgmt" style="display: none;">
-          <div style="background: linear-gradient(135deg, rgba(219, 39, 119, 0.08), rgba(99, 102, 241, 0.08)); border: 1.5px solid #fbcfe8; border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
-            <div>
-              <div style="font-weight: 700; font-size: 0.98rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
-                <span>🎟️ Danh Sách Sự Kiện Đi Tour & Ngoại Kiểm Tháng Này</span>
-                <span class="badge" id="badge-events-count" style="background: #db2777; color: #fff; font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-full);">0 sự kiện</span>
-              </div>
-              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.45;">
-                Các sự kiện ngoại kiểm (ngày hội trường THPT, tư vấn hướng nghiệp) được quy đổi thành công trực (1-2 công) cộng dồn trực tiếp vào Bảng Chấm Công tháng của CTV.
-              </div>
-            </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <button type="button" class="btn btn-primary" id="btn-events-open-add-modal" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="background: linear-gradient(135deg, #db2777, #be185d); border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
-                <span>🎟️ Thêm Sự Kiện Mới</span>
-              </button>
-              <button type="button" class="btn btn-secondary" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;">
-                <span>📋 Xem Bảng Chấm Công</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Bảng Danh Sách Các Sự Kiện Trong Tháng -->
-          <div class="events-table-wrapper" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; background: var(--bg-card); max-height: 380px;">
-            <table class="user-mgmt-table" style="margin: 0; min-width: 720px;" aria-label="Danh sách sự kiện ngoại kiểm">
-              <thead>
-                <tr>
-                  <th style="width: 45px; text-align: center;">STT</th>
-                  <th>Tên Sự Kiện / Chương Trình</th>
-                  <th style="width: 130px;">Ngày Diễn Ra</th>
-                  <th style="width: 130px; text-align: center;">Buổi / Số Công</th>
-                  <th style="width: 140px;">Địa Điểm</th>
-                  <th>CTV Tham Gia</th>
-                  <th style="width: 100px; text-align: center;">Thao Tác</th>
-                </tr>
-              </thead>
-              <tbody id="events-table-body">
-                <!-- Render động các sự kiện -->
-              </tbody>
-            </table>
           </div>
         </div>
 
@@ -1400,6 +1354,7 @@
       <div class="modal-footer" style="display: flex; justify-content: flex-end;">
         <button type="button" class="btn btn-secondary" id="btn-close-backup-footer">Đóng Hộp Thoại</button>
       </div>
+    </div> <!-- /.modal-content -->
   </div> <!-- /#modal-backup-center -->
 
   <!-- ====================================================================
