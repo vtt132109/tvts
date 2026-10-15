@@ -137,7 +137,7 @@
     </div>
 
     <!-- Banner Nổi Bật: Hỗ Trợ Đổi Ca & Nhờ Trực Hộ Cho Sinh Viên (Task 26) -->
-    <div class="swap-action-callout" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.08)); border: 1.5px solid var(--primary-light, #818cf8); border-radius: var(--radius-md); padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem; box-shadow: var(--shadow-sm);">
+    <div class="swap-action-callout" id="section-student-swap-callout" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.08)); border: 1.5px solid var(--primary-light, #818cf8); border-radius: var(--radius-md); padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem; box-shadow: var(--shadow-sm);">
       <div style="display: flex; align-items: center; gap: 0.85rem;">
         <span style="font-size: 1.8rem; line-height: 1;">🔄</span>
         <div>
@@ -164,7 +164,7 @@
     <!-- ====================================================================
          PHẦN 1: FORM ĐIỀN THÔNG TIN CÁ NHÂN & CHỌN LỊCH RẢNH
          ==================================================================== -->
-    <section style="margin-bottom: 2.5rem;">
+    <section id="section-student-registration" style="margin-bottom: 2.5rem;">
       <div class="form-layout">
         
         <!-- Cột trái: Nhập tên, MSSV, SĐT và Chọn Người Mới / Người Cũ -->
@@ -390,10 +390,19 @@
       </div>
     </section>
 
+    <!-- Thông Báo Khi Lịch Trực Đang Chờ Ban Điều Hành Công Bố (Ẩn Lịch Khi Mở Đăng Ký) -->
+    <div id="student-schedule-pending-notice" style="display: none; margin-bottom: 2.5rem; background: #f8fafc; border: 1.5px dashed var(--border-color); border-radius: var(--radius-md); padding: 1.75rem 1.25rem; text-align: center;">
+      <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📋</div>
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem;">Lịch Trực Đang Được Ban Điều Hành Tổng Hợp</h3>
+      <p style="font-size: 0.88rem; color: var(--text-muted); max-width: 620px; margin: 0 auto; line-height: 1.5;">
+        Cổng đăng ký đang mở nhận ca rảnh của sinh viên. Bảng phân công ca trực tuần và chức năng Tra cứu MSSV sẽ được tự động hiển thị sau khi Ban Điều Hành chốt danh sách hoặc công bố chính thức.
+      </p>
+    </div>
+
     <!-- ====================================================================
          PHẦN 2: TRA CỨU NHANH CA TRỰC CỦA TÔI
          ==================================================================== -->
-    <section class="card" style="margin-bottom: 2.5rem;">
+    <section class="card" id="section-student-lookup" style="margin-bottom: 2.5rem;">
       <div class="card-header">
         <div>
           <h2 class="card-title">🔍 Tra Cứu Ca Trực Của Bạn</h2>
@@ -414,7 +423,7 @@
     <!-- ====================================================================
          PHẦN 3: BẢNG LỊCH TRỰC CHUNG CHO TẤT CẢ MỌI NGƯỜI (READ-ONLY)
          ==================================================================== -->
-    <section class="card timetable-card">
+    <section class="card timetable-card" id="section-student-timetable">
       <div class="card-header">
         <div>
           <h2 class="card-title">📅 Lịch Trực Chung Văn Phòng Tư Vấn Tuyển Sinh</h2>

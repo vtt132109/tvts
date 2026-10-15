@@ -165,6 +165,12 @@
       cardModeTime: document.getElementById('card-mode-time'),
       cardModeClosed: document.getElementById('card-mode-closed'),
       timeWindowContainer: document.getElementById('time-window-inputs-container'),
+      inputPublishSchedule: document.getElementById('admin-reg-publish-schedule'),
+      publishStatusTag: document.getElementById('admin-publish-status-tag'),
+      publishLabel: document.getElementById('admin-reg-publish-label'),
+      btnTogglePublishSchedule: document.getElementById('btn-toggle-publish-schedule'),
+      btnPublishScheduleIcon: document.getElementById('btn-publish-schedule-icon'),
+      btnPublishScheduleText: document.getElementById('btn-publish-schedule-text'),
 
       studentTableBody: document.getElementById('admin-student-table-body'),
       filterButtons: document.querySelectorAll('.filter-btn'),
@@ -2707,6 +2713,7 @@
       const raw = localStorage.getItem(STORAGE_KEYS.REG_CONFIG);
       if (raw) {
         state.regConfig = JSON.parse(raw);
+        state.regConfig.publishSchedule = state.regConfig.publishSchedule === true;
       } else {
         const now = new Date();
         const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
@@ -2714,7 +2721,8 @@
           mode: 'always_open',
           startTime: toDateTimeLocalString(now),
           endTime: toDateTimeLocalString(end),
-          closedNotice: 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.'
+          closedNotice: 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.',
+          publishSchedule: false
         };
         saveRegConfig(false);
       }
@@ -2754,6 +2762,32 @@
     }
     if (elements.adminRegClosedMsg) {
       elements.adminRegClosedMsg.value = state.regConfig.closedNotice || '';
+    }
+
+    // Cập nhật trạng thái hiển thị lịch trực trên Cổng Sinh Viên
+    const isPublished = state.regConfig.publishSchedule === true;
+    if (elements.inputPublishSchedule) {
+      elements.inputPublishSchedule.checked = isPublished;
+    }
+    if (elements.publishLabel) {
+      elements.publishLabel.textContent = isPublished ? 'Đang công bố lịch' : 'Tạm ẩn lịch trực';
+    }
+    if (elements.publishStatusTag) {
+      elements.publishStatusTag.textContent = isPublished ? 'Đang Công Bố' : 'Đang Tạm Ẩn';
+      elements.publishStatusTag.style.background = isPublished ? '#ecfdf5' : '#fef2f2';
+      elements.publishStatusTag.style.color = isPublished ? '#047857' : '#dc2626';
+      elements.publishStatusTag.style.borderColor = isPublished ? '#a7f3d0' : '#fecaca';
+    }
+    if (elements.btnTogglePublishSchedule) {
+      elements.btnTogglePublishSchedule.style.background = isPublished ? '#ecfdf5' : '#eef2ff';
+      elements.btnTogglePublishSchedule.style.color = isPublished ? '#047857' : '#4338ca';
+      elements.btnTogglePublishSchedule.style.borderColor = isPublished ? '#10b981' : '#a5b4fc';
+    }
+    if (elements.btnPublishScheduleIcon) {
+      elements.btnPublishScheduleIcon.textContent = isPublished ? '👁️' : '📢';
+    }
+    if (elements.btnPublishScheduleText) {
+      elements.btnPublishScheduleText.textContent = isPublished ? 'Đang Hiện Lịch (Bấm để Ẩn)' : 'Công Bố Lịch Cho SV';
     }
 
     updateRegLiveStatus();
@@ -2805,6 +2839,24 @@
       });
     });
 
+    // Nút toggle công bố lịch trên thanh Header/Hero
+    elements.btnTogglePublishSchedule?.addEventListener('click', () => {
+      state.regConfig.publishSchedule = !state.regConfig.publishSchedule;
+      saveRegConfig(true);
+      renderRegConfigUI();
+      window.dispatchEvent(new Event('storage'));
+      const msg = state.regConfig.publishSchedule
+        ? '📢 Đã CÔNG BỐ lịch trực cho sinh viên xem trên Cổng Sinh Viên!'
+        : '🔒 Đã TẠM ẨN lịch trực trên Cổng Sinh Viên (chỉ hiển thị khi đóng cổng hoặc công bố)!';
+      showToast(msg, state.regConfig.publishSchedule ? 'success' : 'info');
+    });
+
+    // Checkbox toggle trong form cấu hình
+    elements.inputPublishSchedule?.addEventListener('change', (e) => {
+      state.regConfig.publishSchedule = e.target.checked;
+      renderRegConfigUI();
+    });
+
     elements.btnPresetNow?.addEventListener('click', () => {
       const nowStr = toDateTimeLocalString(new Date());
       if (elements.adminRegStart) elements.adminRegStart.value = nowStr;
@@ -2846,6 +2898,7 @@
       const startTime = elements.adminRegStart ? elements.adminRegStart.value : '';
       const endTime = elements.adminRegEnd ? elements.adminRegEnd.value : '';
       const closedNotice = elements.adminRegClosedMsg ? elements.adminRegClosedMsg.value.trim() : '';
+      const publishSchedule = elements.inputPublishSchedule ? elements.inputPublishSchedule.checked : (state.regConfig.publishSchedule === true);
 
       if (selectedMode === 'time_window' && startTime && endTime) {
         if (new Date(startTime).getTime() >= new Date(endTime).getTime()) {
@@ -2858,10 +2911,13 @@
         mode: selectedMode,
         startTime,
         endTime,
-        closedNotice: closedNotice || 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.'
+        closedNotice: closedNotice || 'Cổng đăng ký ca trực tạm khóa để ban điều hành chốt danh sách xếp lịch.',
+        publishSchedule
       };
 
       saveRegConfig(true);
+      renderRegConfigUI();
+      window.dispatchEvent(new Event('storage'));
     });
   }
 
