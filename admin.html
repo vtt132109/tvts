@@ -259,6 +259,11 @@
             <span class="swap-badge-count" id="badge-swap-count" style="display: none;">0</span>
           </button>
 
+          <!-- Nút Quản Lý Sự Kiện & Đi Tour (PAYROLL-01) -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-add-event" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" title="Thêm sự kiện đi tour tuyển sinh, ngoại kiểm tính công" style="font-weight: 700; background: #fdf2f8; color: #db2777; border: 1.5px solid #fbcfe8;">
+            <span>🎟️ Thêm Sự Kiện Mới</span>
+          </button>
+
           <!-- Nút Trung Tâm Sao Lưu & Dữ Liệu (Task 27) -->
           <button type="button" class="btn btn-secondary btn-sm" id="btn-open-backup-center" onclick="window.adminOpenBackupModal && window.adminOpenBackupModal()" title="Sao lưu và Phục hồi cơ sở dữ liệu (.json)" style="font-weight: 700;">
             <span>💾 Sao Lưu & Dữ Liệu</span>
@@ -300,6 +305,9 @@
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-swap-mgmt" onclick="window.adminOpenSwapModal && window.adminOpenSwapModal()" style="font-weight: 700;" title="Quản lý đề xuất đổi ca">
         <span>🔄 Đổi Ca</span>
         <span class="swap-badge-count" id="badge-sticky-swap-count" style="display: none;">0</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-add-event" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="font-weight: 700; background: #fdf2f8; color: #db2777; border-color: #fbcfe8;" title="Thêm sự kiện đi tour tuyển sinh, ngoại kiểm tính công">
+        <span>🎟️ Thêm Sự Kiện</span>
       </button>
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-backup-center" onclick="window.adminOpenBackupModal && window.adminOpenBackupModal()" style="font-weight: 700;" title="Trung tâm sao lưu dữ liệu">
         <span>💾 Sao Lưu</span>
@@ -1173,6 +1181,9 @@
           <button type="button" class="backup-tab-btn active" data-backup-tab="tab-web-backups" id="btn-tab-web-backups">
             🗄️ Sao Lưu Trên Web (Lưu 6 Tháng)
           </button>
+          <button type="button" class="backup-tab-btn" data-backup-tab="tab-events-mgmt" id="btn-tab-events-mgmt">
+            🎟️ Quản Lý Sự Kiện & Đi Tour
+          </button>
           <button type="button" class="backup-tab-btn" data-backup-tab="tab-export-backup" id="btn-tab-export-backup">
             💾 Tải File Sao Lưu (.json)
           </button>
@@ -1196,9 +1207,20 @@
                 Dữ liệu được lưu trữ tự động an toàn trong trình duyệt web. Khôi phục nhanh 1-click bất kỳ lúc nào. Hệ thống tự động dọn dẹp các bản sao lưu cũ quá 6 tháng (180 ngày).
               </div>
             </div>
-            <button type="button" class="btn btn-primary" id="btn-create-web-backup" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
-              <span>💾 Tạo Bản Sao Lưu Trên Web Ngay</span>
-            </button>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" id="btn-create-web-backup" onclick="window.adminTriggerCreateWebBackup && window.adminTriggerCreateWebBackup()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span>💾 Tạo Bản Sao Lưu Trên Web Ngay</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-quick-backup-current-month" onclick="window.adminQuickBackupCurrentMonth && window.adminQuickBackupCurrentMonth()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #eef2ff; color: #4338ca; border: 1.5px solid #a5b4fc;" title="Tạo ngay bản sao lưu cho tháng hiện tại chỉ với 1-click">
+                <span>⚡ Tạo Bản Sao Lưu Tháng Này</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-backup-open-add-event" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #fdf2f8; color: #db2777; border: 1.5px solid #fbcfe8;" title="Thêm sự kiện đi tour tuyển sinh, ngoại kiểm tính công">
+                <span>🎟️ Thêm Sự Kiện</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-backup-view-current-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;" title="Xem bảng chấm công tháng hiện tại">
+                <span>📋 Xem Bảng Công Tháng Này</span>
+              </button>
+            </div>
           </div>
 
           <!-- Thanh Thống Kê Dung Lượng & Bản Sao Lưu -->
@@ -1214,15 +1236,15 @@
 
           <!-- Bảng Danh Sách Bản Sao Lưu Trên Web -->
           <div class="web-backup-table-wrapper" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; background: var(--bg-card);">
-            <table class="user-mgmt-table" style="margin: 0; min-width: 650px;" aria-label="Danh sách bản sao lưu trên web">
+            <table class="user-mgmt-table" style="margin: 0; min-width: 680px;" aria-label="Danh sách bản sao lưu trên web">
               <thead>
                 <tr>
                   <th style="width: 45px; text-align: center;">STT</th>
-                  <th>Tên Bản Sao Lưu & Kỳ Trực</th>
+                  <th>Tên Bản Sao Lưu & Kỳ Trực (Bấm xem công)</th>
                   <th>Thời Gian Tạo & Hạn Lưu</th>
                   <th>Dữ Liệu Nhận Diện</th>
                   <th style="width: 85px; text-align: center;">Dung Lượng</th>
-                  <th style="width: 170px; text-align: center;">Thao Tác</th>
+                  <th style="width: 250px; text-align: center;">Thao Tác & Bảng Công</th>
                 </tr>
               </thead>
               <tbody id="web-backup-table-body">
@@ -1234,6 +1256,49 @@
           <!-- Hộp hướng dẫn & gợi ý -->
           <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
             💡 <em><strong>Mẹo an toàn:</strong> Khi bạn bấm "Khôi Phục Nhanh", toàn bộ hệ thống (danh sách sinh viên, lịch phân công 4 tuần, cấu hình cổng và tài khoản cán bộ) sẽ được đưa về chính xác trạng thái của thời điểm sao lưu đó. Khi bạn bấm "Khởi Tạo Lịch Tháng Mới", hệ thống cũng sẽ tự động lưu 1 snapshot vào danh sách này.</em>
+          </div>
+        </div>
+
+        <!-- Tab 0.5: Quản Lý Sự Kiện Đi Tour / Ngoại Kiểm (PAYROLL-01) -->
+        <div class="backup-tab-content" id="tab-events-mgmt" style="display: none;">
+          <div style="background: linear-gradient(135deg, rgba(219, 39, 119, 0.08), rgba(99, 102, 241, 0.08)); border: 1.5px solid #fbcfe8; border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.98rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                <span>🎟️ Danh Sách Sự Kiện Đi Tour & Ngoại Kiểm Tháng Này</span>
+                <span class="badge" id="badge-events-count" style="background: #db2777; color: #fff; font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-full);">0 sự kiện</span>
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.45;">
+                Các sự kiện ngoại kiểm (ngày hội trường THPT, tư vấn hướng nghiệp) được quy đổi thành công trực (1-2 công) cộng dồn trực tiếp vào Bảng Chấm Công tháng của CTV.
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" id="btn-events-open-add-modal" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="background: linear-gradient(135deg, #db2777, #be185d); border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span>🎟️ Thêm Sự Kiện Mới</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;">
+                <span>📋 Xem Bảng Chấm Công</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bảng Danh Sách Các Sự Kiện Trong Tháng -->
+          <div class="events-table-wrapper" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; background: var(--bg-card); max-height: 380px;">
+            <table class="user-mgmt-table" style="margin: 0; min-width: 720px;" aria-label="Danh sách sự kiện ngoại kiểm">
+              <thead>
+                <tr>
+                  <th style="width: 45px; text-align: center;">STT</th>
+                  <th>Tên Sự Kiện / Chương Trình</th>
+                  <th style="width: 130px;">Ngày Diễn Ra</th>
+                  <th style="width: 130px; text-align: center;">Buổi / Số Công</th>
+                  <th style="width: 140px;">Địa Điểm</th>
+                  <th>CTV Tham Gia</th>
+                  <th style="width: 100px; text-align: center;">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody id="events-table-body">
+                <!-- Render động các sự kiện -->
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -1334,6 +1399,322 @@
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end;">
         <button type="button" class="btn btn-secondary" id="btn-close-backup-footer">Đóng Hộp Thoại</button>
+      </div>
+  </div> <!-- /#modal-backup-center -->
+
+  <!-- ====================================================================
+       MODAL 6: BẢNG CHẤM CÔNG CTV THEO THÁNG (PAYROLL-01)
+       Tổng hợp ca trực văn phòng 4 tuần + các sự kiện ngoại kiểm đi tour
+       ==================================================================== -->
+  <div class="modal-overlay modal-backdrop" id="modal-month-payroll" style="display: none; z-index: 1060;">
+    <div class="modal-content payroll-modal-dialog" style="max-width: 1100px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column;">
+      
+      <!-- Modal Header -->
+      <div class="modal-header payroll-modal-header" style="background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff; padding: 1.1rem 1.5rem; border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <div class="payroll-header-icon" style="font-size: 1.75rem; background: rgba(255, 255, 255, 0.12); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            📋
+          </div>
+          <div>
+            <h3 class="modal-title" id="month-payroll-title" style="color: #ffffff; font-size: 1.25rem; font-weight: 800; margin-bottom: 0.2rem; letter-spacing: -0.01em;">
+              📋 BẢNG CHẤM CÔNG CTV - THÁNG 10/2026
+            </h3>
+            <p id="month-payroll-subtitle" style="font-size: 0.82rem; color: #c7d2fe; margin: 0;">
+              Tổng hợp công trực văn phòng (4 tuần) và hoạt động ngoại kiểm / đi tour tuyển sinh
+            </p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-month-payroll-modal" onclick="window.adminCloseMonthPayroll && window.adminCloseMonthPayroll()" style="color: #ffffff; background: rgba(255,255,255,0.15);" aria-label="Đóng bảng chấm công">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body payroll-modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1;">
+        
+        <!-- 4 Ô Chỉ Số Thống Kê (Summary 4 Cards) -->
+        <div class="payroll-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+          
+          <div class="payroll-stat-card card-students" style="background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+            <div class="stat-icon-wrap" style="width: 44px; height: 44px; border-radius: 10px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+              👥
+            </div>
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tổng CTV Nhận Công</div>
+              <div class="stat-value" id="payroll-stat-total-students" style="font-size: 1.6rem; font-weight: 800; color: var(--text-main); line-height: 1.2;">0</div>
+            </div>
+          </div>
+
+          <div class="payroll-stat-card card-office" style="background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+            <div class="stat-icon-wrap" style="width: 44px; height: 44px; border-radius: 10px; background: #ede9fe; color: #6366f1; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+              🏢
+            </div>
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tổng Ca Trực VP (4 tuần)</div>
+              <div class="stat-value" id="payroll-stat-office-shifts" style="font-size: 1.6rem; font-weight: 800; color: #4f46e5; line-height: 1.2;">0</div>
+            </div>
+          </div>
+
+          <div class="payroll-stat-card card-events" style="background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+            <div class="stat-icon-wrap" style="width: 44px; height: 44px; border-radius: 10px; background: #fdf2f8; color: #db2777; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+              🎟️
+            </div>
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tổng Công Sự Kiện</div>
+              <div class="stat-value" id="payroll-stat-event-units" style="font-size: 1.6rem; font-weight: 800; color: #db2777; line-height: 1.2;">0</div>
+            </div>
+          </div>
+
+          <div class="payroll-stat-card card-total-highlight" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.15)); border: 2px solid #10b981; border-radius: var(--radius-md); padding: 1rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);">
+            <div class="stat-icon-wrap" style="width: 44px; height: 44px; border-radius: 10px; background: #10b981; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);">
+              🏆
+            </div>
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: #065f46; text-transform: uppercase; letter-spacing: 0.05em;">TỔNG CÔNG TOÀN BAN</div>
+              <div class="stat-value" id="payroll-stat-total-units" style="font-size: 1.75rem; font-weight: 800; color: #047857; line-height: 1.2;">0</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Toolbar Bộ Lọc & Tìm Kiếm & Nút Xuất/In -->
+        <div class="payroll-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem; margin-bottom: 1rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          
+          <!-- Bộ Lọc Vai Trò -->
+          <div class="payroll-filter-group" style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); margin-right: 0.25rem;">Lọc vai trò:</span>
+            <div class="filter-group" id="payroll-role-filters">
+              <button type="button" class="filter-btn active" data-payroll-filter="all" id="btn-payroll-filter-all">Tất cả</button>
+              <button type="button" class="filter-btn" data-payroll-filter="old" id="btn-payroll-filter-old">🎓 Người cũ</button>
+              <button type="button" class="filter-btn" data-payroll-filter="new" id="btn-payroll-filter-new">🌱 Người mới</button>
+            </div>
+          </div>
+
+          <!-- Ô Tìm Kiếm Nhanh CTV -->
+          <div class="search-input-wrap" style="min-width: 250px; flex: 1; max-width: 380px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="input-search-payroll" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV..." aria-label="Tìm kiếm CTV trong bảng chấm công">
+          </div>
+
+          <!-- Nút In & Xuất Excel -->
+          <div class="payroll-actions" style="display: flex; align-items: center; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-print-month-payroll" onclick="window.adminPrintMonthPayroll && window.adminPrintMonthPayroll()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;" title="In bảng chấm công chuẩn A4 ngang">
+              <span>🖨️ In Bảng Công</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-export-month-payroll-excel" onclick="window.adminExportMonthPayrollExcel && window.adminExportMonthPayrollExcel()" style="background: #107c41; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;" title="Xuất file bảng tính Excel (.xls)">
+              <span>📊 Xuất Excel (.xls)</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Bảng Danh Sách Chấm Công CTV -->
+        <div class="payroll-table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; background: var(--bg-card); max-height: 480px;">
+          <table class="data-table payroll-table" id="table-month-payroll" style="margin: 0; min-width: 820px;" aria-label="Bảng chấm công cộng tác viên">
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">STT</th>
+                <th>Họ và Tên</th>
+                <th style="width: 110px;">MSSV</th>
+                <th style="width: 120px; text-align: center;">Vai Trò</th>
+                <th style="width: 150px; text-align: center;">Trực Văn Phòng</th>
+                <th style="width: 150px; text-align: center;">Đi Sự Kiện</th>
+                <th style="width: 130px; text-align: center;">TỔNG CÔNG</th>
+                <th style="width: 110px; text-align: center;">Chi Tiết</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-month-payroll">
+              <!-- Render động danh sách chấm công -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Hướng dẫn & Quy định tính công -->
+        <div class="payroll-policy-note" style="margin-top: 1rem; padding: 0.75rem 1rem; background: var(--bg-card-hover); border-radius: var(--radius-sm); border: 1px dashed var(--border-color); font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            📌 <strong>Quy tắc tính công:</strong> 1 Ca trực văn phòng (Sáng/Chiều) = <strong>1 công</strong> &bull; Đi sự kiện 1 buổi (Sáng/Chiều) = <strong>1 công</strong> &bull; Đi sự kiện Cả ngày = <strong>2 công</strong>.
+          </div>
+          <div style="font-weight: 600; color: var(--primary);">
+            Mọi thắc mắc về ca trực vui lòng liên hệ Ban Điều Hành Tuyển Sinh.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer payroll-modal-footer" style="padding: 0.9rem 1.5rem; background: var(--bg-card); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 0.82rem; color: var(--text-muted);" id="payroll-footer-summary-text">
+          Hiển thị 0 CTV trong danh sách
+        </div>
+        <button type="button" class="btn btn-secondary" id="btn-close-month-payroll-footer" onclick="window.adminCloseMonthPayroll && window.adminCloseMonthPayroll()">
+          Đóng Bảng Công
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 7: THÊM SỰ KIỆN ĐI TOUR / NGOẠI KIỂM (PAYROLL-01)
+       Form ghi nhận sự kiện ngoại kiểm và tích chọn CTV tham gia tính công
+       ==================================================================== -->
+  <div class="modal-overlay modal-backdrop" id="modal-add-event" style="display: none; z-index: 1070;">
+    <div class="modal-content" style="max-width: 720px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      
+      <!-- Modal Header -->
+      <div class="modal-header" style="background: linear-gradient(135deg, #831843, #be185d); color: #ffffff;">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <span style="font-size: 1.5rem;">🎟️</span>
+          <div>
+            <h3 class="modal-title" style="color: #ffffff; font-size: 1.15rem; margin-bottom: 0.15rem;">
+              Thêm Sự Kiện Tuyển Sinh / Tour Ngoại Kiểm
+            </h3>
+            <p style="color: #fbcfe8; font-size: 0.8rem; margin: 0;">
+              Ghi nhận sự kiện tư vấn ngoại kiểm & phân công CTV tham gia tính công tự động
+            </p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-event-modal" onclick="window.adminCloseAddEventModal && window.adminCloseAddEventModal()" style="color: #ffffff; background: rgba(255,255,255,0.15);" aria-label="Đóng hộp thoại">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1;">
+        <form id="form-add-event" onsubmit="window.adminHandleSubmitEvent && window.adminHandleSubmitEvent(event); return false;">
+          
+          <!-- Hàng 1: Tên sự kiện -->
+          <div class="form-group">
+            <label class="form-label" for="event-input-title" style="font-weight: 700;">
+              Tên Sự Kiện / Trường Cần Tư Vấn <span class="required">*</span>
+            </label>
+            <input type="text" id="event-input-title" class="form-input" placeholder="Ví dụ: Tư vấn tuyển sinh Ngày hội Hướng nghiệp THPT Gia Định" required aria-label="Tên sự kiện">
+          </div>
+
+          <!-- Hàng 2: Ngày diễn ra & Buổi / Thời lượng -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="event-input-date" style="font-weight: 700;">
+                📅 Ngày Diễn Ra <span class="required">*</span>
+              </label>
+              <input type="date" id="event-input-date" class="form-input" required aria-label="Ngày diễn ra sự kiện">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="event-select-session" style="font-weight: 700;">
+                ⏱️ Buổi & Mức Công Quy Đổi <span class="required">*</span>
+              </label>
+              <select id="event-select-session" class="form-input" required aria-label="Buổi và mức công quy đổi">
+                <option value="morning">Buổi Sáng (8h00 - 11h30) — 1 công</option>
+                <option value="afternoon">Buổi Chiều (13h30 - 17h00) — 1 công</option>
+                <option value="fullday" selected>Cả Ngày (Sáng + Chiều) — 2 công</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Hàng 3: Địa điểm & Ghi chú -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="event-input-location" style="font-weight: 700;">
+                📍 Địa Điểm
+              </label>
+              <input type="text" id="event-input-location" class="form-input" placeholder="Ví dụ: Quận Bình Thạnh, TP.HCM" aria-label="Địa điểm sự kiện">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="event-input-note" style="font-weight: 700;">
+                📝 Ghi Chú / Dặn Dò
+              </label>
+              <input type="text" id="event-input-note" class="form-input" placeholder="Ví dụ: Tập trung tại sảnh A lúc 6h30 sáng" aria-label="Ghi chú sự kiện">
+            </div>
+          </div>
+
+          <!-- Phân công CTV tham gia (Checkbox List có Search) -->
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+              <label class="form-label" style="margin: 0; font-weight: 700;">
+                👥 Phân Công CTV Tham Gia Sự Kiện:
+              </label>
+              <span id="event-selected-count-badge" class="badge" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-weight: 700; font-size: 0.78rem;">
+                Đã chọn: 0 CTV
+              </span>
+            </div>
+
+            <!-- Toolbar lọc nhanh danh sách CTV đi sự kiện -->
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
+              <div class="search-input-wrap" style="flex: 1; min-width: 200px;">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="event-student-search" class="form-input" placeholder="Tìm nhanh theo Tên hoặc MSSV..." style="padding-top: 0.35rem; padding-bottom: 0.35rem; font-size: 0.84rem;" aria-label="Tìm nhanh CTV đi sự kiện">
+              </div>
+              <div style="display: flex; gap: 0.3rem;">
+                <button type="button" class="btn-chip" id="btn-event-select-all" onclick="window.adminEventSelectAllStudents && window.adminEventSelectAllStudents(true)">Chọn tất cả</button>
+                <button type="button" class="btn-chip" id="btn-event-clear-all" onclick="window.adminEventSelectAllStudents && window.adminEventSelectAllStudents(false)">Bỏ chọn</button>
+                <button type="button" class="btn-chip" id="btn-event-select-old" onclick="window.adminEventSelectRoleStudents && window.adminEventSelectRoleStudents('old')">Chỉ Người Cũ</button>
+                <button type="button" class="btn-chip" id="btn-event-select-new" onclick="window.adminEventSelectRoleStudents && window.adminEventSelectRoleStudents('new')">Chỉ Người Mới</button>
+              </div>
+            </div>
+
+            <!-- Danh sách Checkbox CTV cuộn được -->
+            <div class="event-student-picker-container" id="event-student-checkbox-list" style="max-height: 220px; overflow-y: auto; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 0.5rem; background: var(--bg-card);">
+              <!-- Checkboxes rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Footer của form -->
+          <div class="modal-footer" style="padding: 1rem 0 0; background: transparent; border: none; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-event-modal" onclick="window.adminCloseAddEventModal && window.adminCloseAddEventModal()">
+              Hủy Bỏ
+            </button>
+            <button type="submit" class="btn btn-primary" id="btn-save-event" style="background: linear-gradient(135deg, #db2777, #be185d); border: none; font-weight: 700; padding: 0.6rem 1.4rem;">
+              <span>💾 Lưu Sự Kiện & Tính Công</span>
+            </button>
+          </div>
+
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 8: CHI TIẾT CÔNG TRỰC & SỰ KIỆN CỦA 1 CTV TRONG THÁNG
+       ==================================================================== -->
+  <div class="modal-overlay modal-backdrop" id="modal-payroll-student-detail" style="display: none; z-index: 1080;">
+    <div class="modal-content" style="max-width: 580px; width: 90vw;">
+      <div class="modal-header" style="background: var(--bg-card-hover); border-bottom: 1px solid var(--border-color);">
+        <div>
+          <h3 class="modal-title" id="payroll-detail-student-name" style="font-size: 1.1rem; color: var(--text-main);">
+            👤 Chi Tiết Công Trực: -
+          </h3>
+          <p id="payroll-detail-student-meta" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+            MSSV: - &bull; -
+          </p>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="window.adminClosePayrollStudentDetail && window.adminClosePayrollStudentDetail()" aria-label="Đóng chi tiết">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem; max-height: 70vh; overflow-y: auto;">
+        
+        <div style="margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-main); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🏢 Các Ca Trực Văn Phòng (4 Tuần):</span>
+            <span class="badge" id="payroll-detail-office-count" style="background: #ede9fe; color: #4338ca;">0 ca</span>
+          </div>
+          <ul id="payroll-detail-office-list" style="margin-left: 1.25rem; font-size: 0.85rem; line-height: 1.7; color: var(--text-main);">
+            <li>Chưa có ca trực nào</li>
+          </ul>
+        </div>
+
+        <div>
+          <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-main); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🎟️ Các Sự Kiện & Tour Tham Gia:</span>
+            <span class="badge" id="payroll-detail-event-count" style="background: #fdf2f8; color: #db2777;">0 sự kiện</span>
+          </div>
+          <ul id="payroll-detail-event-list" style="margin-left: 1.25rem; font-size: 0.85rem; line-height: 1.7; color: var(--text-main);">
+            <li>Chưa tham gia sự kiện nào</li>
+          </ul>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminClosePayrollStudentDetail && window.adminClosePayrollStudentDetail()">
+          Đóng Hộp Thoại
+        </button>
       </div>
     </div>
   </div>

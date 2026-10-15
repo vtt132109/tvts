@@ -167,6 +167,8 @@ interface WebBackupItem {
     weekCount: number;      // Số tuần lịch trực
     swapCount: number;      // Số lượng đề xuất đổi ca
     adminCount: number;     // Số tài khoản cán bộ
+    eventCount?: number;    // Số sự kiện trong tháng
+    totalWorkUnits?: number;// Tổng số công của toàn bộ CTV
   };
   payload: {
     students: Student[];
@@ -175,6 +177,7 @@ interface WebBackupItem {
     regConfig: RegConfig;
     adminUsers: AdminUser[];
     swapRequests: SwapRequest[];
+    events: EventItem[];    // Danh sách sự kiện & hoạt động ngoại kiểm
   };
 }
 ```
@@ -183,3 +186,43 @@ interface WebBackupItem {
 - **Thời hạn lưu trữ tối đa:** 6 tháng (~180 ngày).
 - **Giới hạn số bản lưu:** Tối đa 6 bản sao lưu gần nhất.
 - **Tự động dọn dẹp (Auto-Prune):** Khi khởi tạo hoặc khi lưu bản mới, hệ thống tự động lọc bỏ các bản sao lưu có `createdAt < Date.now() - 180*24*60*60*1000` hoặc vượt quá 6 bản.
+
+---
+
+## 8. 🎟️ Quản Lý Sự Kiện Đi Tour / Ngoại Kiểm & Tính Công Tháng (`EventItem` & `MonthlyPayroll`)
+
+Lưu trữ trong `localStorage.getItem('ts_scheduler_events_v1')`:
+
+```typescript
+interface EventItem {
+  id: string;                 // Mã sự kiện (vd: 'evt_1729000000_xyz')
+  title: string;              // Tên sự kiện (vd: 'Tư vấn hướng nghiệp THPT Gia Định')
+  date: string;               // Ngày diễn ra (vd: '2026-10-25')
+  monthKey: string;           // Khóa tháng (vd: '2026-10')
+  location: string;           // Địa điểm (vd: 'Bình Thạnh, TP.HCM')
+  timeOfDay: 'morning' | 'afternoon' | 'fullday'; // Sáng (1 công) / Chiều (1 công) / Cả ngày (2 công)
+  workUnits: number;          // Số công quy đổi (mặc định: sáng/chiều = 1, cả ngày = 2)
+  assignedStudentIds: string[]; // Danh sách ID sinh viên tham gia
+  note?: string;              // Ghi chú
+  createdAt: number;
+}
+
+interface MonthlyPayrollItem {
+  studentId: string;
+  studentMssv: string;
+  fullName: string;
+  role: 'old' | 'new';
+  officeShiftsCount: number;  // Số ca trực văn phòng 4 tuần (1 ca = 1 công)
+  eventCount: number;         // Số lần đi sự kiện
+  eventWorkUnits: number;     // Tổng số công từ đi sự kiện
+  totalWorkUnits: number;     // TỔNG CÔNG = officeShiftsCount + eventWorkUnits
+  officeShiftDetails: string[]; // Chi tiết các ca trực văn phòng
+  eventDetails: { title: string; date: string; workUnits: number }[]; // Chi tiết sự kiện
+}
+```
+
+### Thuật toán tự động tính công (Auto-Payroll Algorithm):
+1. **Công trực văn phòng:** Quét qua tất cả 4 tuần trong `monthSchedule.weeks`. Với mỗi sinh viên được phân công ở `oldMember` hoặc `newMember` trong bất kỳ ca nào, tăng `officeShiftsCount += 1`.
+2. **Công sự kiện:** Quét qua tất cả `events` trong tháng. Với mỗi sự kiện mà `assignedStudentIds` chứa ID của sinh viên, tăng `eventCount += 1` và `eventWorkUnits += event.workUnits`.
+3. **Tổng công:** `totalWorkUnits = officeShiftsCount + eventWorkUnits`.
+4. Khi bấm vào xem bất kỳ tháng nào (ví dụ: Tháng 10), hệ thống trích xuất bảng chấm công hoàn chỉnh này cho quản trị viên xem, tìm kiếm, lọc theo vai trò, in ấn hoặc xuất Excel.
