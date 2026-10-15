@@ -41,3 +41,7 @@
 - `18:21`: `@qa-agent` hoàn thành suite `tests/payroll_events.test.js` (31/31 tests PASS), tích hợp vào `run_all_tests.js` (72/72 tests PASS toàn hệ thống).
 - `18:24`: `@frontend-agent` hoàn thiện toàn bộ giao diện trong `admin.html` và `css/style.css`, nút sao lưu trực tiếp onclick, nút 1-click tháng này, modal chấm công tháng, modal thêm sự kiện và nút xem công trong bảng backup.
 - `18:26`: `@backend-agent` hoàn thiện xử lý ID duy nhất trong `EventManager.addEvent`, chạy toàn bộ test runner và đạt chuẩn 100% (72/72 tests PASS).
+- `18:29`: Tạo nhánh `agent/fix-event-buttons-and-cleanup-20261015-1829` theo phản hồi của Tris: Bỏ thêm sự kiện trong modal sao lưu & khắc phục nút thêm sự kiện ngoài màn hình.
+- `18:35`: Phát hiện root cause thẻ lồng nhầm do thiếu `</div>` trong `#modal-backup-center`. Đã sửa thẻ đóng, dọn dẹp sạch tab/nút sự kiện trong modal sao lưu, đưa nút "🎟️ Thêm Sự Kiện / Tour" và "📋 Bảng Chấm Công Tháng" ra Hero Toolbar bên ngoài.
+- `18:40`: Kiểm thử trực quan thực tế bằng Chrome DevTools: Giả lập click nút `#btn-hero-add-event` bên ngoài, xác thực modal `#modal-add-event` hiển thị sắc nét 100% (chụp ảnh màn hình kiểm chứng).
+- `18:45`: Chạy toàn bộ test suites (72/72 tests PASS 100%), chuẩn bị hoàn tất `/merge-clean` vào nhánh `main`.
