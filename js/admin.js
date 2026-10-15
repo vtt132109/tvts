@@ -21,7 +21,8 @@
     AUTH_TOKEN: 'ts_admin_authenticated',
     CURRENT_USER: 'ts_admin_user_data',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
-    WEB_BACKUPS: 'ts_scheduler_web_backups_v1'
+    WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
+    EVENTS: 'ts_scheduler_events_v1'
   };
 
   // Danh sách tài khoản cán bộ mặc định có quyền quản trị
@@ -82,7 +83,8 @@
     },
     adminUsers: [],
     currentUser: null,
-    isAuthenticated: false
+    isAuthenticated: false,
+    events: []
   };
 
   function escapeHtml(str) {
@@ -346,6 +348,10 @@
         updateSwapCountBadges();
         renderSwapRequestsTable();
         showToast('Có đề xuất đổi ca mới từ sinh viên!', 'info');
+      } else if (e.key === STORAGE_KEYS.EVENTS) {
+        if (typeof EventManager !== 'undefined') {
+          state.events = EventManager.getEvents();
+        }
       }
     });
   }
@@ -709,6 +715,12 @@
         state.monthSchedule = null;
         state.twoWeekSchedule = null;
         state.currentSchedule = null;
+      }
+
+      try {
+        state.events = EventManager.getEvents();
+      } catch (e) {
+        state.events = [];
       }
     } catch (err) {
       console.error(err);
@@ -2481,7 +2493,7 @@
 
     elements.btnConfirmRestore?.addEventListener('click', handleConfirmRestore);
     elements.btnStartNewMonth?.addEventListener('click', handleStartNewMonth);
-    elements.btnCreateWebBackup?.addEventListener('click', handleCreateWebBackupPrompt);
+    elements.btnCreateWebBackup?.addEventListener('click', () => handleTriggerCreateWebBackup());
   }
 
   function openBackupCenterModal() {
@@ -2717,6 +2729,374 @@
 
   /**
    * ==========================================================================
+   * 1. QUẢN LÝ SỰ KIỆN & HOẠT ĐỘNG NGOẠI KIỂM TUYỂN SINH (EVENT MANAGER)
+   * ==========================================================================
+   */
+  const EventManager = {
+    getEvents(monthKey) {
+      let list = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.EVENTS);
+        if (raw) list = JSON.parse(raw);
+      } catch (e) {
+        console.error('Lỗi khi đọc danh sách sự kiện:', e);
+        list = [];
+      }
+      if (!Array.isArray(list)) list = [];
+
+      // Sắp xếp theo ngày tăng dần
+      list.sort((a, b) => {
+        const dateA = new Date(a.date || 0).getTime();
+        const dateB = new Date(b.date || 0).getTime();
+        return dateA - dateB;
+      });
+
+      if (monthKey) {
+        return list.filter(e => {
+          if (e.monthKey === monthKey) return true;
+          if (e.date && e.date.startsWith(monthKey)) return true;
+          return false;
+        });
+      }
+
+      return list;
+    },
+
+    saveEvents(list) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(list));
+        window.dispatchEvent(new Event('storage'));
+      } catch (err) {
+        console.error('Lỗi khi lưu danh sách sự kiện:', err);
+        showToast('Lỗi lưu trữ danh sách sự kiện!', 'error');
+      }
+    },
+
+    addEvent(eventData) {
+      if (!eventData || !eventData.title || !eventData.title.trim() || !eventData.date || !eventData.date.trim()) {
+        throw new Error('Sự kiện phải có tiêu đề và ngày diễn ra');
+      }
+
+      const list = this.getEvents();
+      const createdAt = Date.now();
+      const timeOfDay = eventData.timeOfDay || 'morning';
+      const defaultUnits = timeOfDay === 'fullday' ? 2 : 1;
+      const workUnits = (typeof eventData.workUnits === 'number' && !isNaN(eventData.workUnits))
+        ? eventData.workUnits
+        : defaultUnits;
+
+      const dateStr = eventData.date.trim();
+      const monthKey = eventData.monthKey || dateStr.substring(0, 7);
+
+      const newEvent = {
+        id: eventData.id || ('evt_' + createdAt + '_' + Math.random().toString(36).substr(2, 6)),
+        title: eventData.title.trim(),
+        date: dateStr,
+        monthKey: monthKey,
+        location: (eventData.location || '').trim(),
+        timeOfDay: timeOfDay,
+        workUnits: workUnits,
+        assignedStudentIds: Array.isArray(eventData.assignedStudentIds) ? [...eventData.assignedStudentIds] : [],
+        note: (eventData.note || '').trim(),
+        createdAt: createdAt
+      };
+
+      list.push(newEvent);
+      this.saveEvents(list);
+      state.events = list;
+      return newEvent;
+    },
+
+    assignStudent(eventId, studentIdOrMssv) {
+      const list = this.getEvents();
+      const evt = list.find(e => e.id === eventId);
+      if (!evt) return false;
+
+      if (!Array.isArray(evt.assignedStudentIds)) {
+        evt.assignedStudentIds = [];
+      }
+
+      if (evt.assignedStudentIds.includes(studentIdOrMssv)) {
+        return false; // Đã tồn tại, tránh trùng lặp
+      }
+
+      evt.assignedStudentIds.push(studentIdOrMssv);
+      this.saveEvents(list);
+      state.events = list;
+      return true;
+    },
+
+    deleteEvent(id) {
+      let list = this.getEvents();
+      const initialLen = list.length;
+      list = list.filter(e => e.id !== id);
+      if (list.length === initialLen) {
+        return false;
+      }
+      this.saveEvents(list);
+      state.events = list;
+      return true;
+    }
+  };
+
+  /**
+   * ==========================================================================
+   * 2. BỘ TÍNH CÔNG THÁNG & CHẤM CÔNG CTV (PAYROLL CALCULATOR)
+   * ==========================================================================
+   */
+  const PayrollCalculator = {
+    calculateOfficeShifts(student, monthSchedule) {
+      if (!student || !monthSchedule) {
+        return { count: 0, details: [] };
+      }
+
+      const weeks = Array.isArray(monthSchedule.weeks) ? monthSchedule.weeks : [];
+      let count = 0;
+      const details = [];
+
+      const targetId = student.id;
+      const targetMssv = student.studentId;
+
+      weeks.forEach((w, wIdx) => {
+        const weekNum = w.weekNumber || w.weekNum || (wIdx + 1);
+        const schedTable = w.scheduleTable || {};
+
+        Object.entries(schedTable).forEach(([shiftId, slot]) => {
+          if (!slot) return;
+
+          const isMatch = (member) => {
+            if (!member) return false;
+            return (targetId && member.id === targetId) ||
+                   (targetMssv && (member.studentId === targetMssv || member.id === targetMssv));
+          };
+
+          if (isMatch(slot.oldMember) || isMatch(slot.newMember)) {
+            count += 1;
+            const dayKey = slot.dayKey || shiftId.split('_')[0];
+            const period = slot.period || (shiftId.endsWith('_S') ? 'S' : 'C');
+            const periodName = period === 'S' ? 'Sáng' : 'Chiều';
+            details.push(`Tuần ${weekNum}: ${dayKey} ${periodName} (${shiftId})`);
+          }
+        });
+      });
+
+      return { count, details };
+    },
+
+    calculateEventWorkUnits(student, events, monthKey) {
+      if (!student || !Array.isArray(events)) {
+        return { count: 0, workUnits: 0, details: [] };
+      }
+
+      let count = 0;
+      let totalWorkUnits = 0;
+      const details = [];
+
+      const targetId = student.id;
+      const targetMssv = student.studentId;
+
+      events.forEach(evt => {
+        if (!evt) return;
+        if (monthKey) {
+          const matchMonth = evt.monthKey === monthKey || (evt.date && evt.date.startsWith(monthKey));
+          if (!matchMonth) return;
+        }
+
+        const assigned = Array.isArray(evt.assignedStudentIds) ? evt.assignedStudentIds : [];
+        const isAssigned = (targetId && assigned.includes(targetId)) ||
+                           (targetMssv && assigned.includes(targetMssv));
+
+        if (isAssigned) {
+          count += 1;
+          const timeOfDay = evt.timeOfDay || 'morning';
+          const units = (typeof evt.workUnits === 'number' && !isNaN(evt.workUnits))
+            ? evt.workUnits
+            : (timeOfDay === 'fullday' ? 2 : 1);
+
+          totalWorkUnits += units;
+          details.push({
+            id: evt.id,
+            title: evt.title,
+            date: evt.date,
+            timeOfDay: evt.timeOfDay,
+            workUnits: units
+          });
+        }
+      });
+
+      return { count, workUnits: totalWorkUnits, details };
+    },
+
+    calculateMonthlyPayroll(param1, param2, param3, param4) {
+      let students = [];
+      let monthSchedule = null;
+      let events = [];
+      let monthKey = null;
+
+      if (param1 && !Array.isArray(param1) && typeof param1 === 'object') {
+        students = param1.students || [];
+        monthSchedule = param1.monthSchedule || null;
+        events = param1.events || [];
+        monthKey = param1.monthKey || null;
+      } else {
+        students = Array.isArray(param1) ? param1 : [];
+        monthSchedule = param2 || null;
+        events = Array.isArray(param3) ? param3 : [];
+        monthKey = param4 || null;
+      }
+
+      const results = [];
+
+      students.forEach(st => {
+        const office = this.calculateOfficeShifts(st, monthSchedule);
+        const eventData = this.calculateEventWorkUnits(st, events, monthKey);
+        const totalWorkUnits = office.count + eventData.workUnits;
+
+        results.push({
+          studentId: st.id,
+          studentMssv: st.studentId || '',
+          fullName: st.fullName || '',
+          role: st.role || 'new',
+          officeShiftsCount: office.count,
+          eventCount: eventData.count,
+          eventWorkUnits: eventData.workUnits,
+          totalWorkUnits: totalWorkUnits,
+          officeShiftDetails: office.details,
+          eventDetails: eventData.details
+        });
+      });
+
+      // Sắp xếp: totalWorkUnits giảm dần, sau đó theo fullName tiếng Việt
+      results.sort((a, b) => {
+        if (b.totalWorkUnits !== a.totalWorkUnits) {
+          return b.totalWorkUnits - a.totalWorkUnits;
+        }
+        return (a.fullName || '').localeCompare(b.fullName || '', 'vi');
+      });
+
+      return results;
+    },
+
+    getPayrollSummary(payrollItems) {
+      const items = Array.isArray(payrollItems) ? payrollItems : [];
+      const totalStudents = items.length;
+      const oldStudentsCount = items.filter(p => p.role === 'old').length;
+      const newStudentsCount = items.filter(p => p.role === 'new').length;
+      const totalOfficeShifts = items.reduce((sum, p) => sum + (p.officeShiftsCount || 0), 0);
+      const totalEventUnits = items.reduce((sum, p) => sum + (p.eventWorkUnits || 0), 0);
+      const grandTotalWorkUnits = items.reduce((sum, p) => sum + (p.totalWorkUnits || 0), 0);
+
+      return {
+        totalStudents,
+        oldStudentsCount,
+        newStudentsCount,
+        totalOfficeShifts,
+        totalEventUnits,
+        grandTotalWorkUnits
+      };
+    },
+
+    getPayrollFromBackup(backupItem) {
+      if (!backupItem || !backupItem.payload) {
+        return {
+          backupId: '',
+          monthKey: '',
+          monthLabel: '',
+          createdAt: 0,
+          payrollItems: [],
+          summary: this.getPayrollSummary([])
+        };
+      }
+
+      const monthKey = backupItem.monthKey || '2026-10';
+      const monthLabel = backupItem.monthLabel || backupItem.name || 'Tháng 10/2026';
+      const students = backupItem.payload.students || [];
+      const monthSchedule = backupItem.payload.monthSchedule || null;
+      const events = backupItem.payload.events || [];
+
+      const payrollItems = this.calculateMonthlyPayroll({
+        students,
+        monthSchedule,
+        events,
+        monthKey
+      });
+
+      const summary = this.getPayrollSummary(payrollItems);
+
+      return {
+        backupId: backupItem.id,
+        monthKey: monthKey,
+        monthLabel: monthLabel,
+        createdAt: backupItem.createdAt,
+        payrollItems: payrollItems,
+        summary: summary
+      };
+    },
+
+    exportReport(payrollReport, format = 'csv') {
+      const items = payrollReport.payrollItems || [];
+      const monthLabel = payrollReport.monthLabel || 'Kỳ Trực';
+
+      if (format === 'csv') {
+        const rows = [
+          `"BẢNG CHẤM CÔNG CỘNG TÁC VIÊN BAN TƯ VẤN TUYỂN SINH - ${monthLabel}"`,
+          `"Xuất ngày: ${new Date().toLocaleDateString('vi-VN')}"`,
+          '',
+          '"STT","MSSV","Họ và Tên","Phân Loại","Số Ca Trực VP","Số Sự Kiện","Công Sự Kiện","Tổng Công Quy Đổi"'
+        ];
+
+        items.forEach((item, idx) => {
+          const roleLabel = item.role === 'old' ? 'Người Cũ' : 'Người Mới';
+          rows.push(`"${idx + 1}","${item.studentMssv}","${item.fullName}","${roleLabel}",${item.officeShiftsCount},${item.eventCount},${item.eventWorkUnits},${item.totalWorkUnits}`);
+        });
+
+        return '\uFEFF' + rows.join('\r\n');
+      }
+
+      if (format === 'html') {
+        const rowsHtml = items.map((item, idx) => {
+          const roleLabel = item.role === 'old' ? 'Người Cũ' : 'Người Mới';
+          return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${escapeHtml(item.studentMssv)}</td>
+              <td>${escapeHtml(item.fullName)}</td>
+              <td>${escapeHtml(roleLabel)}</td>
+              <td>${item.officeShiftsCount}</td>
+              <td>${item.eventCount}</td>
+              <td>${item.eventWorkUnits}</td>
+              <td><strong>${item.totalWorkUnits}</strong></td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <table class="payroll-report-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>MSSV</th>
+                <th>Họ và Tên</th>
+                <th>Phân Loại</th>
+                <th>Trực VP</th>
+                <th>Sự Kiện</th>
+                <th>Công SK</th>
+                <th>Tổng Công</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        `;
+      }
+
+      return '';
+    }
+  };
+
+  /**
+   * ==========================================================================
    * HỆ THỐNG SAO LƯU TRỰC TIẾP TRÊN WEB (TỐI ĐA 6 THÁNG / 180 NGÀY)
    * ==========================================================================
    */
@@ -2779,12 +3159,15 @@
     } catch (e) {}
 
     const now = new Date();
+    const createdAt = Date.now();
     const monthNum = now.getMonth() + 1;
     const yearNum = now.getFullYear();
     const monthKey = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
     const monthLabel = `Tháng ${monthNum}/${yearNum}`;
 
-    const defaultName = customName || `Bản sao lưu ${monthLabel} (${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ngày ${now.getDate()}/${monthNum}/${yearNum})`;
+    const defaultName = (typeof customName === 'string' && customName.trim())
+      ? customName.trim()
+      : `Bản Chấm Công & Sao Lưu Tháng ${monthNum}/${yearNum}`;
 
     let studentList = (state.students && state.students.length > 0) ? state.students : [];
     if (studentList.length === 0) {
@@ -2826,31 +3209,46 @@
       } catch (e) {}
     }
 
+    let eventList = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.EVENTS);
+      if (raw) eventList = JSON.parse(raw) || [];
+    } catch (e) {}
+    if (eventList.length === 0 && state.events && state.events.length > 0) {
+      eventList = state.events;
+    }
+
+    const payroll = PayrollCalculator.calculateMonthlyPayroll(studentList, monthSched, eventList);
+    const totalWorkUnits = payroll.reduce((sum, item) => sum + (item.totalWorkUnits || 0), 0);
+
     const backupPayload = {
       students: studentList,
       monthSchedule: monthSched,
       scheduleResult: schedRes,
       regConfig: regCfg,
       adminUsers: adminUserList,
-      swapRequests: swapList
+      swapRequests: swapList,
+      events: eventList
     };
 
     const payloadJson = JSON.stringify(backupPayload);
     const sizeBytes = typeof Blob !== 'undefined' ? new Blob([payloadJson]).size : payloadJson.length;
 
     const backupItem = {
-      id: `wbk_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: `wbk_${createdAt}_${Math.random().toString(36).substr(2, 6)}`,
       name: defaultName,
       monthKey: monthKey,
       monthLabel: monthLabel,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + RETENTION_PERIOD_MS,
+      createdAt: createdAt,
+      expiresAt: createdAt + RETENTION_PERIOD_MS,
       sizeBytes: sizeBytes,
       stats: {
         studentCount: studentList.length,
         weekCount: (monthSched?.weeks || []).length || 4,
         swapCount: swapList.length,
-        adminCount: adminUserList.length
+        adminCount: adminUserList.length,
+        eventCount: eventList.length,
+        totalWorkUnits: totalWorkUnits
       },
       payload: backupPayload
     };
@@ -2869,14 +3267,17 @@
     return backupItem;
   }
 
-  function handleCreateWebBackupPrompt() {
-    const defaultName = `Sao lưu ${new Date().toLocaleDateString('vi-VN')} (${String(new Date().getHours()).padStart(2, '0')}h${String(new Date().getMinutes()).padStart(2, '0')})`;
-    const customName = prompt('Nhập tên gợi nhớ cho bản sao lưu trên web (hoặc để mặc định):', defaultName);
-    if (customName === null) return; // Người dùng bấm Hủy
+  function handleTriggerCreateWebBackup(customName) {
+    const now = new Date();
+    const monthNum = now.getMonth() + 1;
+    const yearNum = now.getFullYear();
+    const finalName = (typeof customName === 'string' && customName.trim())
+      ? customName.trim()
+      : `Bản Chấm Công & Sao Lưu Tháng ${monthNum}/${yearNum}`;
 
-    const finalName = customName.trim() || defaultName;
-    createWebBackup(finalName);
-    showToast(`Đã tạo bản sao lưu "${escapeHtml(finalName)}" trên web thành công!`, 'success');
+    const backupItem = createWebBackup(finalName);
+    showToast(`Đã tạo bản sao lưu "${escapeHtml(backupItem.name)}" thành công!`, 'success');
+    return backupItem;
   }
 
   function renderWebBackupsTable() {
@@ -2934,11 +3335,13 @@
         <tr>
           <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
           <td>
-            <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${escapeHtml(item.name)}</div>
-            <div style="display: flex; gap: 0.35rem; align-items: center; margin-top: 0.2rem;">
-              <span class="badge" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: var(--radius-full);">
-                🗓️ ${escapeHtml(item.monthLabel || 'Kỳ trực')}
-              </span>
+            <a href="javascript:void(0)" onclick="window.adminViewMonthPayroll && window.adminViewMonthPayroll('${escapeHtml(item.id)}')" class="backup-payroll-link" title="Bấm để xem Bảng Chấm Công chi tiết của tháng này">
+              <span style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${escapeHtml(item.name)}</span>
+            </a>
+            <div style="display: flex; gap: 0.35rem; align-items: center; margin-top: 0.25rem;">
+              <button type="button" onclick="window.adminViewMonthPayroll && window.adminViewMonthPayroll('${escapeHtml(item.id)}')" class="badge" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem; padding: 0.15rem 0.55rem; border-radius: var(--radius-full); cursor: pointer; font-weight: 700;" title="Xem Bảng Chấm Công tháng này">
+                🗓️ ${escapeHtml(item.monthLabel || 'Kỳ trực')} &bull; Xem công
+              </button>
             </div>
           </td>
           <td>
@@ -2952,7 +3355,10 @@
               👥 <strong>${stats.studentCount}</strong> CTV &bull; 📅 <strong>${stats.weekCount}</strong> tuần
             </div>
             <div style="font-size: 0.75rem; color: var(--text-muted);">
-              🔄 ${stats.swapCount} đề xuất đổi ca &bull; 🔑 ${stats.adminCount || 2} cán bộ
+              🎟️ <strong>${stats.eventCount || 0}</strong> SK &bull; 💼 <strong>${stats.totalWorkUnits || 0}</strong> công
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              🔄 ${stats.swapCount} đề xuất &bull; 🔑 ${stats.adminCount || 2} cán bộ
             </div>
           </td>
           <td style="text-align: center; font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">
@@ -2960,6 +3366,9 @@
           </td>
           <td style="text-align: center;">
             <div style="display: flex; gap: 0.35rem; justify-content: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-sm btn-view-payroll-highlight" onclick="window.adminViewMonthPayroll && window.adminViewMonthPayroll('${escapeHtml(item.id)}')" title="Xem bảng chấm công tổng hợp CTV trong tháng này" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; font-weight: 700; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;">
+                👁️ Xem Bảng Công
+              </button>
               <button type="button" class="btn btn-primary btn-sm" onclick="window.adminRestoreFromWebBackup('${escapeHtml(item.id)}')" title="Khôi phục nhanh 1-click về bản sao lưu này" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; font-weight: 700;">
                 🔄 Khôi Phục
               </button>
@@ -3015,6 +3424,10 @@
       }
       if (payload.swapRequests) {
         localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(payload.swapRequests));
+      }
+      if (payload.events) {
+        state.events = payload.events;
+        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(state.events));
       }
 
       window.dispatchEvent(new Event('storage'));
@@ -3086,24 +3499,1078 @@
     showToast(`Đã xóa bản sao lưu "${escapeHtml(target.name)}" khỏi web!`, 'info');
   }
 
+  /**
+   * ==========================================================================
+   * 3. XEM BẢNG CHẤM CÔNG THÁNG & MODAL PAYROLL
+   * ==========================================================================
+   */
+  function handleViewMonthPayroll(backupId) {
+    let students = [];
+    let monthSchedule = null;
+    let events = [];
+    let monthLabel = '';
+
+    if (backupId && backupId !== 'current') {
+      const backups = getWebBackups();
+      const target = backups.find(b => b.id === backupId);
+      if (!target || !target.payload) {
+        showToast('Không tìm thấy dữ liệu bản sao lưu hợp lệ!', 'error');
+        return null;
+      }
+      students = target.payload.students || [];
+      monthSchedule = target.payload.monthSchedule || null;
+      events = target.payload.events || [];
+      monthLabel = target.name || target.monthLabel || 'Kỳ Sao Lưu';
+    } else {
+      // Dữ liệu tháng hiện tại
+      students = (state.students && state.students.length > 0) ? state.students : [];
+      if (students.length === 0) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+          if (raw) students = JSON.parse(raw) || [];
+        } catch (e) {}
+      }
+      monthSchedule = state.monthSchedule;
+      if (!monthSchedule) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE);
+          if (raw) monthSchedule = JSON.parse(raw);
+        } catch (e) {}
+      }
+      events = EventManager.getEvents();
+      const now = new Date();
+      monthLabel = `Tháng ${now.getMonth() + 1}/${now.getFullYear()} (Hiện Tại)`;
+    }
+
+    const payrollData = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events);
+    renderMonthlyPayrollModal(payrollData, monthLabel);
+    return payrollData;
+  }
+
+  function renderMonthlyPayrollModal(payrollData, monthLabel) {
+    let modal = document.getElementById('modal-monthly-payroll');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-monthly-payroll';
+      modal.className = 'modal-overlay modal-backdrop';
+      modal.style.display = 'none';
+      document.body.appendChild(modal);
+    }
+
+    const totalStudents = payrollData.length;
+    const totalWorkUnits = payrollData.reduce((sum, item) => sum + (item.totalWorkUnits || 0), 0);
+    const totalOfficeShifts = payrollData.reduce((sum, item) => sum + (item.officeShiftsCount || 0), 0);
+    const totalEventUnits = payrollData.reduce((sum, item) => sum + (item.eventWorkUnits || 0), 0);
+
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width: 980px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35); background: var(--bg-card, #ffffff);">
+        
+        <!-- Modal Header -->
+        <div class="modal-header" style="background: linear-gradient(135deg, #1e1b4b, #3730a3); color: #ffffff; padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 class="modal-title" style="color: #ffffff; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+              <span>📊 Bảng Chấm Công & Phân Bổ Công Tác Tuyển Sinh</span>
+            </h3>
+            <p style="font-size: 0.84rem; color: #c7d2fe; margin-top: 0.25rem; margin-bottom: 0;">
+              🗓️ <strong>${escapeHtml(monthLabel)}</strong> &bull; Tổng hợp 4 tuần trực văn phòng & các đợt đi tour/sự kiện
+            </p>
+          </div>
+          <button type="button" class="modal-close-btn" onclick="window.adminCloseMonthPayroll && window.adminCloseMonthPayroll()" style="color: #ffffff; background: rgba(255,255,255,0.15); border: none; font-size: 1.5rem; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+
+        <!-- Modal Body with Scroll -->
+        <div class="modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1;">
+          
+          <!-- Summary Metrics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+            <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 0.85rem 1rem;">
+              <div style="font-size: 0.78rem; color: #64748b; font-weight: 600; text-transform: uppercase;">👥 Tổng Số CTV</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">${totalStudents} <span style="font-size: 0.85rem; font-weight: 600; color: #64748b;">sinh viên</span></div>
+            </div>
+            <div style="background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 10px; padding: 0.85rem 1rem;">
+              <div style="font-size: 0.78rem; color: #047857; font-weight: 600; text-transform: uppercase;">💼 Tổng Công Toàn Đoàn</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #065f46; margin-top: 0.2rem;">${totalWorkUnits} <span style="font-size: 0.85rem; font-weight: 600; color: #047857;">công</span></div>
+            </div>
+            <div style="background: #eef2ff; border: 1.5px solid #c7d2fe; border-radius: 10px; padding: 0.85rem 1rem;">
+              <div style="font-size: 0.78rem; color: #4338ca; font-weight: 600; text-transform: uppercase;">🏢 Trực Văn Phòng (4 Tuần)</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #312e81; margin-top: 0.2rem;">${totalOfficeShifts} <span style="font-size: 0.85rem; font-weight: 600; color: #4338ca;">ca</span></div>
+            </div>
+            <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px; padding: 0.85rem 1rem;">
+              <div style="font-size: 0.78rem; color: #b45309; font-weight: 600; text-transform: uppercase;">🎟️ Công Sự Kiện / Tour</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #92400e; margin-top: 0.2rem;">${totalEventUnits} <span style="font-size: 0.85rem; font-weight: 600; color: #b45309;">công</span></div>
+            </div>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="position: relative; flex: 1; min-width: 240px; max-width: 400px;">
+              <input type="text" id="payroll-search-input" placeholder="🔍 Tìm theo Tên hoặc MSSV..." style="width: 100%; padding: 0.5rem 0.85rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; outline: none;">
+            </div>
+            <div style="display: flex; gap: 0.4rem;">
+              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter active" data-role="all" style="font-weight: 700;">Tất cả (${totalStudents})</button>
+              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="old" style="font-weight: 700;">🎓 Người cũ</button>
+              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="new" style="font-weight: 700;">🌱 Người mới</button>
+            </div>
+          </div>
+
+          <!-- Table Container -->
+          <div style="border: 1px solid #e2e8f0; border-radius: 10px; overflow-x: auto; background: #ffffff;">
+            <table class="user-mgmt-table" style="margin: 0; min-width: 780px; width: 100%; border-collapse: collapse;" id="payroll-main-table">
+              <thead style="background: #f1f5f9;">
+                <tr>
+                  <th style="width: 50px; text-align: center; padding: 0.65rem 0.5rem;">STT</th>
+                  <th style="width: 110px; padding: 0.65rem 0.75rem;">MSSV</th>
+                  <th style="padding: 0.65rem 0.75rem;">Họ và Tên</th>
+                  <th style="width: 110px; text-align: center; padding: 0.65rem 0.5rem;">Phân Loại</th>
+                  <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Trực VP (ca)</th>
+                  <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Sự Kiện (lần)</th>
+                  <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Công SK</th>
+                  <th style="width: 110px; text-align: center; padding: 0.65rem 0.5rem; background: #f0fdf4;">TỔNG CÔNG</th>
+                  <th style="padding: 0.65rem 0.75rem;">Chi Tiết Phân Bổ</th>
+                </tr>
+              </thead>
+              <tbody id="payroll-table-body">
+                ${renderPayrollRows(payrollData)}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer" style="padding: 0.85rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="font-size: 0.82rem; color: #64748b;">
+            💡 <em>Quy đổi: 1 ca trực văn phòng = 1 công. Đi sự kiện: Buổi = 1 công, Cả ngày = 2 công.</em>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.print()" style="font-weight: 700;">
+              🖨️ In Bảng Chấm Công
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.adminCloseMonthPayroll && window.adminCloseMonthPayroll()" style="font-weight: 700;">
+              Đóng
+            </button>
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    // Hook search & filter in modal
+    const searchInput = modal.querySelector('#payroll-search-input');
+    const filterBtns = modal.querySelectorAll('.payroll-role-filter');
+    const tbody = modal.querySelector('#payroll-table-body');
+
+    let currentRole = 'all';
+    let currentSearch = '';
+
+    function filterAndRender() {
+      const filtered = payrollData.filter(item => {
+        if (currentRole !== 'all' && item.role !== currentRole) return false;
+        if (currentSearch) {
+          const s = currentSearch.toLowerCase();
+          const matchName = (item.fullName || '').toLowerCase().includes(s);
+          const matchMssv = (item.studentMssv || '').toLowerCase().includes(s);
+          if (!matchName && !matchMssv) return false;
+        }
+        return true;
+      });
+      tbody.innerHTML = renderPayrollRows(filtered);
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        currentSearch = e.target.value.trim();
+        filterAndRender();
+      });
+    }
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRole = btn.getAttribute('data-role') || 'all';
+        filterAndRender();
+      });
+    });
+  }
+
+  function renderPayrollRows(list) {
+    if (!list || list.length === 0) {
+      return `
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2rem; color: #64748b;">
+            Không tìm thấy dữ liệu chấm công phù hợp.
+          </td>
+        </tr>
+      `;
+    }
+
+    return list.map((item, idx) => {
+      const roleBadge = item.role === 'old'
+        ? `<span class="badge" style="background: #faf5ff; color: #7e22ce; border: 1px solid #d8b4fe; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 9999px;">🎓 Người cũ</span>`
+        : `<span class="badge" style="background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 9999px;">🌱 Người mới</span>`;
+
+      const officeDetails = item.officeShiftDetails && item.officeShiftDetails.length > 0
+        ? item.officeShiftDetails.join(', ')
+        : 'Chưa có ca';
+
+      const eventDetails = item.eventDetails && item.eventDetails.length > 0
+        ? item.eventDetails.map(e => `${e.title} (${e.workUnits} công)`).join('; ')
+        : '';
+
+      const detailText = [
+        officeDetails !== 'Chưa có ca' ? `🏢 ${officeDetails}` : null,
+        eventDetails ? `🎟️ ${eventDetails}` : null
+      ].filter(Boolean).join(' | ') || 'Chưa phân bổ';
+
+      return `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="text-align: center; font-weight: 600; color: #64748b; padding: 0.6rem 0.5rem;">${idx + 1}</td>
+          <td style="font-weight: 700; color: #334155; font-size: 0.86rem; padding: 0.6rem 0.75rem;">${escapeHtml(item.studentMssv || '—')}</td>
+          <td style="font-weight: 700; color: #0f172a; font-size: 0.9rem; padding: 0.6rem 0.75rem;">${escapeHtml(item.fullName)}</td>
+          <td style="text-align: center; padding: 0.6rem 0.5rem;">${roleBadge}</td>
+          <td style="text-align: center; font-weight: 600; color: #3730a3; padding: 0.6rem 0.5rem;">${item.officeShiftsCount}</td>
+          <td style="text-align: center; font-weight: 600; color: #92400e; padding: 0.6rem 0.5rem;">${item.eventCount}</td>
+          <td style="text-align: center; font-weight: 600; color: #b45309; padding: 0.6rem 0.5rem;">${item.eventWorkUnits}</td>
+          <td style="text-align: center; font-weight: 800; font-size: 1rem; color: #065f46; background: #f0fdf4; padding: 0.6rem 0.5rem;">
+            <span style="background: #10b981; color: #ffffff; padding: 0.2rem 0.65rem; border-radius: 9999px; display: inline-block;">
+              ${item.totalWorkUnits}
+            </span>
+          </td>
+          <td style="font-size: 0.78rem; color: #64748b; line-height: 1.4; padding: 0.6rem 0.75rem; max-width: 250px;">
+            ${escapeHtml(detailText)}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function closeMonthlyPayrollModal() {
+    const modal = document.getElementById('modal-monthly-payroll');
+    if (modal) modal.style.display = 'none';
+  }
+
+  /**
+   * ==========================================================================
+   * 4. QUẢN LÝ MODAL THÊM / SỬA / XÓA SỰ KIỆN NGOẠI KIỂM
+   * ==========================================================================
+   */
+  function handleOpenAddEventModal(eventData) {
+    let modal = document.getElementById('modal-event-form');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-event-form';
+      modal.className = 'modal-overlay modal-backdrop';
+      modal.style.display = 'none';
+      document.body.appendChild(modal);
+    }
+
+    const students = (state.students && state.students.length > 0) ? state.students : [];
+    const ev = eventData || {};
+    const assignedIds = new Set(ev.assignedStudentIds || []);
+
+    const studentsHtml = students.length > 0
+      ? students.map(st => {
+          const isChecked = assignedIds.has(st.id) || (st.studentId && assignedIds.has(st.studentId));
+          const roleLabel = st.role === 'old' ? '🎓 Người cũ' : '🌱 Người mới';
+          return `
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 0.84rem;">
+              <input type="checkbox" class="event-student-cb" value="${escapeHtml(st.id)}" ${isChecked ? 'checked' : ''} style="cursor: pointer;">
+              <span style="font-weight: 600; color: #1e293b;">${escapeHtml(st.fullName)}</span>
+              <span style="color: #64748b; font-size: 0.78rem;">(${escapeHtml(st.studentId || '')})</span>
+              <span style="margin-left: auto; font-size: 0.72rem; color: ${st.role === 'old' ? '#7e22ce' : '#c2410c'}; font-weight: 600;">${roleLabel}</span>
+            </label>
+          `;
+        }).join('')
+      : '<div style="color: #64748b; font-size: 0.84rem;">Chưa có sinh viên nào trong danh sách.</div>';
+
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width: 650px; width: 95vw; max-height: 85vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 14px; box-shadow: 0 20px 45px -10px rgba(0,0,0,0.3); background: var(--bg-card, #ffffff);">
+        <div class="modal-header" style="background: linear-gradient(135deg, #0f766e, #0d9488); color: #ffffff; padding: 1.15rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 class="modal-title" style="color: #ffffff; font-size: 1.1rem; font-weight: 700; margin: 0;">
+              🎟️ ${ev.id ? 'Chỉnh Sửa Sự Kiện / Tour' : 'Thêm Sự Kiện / Tour Tuyển Sinh'}
+            </h3>
+            <p style="font-size: 0.82rem; color: #ccfbf1; margin-top: 0.2rem; margin-bottom: 0;">
+              Ghi nhận các hoạt động đi tour ngoại kiểm để tính công tự động vào bảng chấm công tháng
+            </p>
+          </div>
+          <button type="button" class="modal-close-btn" onclick="window.adminCloseEventModal && window.adminCloseEventModal()" style="color: #ffffff; background: rgba(255,255,255,0.15); border: none; font-size: 1.4rem; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;">&times;</button>
+        </div>
+
+        <form id="admin-event-form" onsubmit="event.preventDefault(); window.adminSaveEvent && window.adminSaveEvent();" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; margin: 0;">
+          <input type="hidden" id="event-input-id" value="${escapeHtml(ev.id || '')}">
+          <div class="modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1;">
+            
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label" for="event-input-title" style="font-weight: 700; font-size: 0.88rem;">Tên Sự Kiện / Chương Trình <span style="color: #ef4444;">*</span></label>
+              <input type="text" id="event-input-title" class="form-input" placeholder="Ví dụ: Tư vấn tuyển sinh THPT Gia Định" value="${escapeHtml(ev.title || '')}" required style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+              <div class="form-group">
+                <label class="form-label" for="event-input-date" style="font-weight: 700; font-size: 0.88rem;">Ngày Diễn Ra <span style="color: #ef4444;">*</span></label>
+                <input type="date" id="event-input-date" class="form-input" value="${escapeHtml(ev.date || new Date().toISOString().split('T')[0])}" required style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="event-input-timeofday" style="font-weight: 700; font-size: 0.88rem;">Buổi / Khung Giờ</label>
+                <select id="event-input-timeofday" class="form-input" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+                  <option value="morning" ${ev.timeOfDay === 'morning' ? 'selected' : ''}>Sáng (07:30 - 11:30) [1 công]</option>
+                  <option value="afternoon" ${ev.timeOfDay === 'afternoon' ? 'selected' : ''}>Chiều (13:00 - 16:30) [1 công]</option>
+                  <option value="fullday" ${ev.timeOfDay === 'fullday' ? 'selected' : ''}>Cả ngày (07:30 - 16:30) [2 công]</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+              <div class="form-group">
+                <label class="form-label" for="event-input-workunits" style="font-weight: 700; font-size: 0.88rem;">Số Công Quy Đổi</label>
+                <input type="number" id="event-input-workunits" class="form-input" min="0.5" step="0.5" value="${ev.workUnits || (ev.timeOfDay === 'fullday' ? 2 : 1)}" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="event-input-location" style="font-weight: 700; font-size: 0.88rem;">Địa Điểm</label>
+                <input type="text" id="event-input-location" class="form-input" placeholder="Ví dụ: Bình Thạnh, TP.HCM" value="${escapeHtml(ev.location || '')}" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label" for="event-input-note" style="font-weight: 700; font-size: 0.88rem;">Ghi Chú</label>
+              <input type="text" id="event-input-note" class="form-input" placeholder="Ghi chú thêm về trang thiết bị, phương tiện..." value="${escapeHtml(ev.note || '')}" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <label class="form-label" style="font-weight: 700; font-size: 0.88rem; margin: 0;">
+                  👥 Chọn Sinh Viên CTV Tham Gia:
+                </label>
+                <div style="font-size: 0.78rem; display: flex; gap: 0.4rem;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-event-select-all" style="padding: 0.15rem 0.45rem; font-size: 0.75rem;">Chọn tất cả</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-event-deselect-all" style="padding: 0.15rem 0.45rem; font-size: 0.75rem;">Bỏ chọn</button>
+                </div>
+              </div>
+              <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                ${studentsHtml}
+              </div>
+            </div>
+
+          </div>
+
+          <div class="modal-footer" style="padding: 0.85rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminCloseEventModal && window.adminCloseEventModal()">Hủy Bỏ</button>
+            <button type="submit" class="btn btn-primary btn-sm" style="font-weight: 700; background: #0d9488; border-color: #0f766e; color: #ffffff;">
+              💾 Lưu Sự Kiện
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    // Auto update work units when timeOfDay changes
+    const timeSelect = modal.querySelector('#event-input-timeofday');
+    const workInput = modal.querySelector('#event-input-workunits');
+    if (timeSelect && workInput) {
+      timeSelect.addEventListener('change', () => {
+        workInput.value = timeSelect.value === 'fullday' ? 2 : 1;
+      });
+    }
+
+    const btnSelectAll = modal.querySelector('#btn-event-select-all');
+    const btnDeselectAll = modal.querySelector('#btn-event-deselect-all');
+    if (btnSelectAll) {
+      btnSelectAll.addEventListener('click', () => {
+        modal.querySelectorAll('.event-student-cb').forEach(cb => cb.checked = true);
+      });
+    }
+    if (btnDeselectAll) {
+      btnDeselectAll.addEventListener('click', () => {
+        modal.querySelectorAll('.event-student-cb').forEach(cb => cb.checked = false);
+      });
+    }
+  }
+
+  function handleSaveEvent(eventData) {
+    let payload = eventData;
+    if (!payload || !payload.title) {
+      const idInput = document.getElementById('event-input-id');
+      const titleInput = document.getElementById('event-input-title');
+      const dateInput = document.getElementById('event-input-date');
+      const timeInput = document.getElementById('event-input-timeofday');
+      const workInput = document.getElementById('event-input-workunits');
+      const locInput = document.getElementById('event-input-location');
+      const noteInput = document.getElementById('event-input-note');
+      const checkedBoxes = document.querySelectorAll('.event-student-cb:checked');
+
+      if (!titleInput || !titleInput.value.trim()) {
+        showToast('Vui lòng nhập tên sự kiện!', 'error');
+        return null;
+      }
+
+      const assignedStudentIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+      payload = {
+        id: idInput?.value || undefined,
+        title: titleInput.value.trim(),
+        date: dateInput?.value || new Date().toISOString().split('T')[0],
+        timeOfDay: timeInput?.value || 'morning',
+        workUnits: parseFloat(workInput?.value) || (timeInput?.value === 'fullday' ? 2 : 1),
+        location: locInput?.value?.trim() || '',
+        note: noteInput?.value?.trim() || '',
+        assignedStudentIds: assignedStudentIds
+      };
+    }
+
+    let savedItem;
+    if (payload.id) {
+      EventManager.deleteEvent(payload.id);
+      savedItem = EventManager.addEvent(payload);
+    } else {
+      savedItem = EventManager.addEvent(payload);
+    }
+
+    closeEventModal();
+    showToast(`Đã lưu sự kiện "${escapeHtml(savedItem.title)}" thành công!`, 'success');
+    return savedItem;
+  }
+
+  function handleDeleteEvent(id) {
+    if (!confirm('Bạn có chắc chắn muốn xóa sự kiện này không? Thao tác này sẽ xóa công của các bạn tham gia sự kiện.')) {
+      return;
+    }
+    const updated = EventManager.deleteEvent(id);
+    showToast('Đã xóa sự kiện thành công!', 'info');
+    return updated;
+  }
+
+  function closeEventModal() {
+    const modal = document.getElementById('modal-event-form');
+    if (modal) modal.style.display = 'none';
+  }
+
   window.adminApproveSwap = (swapId) => handleApproveSwap(swapId);
   window.adminRejectSwap = (swapId) => handleRejectSwap(swapId);
   window.adminOpenSwapModal = () => openSwapMgmtModal();
   window.adminCloseSwapModal = () => closeSwapMgmtModal();
   window.adminOpenBackupModal = () => openBackupCenterModal();
   window.adminCloseBackupModal = () => closeBackupCenterModal();
-  window.adminTriggerCreateWebBackup = () => handleCreateWebBackupPrompt();
+  window.adminTriggerCreateWebBackup = (customName) => handleTriggerCreateWebBackup(customName);
   window.adminRestoreFromWebBackup = (id) => handleRestoreFromWebBackup(id);
   window.adminDownloadSingleWebBackup = (id) => handleDownloadSingleWebBackup(id);
   window.adminDeleteWebBackup = (id) => handleDeleteWebBackup(id);
   window.adminStartNewMonth = () => handleStartNewMonth();
+  window.adminViewMonthPayroll = (backupId) => handleViewMonthPayroll(backupId);
+  window.adminCloseMonthPayroll = () => closeMonthlyPayrollModal();
+  window.adminOpenAddEventModal = (eventData) => handleOpenAddEventModal(eventData);
+  window.adminSaveEvent = (eventData) => handleSaveEvent(eventData);
+  window.adminDeleteEvent = (id) => handleDeleteEvent(id);
+  window.adminCloseEventModal = () => closeEventModal();
+  window.EventManager = EventManager;
+  window.PayrollCalculator = PayrollCalculator;
   window.WebBackupManager = {
     getWebBackups,
     createWebBackup,
     restoreFromWebBackup: handleRestoreFromWebBackup,
     deleteWebBackup: handleDeleteWebBackup,
+    adminViewMonthPayroll: handleViewMonthPayroll,
     MAX_WEB_BACKUPS,
     RETENTION_PERIOD_MS
+  };
+
+  /**
+   * ==========================================================================
+   * TIỆN ÍCH SAO LƯU NHANH & SỰ KIỆN & CHẤM CÔNG THÁNG (PAYROLL-01 & 02)
+   * ==========================================================================
+   */
+  window.adminQuickBackupCurrentMonth = function() {
+    const now = new Date();
+    const monthNum = now.getMonth() + 1;
+    const yearNum = now.getFullYear();
+    const monthLabel = `Tháng ${monthNum}/${yearNum}`;
+    const name = `Bản sao lưu ${monthLabel} (${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')})`;
+    createWebBackup(name);
+    showToast(`Đã tạo bản sao lưu nhanh cho ${monthLabel} trên web thành công!`, 'success');
+  };
+
+  // Quản lý Sự Kiện & Ngoại Kiểm
+  window.adminOpenAddEventModal = function() {
+    const modal = document.getElementById('modal-add-event');
+    if (!modal) return;
+
+    // Reset form
+    const form = document.getElementById('form-add-event');
+    if (form) form.reset();
+
+    const dateInput = document.getElementById('event-input-date');
+    if (dateInput) {
+      dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Render danh sách CTV dạng checkbox
+    const listContainer = document.getElementById('event-student-checkbox-list');
+    if (listContainer) {
+      let studentList = state.students || [];
+      if (!studentList || studentList.length === 0) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+          if (raw) studentList = JSON.parse(raw) || [];
+        } catch (e) {}
+      }
+
+      if (studentList.length === 0) {
+        listContainer.innerHTML = `
+          <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+            Chưa có sinh viên nào đăng ký trong hệ thống.
+          </div>
+        `;
+      } else {
+        listContainer.innerHTML = studentList.map(st => {
+          const isOld = st.role === 'old';
+          const roleBadge = isOld 
+            ? '<span class="badge" style="background: #ede9fe; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem;">🎓 Người cũ</span>'
+            : '<span class="badge" style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; font-size: 0.72rem;">🌱 Người mới</span>';
+
+          return `
+            <label class="event-student-item" for="cb-evt-st-${escapeHtml(st.id)}" data-role="${escapeHtml(st.role || 'new')}">
+              <div class="event-student-left">
+                <input type="checkbox" id="cb-evt-st-${escapeHtml(st.id)}" class="event-student-cb" value="${escapeHtml(st.id)}" onchange="window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount()">
+                <div>
+                  <div class="event-student-name">${escapeHtml(st.fullName)}</div>
+                  <div class="event-student-mssv">MSSV: ${escapeHtml(st.studentId || '-')}</div>
+                </div>
+              </div>
+              <div>${roleBadge}</div>
+            </label>
+          `;
+        }).join('');
+      }
+    }
+
+    const searchInput = document.getElementById('event-student-search');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.oninput = function(e) {
+        const query = (e.target.value || '').trim().toLowerCase();
+        const items = document.querySelectorAll('#event-student-checkbox-list .event-student-item');
+        items.forEach(it => {
+          const text = it.textContent.toLowerCase();
+          it.style.display = text.includes(query) ? 'flex' : 'none';
+        });
+      };
+    }
+
+    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
+
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  };
+
+  window.adminCloseAddEventModal = function() {
+    const modal = document.getElementById('modal-add-event');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
+  };
+
+  window.adminEventSelectAllStudents = function(selectAll = true) {
+    const cbs = document.querySelectorAll('#event-student-checkbox-list .event-student-cb');
+    cbs.forEach(cb => {
+      const parentLabel = cb.closest('.event-student-item');
+      if (!parentLabel || parentLabel.style.display !== 'none') {
+        cb.checked = selectAll;
+        if (selectAll) parentLabel?.classList.add('selected');
+        else parentLabel?.classList.remove('selected');
+      }
+    });
+    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
+  };
+
+  window.adminEventSelectRoleStudents = function(role) {
+    const cbs = document.querySelectorAll('#event-student-checkbox-list .event-student-cb');
+    cbs.forEach(cb => {
+      const parentLabel = cb.closest('.event-student-item');
+      if (parentLabel && parentLabel.getAttribute('data-role') === role) {
+        cb.checked = true;
+        parentLabel.classList.add('selected');
+      } else {
+        cb.checked = false;
+        parentLabel?.classList.remove('selected');
+      }
+    });
+    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
+  };
+
+  window.adminUpdateEventSelectedCount = function() {
+    const badge = document.getElementById('event-selected-count-badge');
+    const checked = document.querySelectorAll('#event-student-checkbox-list .event-student-cb:checked');
+    const session = document.getElementById('event-select-session')?.value || 'fullday';
+    const multiplier = session === 'fullday' ? 2 : 1;
+    const totalUnits = checked.length * multiplier;
+
+    if (badge) {
+      badge.textContent = `Đã chọn: ${checked.length} CTV (${totalUnits} công)`;
+    }
+
+    document.querySelectorAll('#event-student-checkbox-list .event-student-item').forEach(it => {
+      const cb = it.querySelector('.event-student-cb');
+      if (cb && cb.checked) it.classList.add('selected');
+      else it.classList.remove('selected');
+    });
+  };
+
+  window.adminHandleSubmitEvent = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const title = document.getElementById('event-input-title')?.value?.trim();
+    const date = document.getElementById('event-input-date')?.value?.trim();
+    const timeOfDay = document.getElementById('event-select-session')?.value || 'fullday';
+    const location = document.getElementById('event-input-location')?.value?.trim() || '';
+    const note = document.getElementById('event-input-note')?.value?.trim() || '';
+
+    if (!title) {
+      showToast('Vui lòng nhập tên sự kiện!', 'error');
+      return false;
+    }
+    if (!date) {
+      showToast('Vui lòng chọn ngày diễn ra!', 'error');
+      return false;
+    }
+
+    const checked = document.querySelectorAll('#event-student-checkbox-list .event-student-cb:checked');
+    const assignedStudentIds = Array.from(checked).map(cb => cb.value);
+
+    try {
+      EventManager.addEvent({
+        title,
+        date,
+        timeOfDay,
+        location,
+        note,
+        assignedStudentIds
+      });
+
+      showToast(`Đã thêm sự kiện "${escapeHtml(title)}" (${assignedStudentIds.length} CTV tham gia) thành công!`, 'success');
+      window.adminCloseAddEventModal();
+      window.renderEventsTable && window.renderEventsTable();
+      updateBackupStats();
+    } catch (err) {
+      console.error('Lỗi thêm sự kiện:', err);
+      showToast('Không thể lưu sự kiện: ' + err.message, 'error');
+    }
+    return false;
+  };
+
+  window.renderEventsTable = function() {
+    const tbody = document.getElementById('events-table-body');
+    const badge = document.getElementById('badge-events-count');
+    if (!tbody) return;
+
+    const events = EventManager.getEvents();
+    if (badge) {
+      badge.textContent = `${events.length} sự kiện`;
+    }
+
+    if (events.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 2rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 0.35rem;">🎟️</div>
+            <div style="font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem;">Chưa có sự kiện ngoại kiểm nào được tạo</div>
+            <div style="font-size: 0.8rem; margin-bottom: 0.85rem;">Thêm sự kiện đi tour để tự động tính công cho cộng tác viên.</div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.adminOpenAddEventModal && window.adminOpenAddEventModal()" style="font-weight: 700; background: linear-gradient(135deg, #db2777, #be185d); border: none;">
+              🎟️ Thêm Sự Kiện Đầu Tiên
+            </button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    // Lookup tên CTV
+    let studentList = state.students || [];
+    if (!studentList || studentList.length === 0) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+        if (raw) studentList = JSON.parse(raw) || [];
+      } catch (e) {}
+    }
+    const stMap = new Map();
+    studentList.forEach(s => {
+      stMap.set(s.id, s.fullName);
+      if (s.studentId) stMap.set(s.studentId, s.fullName);
+    });
+
+    tbody.innerHTML = events.map((ev, idx) => {
+      const assignedNames = (ev.assignedStudentIds || []).map(id => stMap.get(id) || id).slice(0, 3).join(', ');
+      const moreCount = (ev.assignedStudentIds || []).length > 3 ? ` +${(ev.assignedStudentIds || []).length - 3}` : '';
+      const sessionLabel = ev.timeOfDay === 'morning' ? 'Sáng (1 công)' : (ev.timeOfDay === 'afternoon' ? 'Chiều (1 công)' : 'Cả ngày (2 công)');
+
+      return `
+        <tr>
+          <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
+          <td>
+            <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${escapeHtml(ev.title)}</div>
+            ${ev.note ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(ev.note)}</div>` : ''}
+          </td>
+          <td>
+            <div style="font-weight: 600; font-size: 0.84rem; color: var(--text-main);">${escapeHtml(ev.date)}</div>
+          </td>
+          <td style="text-align: center;">
+            <span class="badge" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-size: 0.76rem; font-weight: 700;">
+              ${escapeHtml(sessionLabel)}
+            </span>
+          </td>
+          <td>
+            <div style="font-size: 0.82rem; color: var(--text-main);">${escapeHtml(ev.location || '-')}</div>
+          </td>
+          <td>
+            <div style="font-size: 0.82rem; color: var(--text-main); font-weight: 600;">
+              👥 ${(ev.assignedStudentIds || []).length} bạn
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);" title="${escapeHtml((ev.assignedStudentIds || []).map(id => stMap.get(id) || id).join(', '))}">
+              ${escapeHtml(assignedNames + moreCount)}
+            </div>
+          </td>
+          <td style="text-align: center;">
+            <button type="button" class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteEvent('${escapeHtml(ev.id)}')" title="Xóa sự kiện này" style="font-size: 0.76rem; padding: 0.25rem 0.5rem;">
+              🗑️
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  };
+
+  window.adminDeleteEvent = function(id) {
+    if (!confirm('Bạn có chắc chắn muốn xóa sự kiện này không?')) return;
+    EventManager.deleteEvent(id);
+    showToast('Đã xóa sự kiện thành công!', 'info');
+    window.renderEventsTable && window.renderEventsTable();
+    updateBackupStats();
+  };
+
+  // Quản lý Modal Bảng Chấm Công Tháng
+  let activePayrollData = {
+    list: [],
+    monthLabel: '',
+    currentFilter: 'all',
+    currentSearch: ''
+  };
+
+  window.adminViewCurrentMonthPayroll = function() {
+    window.adminViewMonthPayroll(null);
+  };
+
+  window.adminViewMonthPayroll = function(backupId = null) {
+    const modal = document.getElementById('modal-month-payroll');
+    if (!modal) return;
+
+    let students = state.students || [];
+    let monthSchedule = state.monthSchedule;
+    let events = EventManager.getEvents();
+    let monthLabel = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+
+    if (backupId) {
+      const backups = getWebBackups();
+      const target = backups.find(b => b.id === backupId);
+      if (target && target.payload) {
+        students = target.payload.students || [];
+        monthSchedule = target.payload.monthSchedule;
+        events = target.payload.events || [];
+        monthLabel = target.monthLabel || target.name || 'Kỳ đã lưu';
+      }
+    } else {
+      if (!students || students.length === 0) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+          if (raw) students = JSON.parse(raw) || [];
+        } catch (e) {}
+      }
+      if (!monthSchedule) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE);
+          if (raw) monthSchedule = JSON.parse(raw);
+        } catch (e) {}
+      }
+    }
+
+    const payrollList = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events);
+
+    activePayrollData.list = payrollList;
+    activePayrollData.monthLabel = monthLabel;
+    activePayrollData.currentFilter = 'all';
+    activePayrollData.currentSearch = '';
+
+    // Cập nhật tiêu đề modal
+    const titleEl = document.getElementById('month-payroll-title');
+    if (titleEl) {
+      titleEl.textContent = `📋 BẢNG CHẤM CÔNG CTV - ${monthLabel.toUpperCase()}`;
+    }
+
+    // Tính 4 ô chỉ số
+    let totalOfficeShifts = 0;
+    let totalEventUnits = 0;
+    let grandTotalUnits = 0;
+
+    payrollList.forEach(p => {
+      totalOfficeShifts += (p.officeShiftsCount || 0);
+      totalEventUnits += (p.eventWorkUnits || 0);
+      grandTotalUnits += (p.totalWorkUnits || 0);
+    });
+
+    const statStudents = document.getElementById('payroll-stat-total-students');
+    const statOffice = document.getElementById('payroll-stat-office-shifts');
+    const statEvents = document.getElementById('payroll-stat-event-units');
+    const statTotal = document.getElementById('payroll-stat-total-units');
+
+    if (statStudents) statStudents.textContent = payrollList.length;
+    if (statOffice) statOffice.textContent = totalOfficeShifts;
+    if (statEvents) statEvents.textContent = totalEventUnits;
+    if (statTotal) statTotal.textContent = grandTotalUnits;
+
+    // Reset bộ lọc & tìm kiếm
+    const searchInput = document.getElementById('input-search-payroll');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.oninput = function(e) {
+        activePayrollData.currentSearch = (e.target.value || '').trim().toLowerCase();
+        renderPayrollTableRows();
+      };
+    }
+
+    document.querySelectorAll('#payroll-role-filters .filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-payroll-filter') === 'all');
+      btn.onclick = function() {
+        document.querySelectorAll('#payroll-role-filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activePayrollData.currentFilter = btn.getAttribute('data-payroll-filter') || 'all';
+        renderPayrollTableRows();
+      };
+    });
+
+    renderPayrollTableRows();
+
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  };
+
+  function renderPayrollTableRows() {
+    const tbody = document.getElementById('tbody-month-payroll');
+    const footerSummary = document.getElementById('payroll-footer-summary-text');
+    if (!tbody) return;
+
+    let filtered = activePayrollData.list;
+
+    // Lọc theo vai trò
+    if (activePayrollData.currentFilter === 'old') {
+      filtered = filtered.filter(p => p.role === 'old');
+    } else if (activePayrollData.currentFilter === 'new') {
+      filtered = filtered.filter(p => p.role === 'new');
+    }
+
+    // Lọc theo từ khóa tìm kiếm
+    if (activePayrollData.currentSearch) {
+      const q = activePayrollData.currentSearch;
+      filtered = filtered.filter(p => 
+        (p.fullName || '').toLowerCase().includes(q) || 
+        (p.studentMssv || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (footerSummary) {
+      footerSummary.textContent = `Hiển thị ${filtered.length} / ${activePayrollData.list.length} CTV trong danh sách`;
+    }
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 0.35rem;">🔍</div>
+            <div style="font-weight: 600; font-size: 0.92rem;">Không tìm thấy CTV nào khớp với điều kiện lọc</div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((item, idx) => {
+      const isOld = item.role === 'old';
+      const roleBadge = isOld 
+        ? '<span class="badge" style="background: #ede9fe; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full);">🎓 Người cũ</span>'
+        : '<span class="badge" style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full);">🌱 Người mới</span>';
+
+      return `
+        <tr>
+          <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
+          <td>
+            <div style="font-weight: 700; color: var(--text-main); font-size: 0.92rem;">${escapeHtml(item.fullName)}</div>
+          </td>
+          <td>
+            <code style="font-weight: 600; color: var(--primary); font-size: 0.85rem;">${escapeHtml(item.studentMssv || '-')}</code>
+          </td>
+          <td style="text-align: center;">${roleBadge}</td>
+          <td style="text-align: center;">
+            <span class="badge-office-shifts">
+              🏢 ${item.officeShiftsCount || 0} ca
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <span class="badge-event-shifts">
+              🎟️ ${item.eventCount || 0} buổi (${item.eventWorkUnits || 0} công)
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <span class="badge-total-work">
+              ${item.totalWorkUnits || 0}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminOpenPayrollStudentDetail('${escapeHtml(item.studentId)}')" title="Xem chi tiết các ca trực và sự kiện của bạn này" style="font-size: 0.78rem; padding: 0.25rem 0.55rem; font-weight: 700;">
+              👁️ Chi tiết
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  window.adminCloseMonthPayroll = function() {
+    const modal = document.getElementById('modal-month-payroll');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
+  };
+
+  window.adminPrintMonthPayroll = function() {
+    document.body.classList.add('printing-payroll');
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('printing-payroll');
+    }, 1000);
+  };
+
+  window.adminExportMonthPayrollExcel = function() {
+    const list = activePayrollData.list || [];
+    const monthLabel = activePayrollData.monthLabel || 'Thang';
+
+    let rowsHtml = list.map((item, idx) => `
+      <tr>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${idx + 1}</td>
+        <td style="border: 1px solid #000; padding: 5px;">${escapeHtml(item.fullName)}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px; mso-number-format: '\\@';">${escapeHtml(item.studentMssv)}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.role === 'old' ? 'Người Cũ' : 'Người Mới'}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.officeShiftsCount || 0}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.eventCount || 0}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.eventWorkUnits || 0}</td>
+        <td style="text-align: center; font-weight: bold; border: 1px solid #000; padding: 5px; background-color: #d1fae5;">${item.totalWorkUnits || 0}</td>
+      </tr>
+    `).join('');
+
+    const excelDoc = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+            xmlns:x="urn:schemas-microsoft-com:office:excel" 
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <style>
+          table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
+          th { background-color: #c2dfd3; font-weight: bold; border: 1px solid #000; padding: 6px; }
+          td { border: 1px solid #000; padding: 5px; }
+        </style>
+      </head>
+      <body>
+        <table style="width: 100%;">
+          <thead>
+            <tr>
+              <th colspan="8" style="font-size: 14pt; height: 35px; background: #ffffff; text-align: center; border: none; font-weight: bold;">
+                BẢNG CHẤM CÔNG CỘNG TÁC VIÊN TUYỂN SINH - ${escapeHtml(monthLabel.toUpperCase())}
+              </th>
+            </tr>
+            <tr>
+              <th>STT</th>
+              <th>Họ và Tên</th>
+              <th>MSSV</th>
+              <th>Phân Loại</th>
+              <th>Ca Trực VP (4 Tuần)</th>
+              <th>Số Buổi Sự Kiện</th>
+              <th>Công Sự Kiện</th>
+              <th>TỔNG CÔNG</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\uFEFF' + excelDoc], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Bang_Cham_Cong_CTV_${monthLabel.replace(/[^a-zA-Z0-9]/g, '_')}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Đã xuất file Excel Bảng Chấm Công (.xls) thành công!', 'success');
+  };
+
+  window.adminOpenPayrollStudentDetail = function(studentId) {
+    const modal = document.getElementById('modal-payroll-student-detail');
+    if (!modal) return;
+
+    const item = (activePayrollData.list || []).find(p => p.studentId === studentId || p.studentMssv === studentId);
+    if (!item) return;
+
+    const nameEl = document.getElementById('payroll-detail-student-name');
+    const metaEl = document.getElementById('payroll-detail-student-meta');
+    const officeCountEl = document.getElementById('payroll-detail-office-count');
+    const officeListEl = document.getElementById('payroll-detail-office-list');
+    const eventCountEl = document.getElementById('payroll-detail-event-count');
+    const eventListEl = document.getElementById('payroll-detail-event-list');
+
+    if (nameEl) nameEl.textContent = `👤 Chi Tiết Công Trực: ${item.fullName}`;
+    if (metaEl) metaEl.textContent = `MSSV: ${item.studentMssv || '-'} • ${item.role === 'old' ? '🎓 Người cũ' : '🌱 Người mới'}`;
+    if (officeCountEl) officeCountEl.textContent = `${item.officeShiftsCount || 0} ca`;
+    if (eventCountEl) eventCountEl.textContent = `${item.eventCount || 0} sự kiện (${item.eventWorkUnits || 0} công)`;
+
+    if (officeListEl) {
+      if (item.officeShiftDetails && item.officeShiftDetails.length > 0) {
+        officeListEl.innerHTML = item.officeShiftDetails.map(d => `<li>${escapeHtml(d)}</li>`).join('');
+      } else {
+        officeListEl.innerHTML = '<li style="color: var(--text-muted);">Không có ca trực văn phòng nào trong tháng.</li>';
+      }
+    }
+
+    if (eventListEl) {
+      if (item.eventDetails && item.eventDetails.length > 0) {
+        eventListEl.innerHTML = item.eventDetails.map(ev => `
+          <li>
+            <strong>${escapeHtml(ev.title)}</strong> &bull; Ngày: ${escapeHtml(ev.date || '-')} &bull; <span style="color: #db2777; font-weight: 700;">+${ev.workUnits} công</span>
+          </li>
+        `).join('');
+      } else {
+        eventListEl.innerHTML = '<li style="color: var(--text-muted);">Chưa tham gia sự kiện ngoại kiểm nào.</li>';
+      }
+    }
+
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  };
+
+  window.adminClosePayrollStudentDetail = function() {
+    const modal = document.getElementById('modal-payroll-student-detail');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
   };
 
   /**

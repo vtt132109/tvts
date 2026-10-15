@@ -16,7 +16,8 @@ const suites = [
   { name: 'Thuật Toán Xếp Ca & Luân Phiên (Scheduler Engine)', script: 'scheduler.test.js' },
   { name: 'Xác Thực, Phân Quyền & Bảo Mật XSS (Auth & Security)', script: 'auth.test.js' },
   { name: 'Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal Visibility & Lookup)', script: 'portal.test.js' },
-  { name: 'Quản Lý Sao Lưu Web 6 Tháng (Web Backup Manager)', script: 'backup.test.js' }
+  { name: 'Quản Lý Sao Lưu Web 6 Tháng (Web Backup Manager)', script: 'backup.test.js' },
+  { name: 'Quản Lý Sự Kiện & Bảng Chấm Công Tháng (Payroll & Events)', script: 'payroll_events.test.js' }
 ];
 
 console.log('╔══════════════════════════════════════════════════════════════════╗');
