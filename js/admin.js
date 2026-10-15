@@ -137,6 +137,7 @@
 
       btnAutoSchedule: document.getElementById('btn-admin-auto-schedule'),
       btnLoadSample30: document.getElementById('btn-load-sample-30'),
+      btnLoadUtePreset: document.getElementById('btn-load-ute-preset'),
       btnExportCsv: document.getElementById('btn-export-csv'),
       btnPrintSchedule: document.getElementById('btn-print-schedule'),
       btnWeek1: document.getElementById('btn-admin-week-1'),
@@ -900,6 +901,21 @@
     elements.btnAdminQuickClear?.addEventListener('click', () => {
       elements.adminSlotCbs.forEach(cb => cb.checked = false);
     });
+
+    elements.btnLoadSample30?.addEventListener('click', () => {
+      const sampleList = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS || [];
+      if (sampleList.length === 0) {
+        showToast('Không tìm thấy dữ liệu mẫu 30 sinh viên!', 'error');
+        return;
+      }
+      state.students = JSON.parse(JSON.stringify(sampleList));
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã nạp thành công ${state.students.length} sinh viên mẫu và tự động phân bổ lịch!`, 'success');
+    });
+
+    elements.btnLoadUtePreset?.addEventListener('click', loadUtePresetStudents);
   }
 
   function switchTab(tabId) {
@@ -2909,6 +2925,7 @@
 
   window.openExcelModal = openExcelModal;
   window.closeExcelModal = closeExcelModal;
+  window.loadUtePresetStudents = loadUtePresetStudents;
 
   function loadUtePresetStudents() {
     const uteList = window.SAMPLE_HCM_UTE_STUDENTS || [];
