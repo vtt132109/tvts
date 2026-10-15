@@ -1,0 +1,48 @@
+# ==============================================================================
+# Antigravity Context Filter & Token Shield (.antigravity/ignore)
+# ==============================================================================
+# Chặn các Agent quét hoặc đọc nội dung các thư mục/file gây lãng phí token
+
+# Dependencies & Package Manager Locks
+node_modules/**
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.lock
+
+# Build Outputs & Bundles
+.next/**
+dist/**
+build/**
+out/**
+*.min.js
+*.min.css
+*.map
+
+# Secrets & Git Internals
+.git/**
+.env*
+*.pem
+*.key
+
+# Binary Media & Assets (Image, Video, Audio, Archives)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.webp
+*.svg
+*.mp4
+*.webm
+*.mov
+*.mp3
+*.wav
+*.pdf
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*.exe
+*.dll

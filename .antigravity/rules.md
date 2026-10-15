@@ -140,3 +140,23 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
      - Web Storage API (`localStorage`, `sessionStorage`).
      - DOM APIs chuẩn trình duyệt, CSS3 Variables.
      - Node.js built-ins (`fs`, `path`, `assert`) cho test harness.
+
+---
+
+## 🌐 GIAO THỨC 10: BROWSER CONSOLE AUTO-HEAL (TỰ ĐỘNG KIỂM THỬ TRÌNH DUYỆT & BẮT LỖI F12)
+
+> [!IMPORTANT]
+> Nhằm đảm bảo mọi thay đổi trên giao diện người dùng hoạt động trơn tru 100% trong môi trường thực tế, không có lỗi ngầm F12:
+
+1. **Kiểm Tra Trình Duyệt Bắt Buộc Sau Khi Sửa UI (Post-Edit Browser Verification):**
+   - Bất cứ khi nào Agent chỉnh sửa mã nguồn giao diện (`index.html`, `admin.html`, `css/*.css`, `js/student.js`, `js/admin.js`, hoặc các components frontend):
+   - Ngay sau khi lưu file, Agent **BẮT BUỘC** phải sử dụng Browser Tool (Chrome DevTools MCP / browser inspection) truy cập vào môi trường phát triển cục bộ (`http://localhost:8000` hoặc trang HTML thực tế).
+2. **Tự Động Bắt Lỗi F12 & Network (Console & Network Auto-Audit):**
+   - Agent tự động quét danh sách thông điệp Console (`list_console_messages` hoặc tương đương) và Network Requests (`list_network_requests`).
+   - Phải phát hiện ngay các nhóm lỗi:
+     - **Runtime JavaScript Errors:** `Uncaught TypeError`, `Uncaught ReferenceError`, `SyntaxError`, `DOMException`.
+     - **Network Failures:** Lỗi tài nguyên 404 (ảnh, CSS, script bị sai đường dẫn relative/absolute), lỗi 500.
+     - **Layout & Visual Bugs:** Tràn màn hình ngang (`overflow-x`), vỡ bố cục Responsive, modal không mở được hoặc bị che khuất.
+3. **Vòng Lặp Tự Sửa Lỗi Triệt Để (Auto-Heal Loop):**
+   - Nếu phát hiện bất kỳ lỗi nào ở F12 Console hoặc Network, Agent **BẮT BUỘC PHẢI TỰ ĐỘNG SỬA** ngay lập tức.
+   - Tiếp tục refresh hoặc reload trang để kiểm tra lại cho đến khi Console **SẠCH LỖI HOÀN TOÀN (0 Errors)** và các tương tác UI đạt chuẩn mượt mà thì mới được phép kết thúc nhiệm vụ.

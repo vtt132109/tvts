@@ -44,4 +44,10 @@
 - `18:29`: Tạo nhánh `agent/fix-event-buttons-and-cleanup-20261015-1829` theo phản hồi của Tris: Bỏ thêm sự kiện trong modal sao lưu & khắc phục nút thêm sự kiện ngoài màn hình.
 - `18:35`: Phát hiện root cause thẻ lồng nhầm do thiếu `</div>` trong `#modal-backup-center`. Đã sửa thẻ đóng, dọn dẹp sạch tab/nút sự kiện trong modal sao lưu, đưa nút "🎟️ Thêm Sự Kiện / Tour" và "📋 Bảng Chấm Công Tháng" ra Hero Toolbar bên ngoài.
 - `18:40`: Kiểm thử trực quan thực tế bằng Chrome DevTools: Giả lập click nút `#btn-hero-add-event` bên ngoài, xác thực modal `#modal-add-event` hiển thị sắc nét 100% (chụp ảnh màn hình kiểm chứng).
-- `18:45`: Chạy toàn bộ test suites (72/72 tests PASS 100%), chuẩn bị hoàn tất `/merge-clean` vào nhánh `main`.
+- `18:45`: Chạy toàn bộ test suites (72/72 tests PASS 100%), hoàn tất `/merge-clean` vào nhánh `main`.
+- `18:47`: Tạo nhánh `agent/operational-browser-automation-layer-20261015-1847` triển khai Tầng Tối Ưu Hóa Vận Hành.
+- `18:50`: Hoàn thành phân tầng Model Routing (Pro cho Backend, Flash cho QA, Inherit cho Frontend).
+- `18:51`: Bổ sung Giao Thức 10 (Browser Console Auto-Heal) vào `rules.md`.
+- `18:52`: Thiết lập bộ lọc `.antigravity/ignore` và đồng bộ `contextFilter` / `secretShield` trong `settings.json`.
+- `18:53`: Thiết lập 2 workflows `/seed-data` và `/clean-project` kèm bộ scripts hỗ trợ, xác thực Chrome DevTools 0 error và CI Harness đạt 72/72 PASS (100%).
+
