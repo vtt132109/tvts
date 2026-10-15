@@ -2297,10 +2297,10 @@
         statusBadge = '<span class="swap-status-pill swap-status-pending">⏳ Chờ Duyệt</span>';
         actionButtons = `
           <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
-            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem;" onclick="window.adminApproveSwap('${req.id}')" title="Phê duyệt và tự động đổi lịch 1-click">
+            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem;" onclick="window.adminApproveSwap('${escapeHtml(req.id)}')" title="Phê duyệt và tự động đổi lịch 1-click">
               ✓ Duyệt
             </button>
-            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; color: #ef4444;" onclick="window.adminRejectSwap('${req.id}')" title="Từ chối yêu cầu này">
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; color: #ef4444;" onclick="window.adminRejectSwap('${escapeHtml(req.id)}')" title="Từ chối yêu cầu này">
               ✕
             </button>
           </div>
@@ -3195,14 +3195,17 @@
     `;
 
     rows.forEach(r => {
+      const morningSafe = (r.morningText || '').split('\n').map(l => escapeHtml(l)).join('<br>');
+      const afternoonSafe = (r.afternoonText || '').split('\n').map(l => escapeHtml(l)).join('<br>');
+
       html += `
         <tr>
           <td class="ute-col-stt">${r.stt}</td>
           <td class="ute-col-date">${r.dateStr}</td>
           <td style="text-align: center;"></td>
           <td></td>
-          <td class="ute-cell-multiline">${r.morningText || ''}</td>
-          <td class="ute-cell-multiline">${r.afternoonText || ''}</td>
+          <td class="ute-cell-multiline">${morningSafe}</td>
+          <td class="ute-cell-multiline">${afternoonSafe}</td>
           <td></td>
           <td></td>
           <td></td>
@@ -3243,8 +3246,8 @@
     `;
 
     rows.forEach(r => {
-      const morningLines = (r.morningText || '').replace(/\n/g, '<br style="mso-data-placement: same-cell;">');
-      const afternoonLines = (r.afternoonText || '').replace(/\n/g, '<br style="mso-data-placement: same-cell;">');
+      const morningLines = (r.morningText || '').split('\n').map(l => escapeHtml(l)).join('<br style="mso-data-placement: same-cell;">');
+      const afternoonLines = (r.afternoonText || '').split('\n').map(l => escapeHtml(l)).join('<br style="mso-data-placement: same-cell;">');
 
       html += `
         <tr>
