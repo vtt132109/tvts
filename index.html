@@ -13,6 +13,7 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/style.css?v=2.2">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme Styles (Guarantees zero unstyled flash) -->
   <style>
@@ -203,10 +204,10 @@
                 <input type="tel" id="input-phone" class="form-input" placeholder="Ví dụ: 0912345678">
               </div>
 
-              <div class="form-group">
-                <label class="form-label">
+              <div class="form-group" role="group" aria-labelledby="label-role-group">
+                <div class="form-label" id="label-role-group" style="font-weight: 700;">
                   Phân Loại Kinh Nghiệm <span class="required">*</span>
-                </label>
+                </div>
                 <div class="role-cards">
                   <!-- Người cũ -->
                   <label class="role-card-label" for="role-old">
@@ -401,7 +402,7 @@
       </div>
       <div class="card-body">
         <div style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
-          <input type="text" id="input-lookup-mssv" class="form-input" style="flex: 1; min-width: 220px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)">
+          <input type="text" id="input-lookup-mssv" class="form-input" style="flex: 1; min-width: 220px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)" aria-label="Nhập MSSV của bạn để tra cứu ca trực">
           <button type="button" id="btn-lookup" class="btn btn-primary">
             <span>Tra Cứu</span>
           </button>

@@ -13,6 +13,7 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/style.css?v=2.2">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
   <style>
@@ -613,6 +614,12 @@
             <p class="card-desc">Xem, chỉnh sửa ca rảnh, thêm mới hoặc xóa sinh viên trong hệ thống</p>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="btn-load-sample-30" style="font-weight: 700; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" title="Nạp nhanh 30 CTV mẫu để chạy thử thuật toán phân bổ">
+              <span>🌟 Nạp 30 CTV Mẫu</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-load-ute-preset" style="font-weight: 700; background: #faf5ff; color: #6b21a8; border-color: #e9d5ff;" title="Nạp 16 CTV HCM-UTE chuẩn từ danh sách thực tế">
+              <span>🏛️ Nạp 16 CTV HCM-UTE</span>
+            </button>
             <button class="btn btn-secondary btn-sm" id="btn-open-import-modal" style="font-weight: 700; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;" title="Nhập hàng loạt sinh viên từ file Excel / CSV khảo sát">
               <span>📥 Nhập Từ Excel / CSV</span>
             </button>
@@ -636,7 +643,7 @@
 
             <div class="search-input-wrap">
               <span class="search-icon">🔍</span>
-              <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV...">
+              <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV..." aria-label="Tìm kiếm theo Tên hoặc MSSV">
             </div>
           </div>
 
@@ -874,7 +881,7 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label class="form-label" for="add-user-pwd">Mật Khẩu <span class="required">*</span></label>
-              <input type="password" id="add-user-pwd" class="form-input" placeholder="Tối thiểu 3 ký tự" required>
+              <input type="password" id="add-user-pwd" class="form-input" placeholder="Tối thiểu 3 ký tự" required autocomplete="new-password">
             </div>
             <div class="form-group">
               <label class="form-label" for="add-user-pin">Mã PIN Nhanh (Tùy chọn)</label>
@@ -890,15 +897,15 @@
         <form id="form-change-current-pwd" style="display: none;">
           <div class="form-group">
             <label class="form-label" for="pwd-current">Mật Khẩu Hiện Tại <span class="required">*</span></label>
-            <input type="password" id="pwd-current" class="form-input" placeholder="Nhập mật khẩu đang dùng" required>
+            <input type="password" id="pwd-current" class="form-input" placeholder="Nhập mật khẩu đang dùng" required autocomplete="current-password">
           </div>
           <div class="form-group">
             <label class="form-label" for="pwd-new">Mật Khẩu Mới <span class="required">*</span></label>
-            <input type="password" id="pwd-new" class="form-input" placeholder="Nhập mật khẩu mới" required>
+            <input type="password" id="pwd-new" class="form-input" placeholder="Nhập mật khẩu mới" required autocomplete="new-password">
           </div>
           <div class="form-group">
             <label class="form-label" for="pwd-confirm">Xác Nhận Mật Khẩu Mới <span class="required">*</span></label>
-            <input type="password" id="pwd-confirm" class="form-input" placeholder="Nhập lại mật khẩu mới" required>
+            <input type="password" id="pwd-confirm" class="form-input" placeholder="Nhập lại mật khẩu mới" required autocomplete="new-password">
           </div>
           <div class="form-group">
             <label class="form-label" for="pin-new">Cập Nhật Mã PIN Nhanh (Tùy chọn)</label>
@@ -1027,7 +1034,7 @@
 
         <!-- Drag & Drop Zone -->
         <div class="import-dropzone" id="import-file-dropzone">
-          <input type="file" id="input-import-file" accept=".csv,text/csv" style="display: none;">
+          <input type="file" id="input-import-file" accept=".csv,text/csv" style="display: none;" aria-label="Tải lên file CSV danh sách sinh viên">
           <div class="import-icon">📂</div>
           <div style="font-weight: 700; font-size: 1rem; margin-bottom: 0.35rem;">
             Kéo thả file CSV vào đây hoặc <span style="color: var(--primary); text-decoration: underline;">bấm để chọn file</span>
@@ -1196,7 +1203,7 @@
           </p>
 
           <div class="backup-dropzone" id="backup-file-dropzone">
-            <input type="file" id="input-backup-file" accept=".json,application/json" style="display: none;">
+            <input type="file" id="input-backup-file" accept=".json,application/json" style="display: none;" aria-label="Chọn file JSON sao lưu hệ thống">
             <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">📂</div>
             <div style="font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">
               Kéo thả file sao lưu (.json) vào đây hoặc <span style="color: var(--primary); text-decoration: underline;">chọn file từ máy tính</span>
