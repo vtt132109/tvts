@@ -436,8 +436,63 @@
     }
   ];
 
+  /**
+   * Lấy bản sao độc lập (deep copy) của danh sách 30 Cộng Tác Viên mẫu
+   * Tránh nguy cơ đột biến dữ liệu gốc khi các module khác chỉnh sửa.
+   * @returns {Array<object>} Bản sao mảng 30 CTV
+   */
+  function getSample30Students() {
+    return JSON.parse(JSON.stringify(SAMPLE_30_STUDENTS));
+  }
+
+  /**
+   * Lấy bản sao độc lập (deep copy) của danh sách 16 Cộng Tác Viên HCM-UTE chuẩn
+   * @returns {Array<object>} Bản sao mảng 16 CTV HCM-UTE
+   */
+  function getSampleHcmUteStudents() {
+    return JSON.parse(JSON.stringify(SAMPLE_HCM_UTE_STUDENTS));
+  }
+
+  /**
+   * Hàm nạp mẫu 30 CTV vào localStorage theo chuẩn hệ thống
+   * @param {boolean} overwrite - Có ghi đè danh sách hiện tại hay không (mặc định: true)
+   * @returns {Array<object>} Danh sách sinh viên sau khi nạp
+   */
+  function loadSample30Students(overwrite = true) {
+    const data = getSample30Students();
+    if (typeof localStorage !== 'undefined') {
+      try {
+        if (!overwrite) {
+          const existing = JSON.parse(localStorage.getItem('ts_scheduler_students') || '[]');
+          const existingIds = new Set(existing.map(s => s.studentId || s.id));
+          const newEntries = data.filter(s => !existingIds.has(s.studentId) && !existingIds.has(s.id));
+          const merged = [...existing, ...newEntries];
+          localStorage.setItem('ts_scheduler_students', JSON.stringify(merged));
+          return merged;
+        }
+        localStorage.setItem('ts_scheduler_students', JSON.stringify(data));
+      } catch (err) {
+        console.warn('[Sample30] Không thể lưu vào localStorage:', err);
+      }
+    }
+    return data;
+  }
+
   if (typeof window !== 'undefined') {
     window.SAMPLE_30_STUDENTS = SAMPLE_30_STUDENTS;
     window.SAMPLE_HCM_UTE_STUDENTS = SAMPLE_HCM_UTE_STUDENTS;
+    window.getSample30Students = getSample30Students;
+    window.getSampleHcmUteStudents = getSampleHcmUteStudents;
+    window.loadSample30Students = loadSample30Students;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      SAMPLE_30_STUDENTS,
+      SAMPLE_HCM_UTE_STUDENTS,
+      getSample30Students,
+      getSampleHcmUteStudents,
+      loadSample30Students
+    };
   }
 })();

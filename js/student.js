@@ -284,6 +284,15 @@
         if (mssv) loadStudentShiftsForSwap(mssv);
       }
     });
+
+    // Hỗ trợ phím tắt Escape để đóng nhanh modal Đổi ca (Task 3)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        if (elements.modalSwap && (elements.modalSwap.classList.contains('active') || elements.modalSwap.style.display === 'flex' || elements.modalSwap.style.display === 'block')) {
+          closeSwapModal();
+        }
+      }
+    });
   }
 
   function formatVNDateTime(isoStr) {
@@ -759,7 +768,7 @@
       students[existingIndex].updatedAt = Date.now();
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
 
-      showSuccessBanner(`Cập nhật thành công! Đã lưu lại thông tin và <strong>${availableShifts.length} ca rảnh</strong> của bạn (${fullName} - MSSV: ${studentId}).`);
+      showSuccessBanner(`Cập nhật thành công! Đã lưu lại thông tin và <strong>${availableShifts.length} ca rảnh</strong> của bạn (${escapeHtml(fullName)} - MSSV: ${escapeHtml(studentId)}).`);
       showToast(`Đã cập nhật ${availableShifts.length} ca rảnh của bạn thành công!`, 'success');
 
       // Tự động làm mới thẻ thông báo đã đăng ký để sinh viên nhìn thấy ca vừa cập nhật
@@ -777,14 +786,15 @@
       students.push(newStudent);
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
 
-      showSuccessBanner(`Đăng ký thành công! Chào mừng bạn <strong>${fullName}</strong> (${selectedRole === 'old' ? 'Người Cũ' : 'Người Mới'}). Bạn đã đăng ký <strong>${availableShifts.length} ca rảnh</strong> trong tuần.`);
+      showSuccessBanner(`Đăng ký thành công! Chào mừng bạn <strong>${escapeHtml(fullName)}</strong> (${selectedRole === 'old' ? 'Người Cũ' : 'Người Mới'}). Bạn đã đăng ký <strong>${availableShifts.length} ca rảnh</strong> trong tuần.`);
       showToast('Đăng ký lịch trực thành công!', 'success');
 
       // Nhận diện ngay sinh viên vừa tạo và hiển thị trạng thái đã đăng ký
       handleMssvAutoDetect();
     }
 
-    if (elements.inputLookupMssv) {
+    const isSchedulePublished = regConfig?.publishSchedule === true;
+    if (elements.inputLookupMssv && (!isRegOpen || isSchedulePublished)) {
       elements.inputLookupMssv.value = studentId;
       handleLookupMySchedule();
     }
@@ -906,8 +916,8 @@
       <div class="duty-member-card role-old" style="cursor: default;" title="Người Cũ phụ trách">
         <div class="member-info">
           <span class="member-role-tag">🎓 Người Cũ</span>
-          <span class="member-name">${oldMem.fullName}</span>
-          <span class="member-mssv">MSSV: ${oldMem.studentId}</span>
+          <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
         </div>
       </div>
     ` : `
@@ -920,8 +930,8 @@
       <div class="duty-member-card role-new" style="cursor: default;" title="Người Mới tập sự">
         <div class="member-info">
           <span class="member-role-tag">🌱 Người Mới</span>
-          <span class="member-name">${newMem.fullName}</span>
-          <span class="member-mssv">MSSV: ${newMem.studentId}</span>
+          <span class="member-name">${escapeHtml(newMem.fullName)}</span>
+          <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
         </div>
       </div>
     ` : `
@@ -1382,7 +1392,7 @@
           const val = `${s.weekNum}__${s.shiftId}`;
           const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
           return `<option value="${val}" ${isSelected ? 'selected' : ''}>
-            Tuần ${s.weekNum} - ${s.shift?.dayName || ''} (${s.shift?.period || ''}: ${s.shift?.time || ''}) | Trực cùng: ${s.partnerName || 'Chưa có bạn'}
+            Tuần ${s.weekNum} - ${escapeHtml(s.shift?.dayName || '')} (${escapeHtml(s.shift?.period || '')}: ${escapeHtml(s.shift?.time || '')}) | Trực cùng: ${escapeHtml(s.partnerName || 'Chưa có bạn')}
           </option>`;
         }).join('');
       }

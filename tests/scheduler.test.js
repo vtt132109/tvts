@@ -125,6 +125,62 @@ runTest('Edge Case: Danh sách rỗng không làm sập ứng dụng (Graceful H
   assert.strictEqual(emptyResult.summary.emptyShifts, 10);
 });
 
+runTest('Edge Case: Xử lý biên khi số lượng Người Cũ = 0 (Hệ thống không crash, tạo bảng phân công với cảnh báo hợp lệ)', () => {
+  const onlyNews = sampleStudents.filter(s => s.role === 'new');
+  assert.ok(onlyNews.length > 0, 'Phải có danh sách người mới');
+  
+  const result = runAutoSchedule(onlyNews);
+  assert.ok(result && result.scheduleTable, 'Phải trả về kết quả xếp ca');
+  assert.strictEqual(result.summary.oldStudentsCount, 0, 'Số lượng người cũ phải là 0');
+  assert.strictEqual(result.summary.fullShifts, 0, 'Không thể có ca nào hoàn chỉnh khi thiếu người cũ');
+  
+  // Xác nhận toàn bộ 10 ca đều không có oldMember và hệ thống vẫn giữ nguyên tính toàn vẹn
+  Object.values(result.scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.oldMember, null, 'Không được có người cũ trong slot');
+  });
+
+  // Có cảnh báo rõ ràng về việc thiếu nhóm Người Cũ
+  assert.ok(
+    result.warnings.some(w => w.includes('Người Cũ')),
+    'Phải có thông báo cảnh báo về việc thiếu Người Cũ'
+  );
+});
+
+runTest('Edge Case: Xử lý biên khi số lượng Người Mới = 0 (Hệ thống không crash, tạo bảng phân công với cảnh báo hợp lệ)', () => {
+  const onlyOlds = sampleStudents.filter(s => s.role === 'old');
+  assert.ok(onlyOlds.length > 0, 'Phải có danh sách người cũ');
+
+  const result = runAutoSchedule(onlyOlds);
+  assert.ok(result && result.scheduleTable, 'Phải trả về kết quả xếp ca');
+  assert.strictEqual(result.summary.newStudentsCount, 0, 'Số lượng người mới phải là 0');
+  assert.strictEqual(result.summary.fullShifts, 0, 'Không thể có ca nào hoàn chỉnh khi thiếu người mới');
+
+  // Xác nhận toàn bộ 10 ca đều không có newMember
+  Object.values(result.scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.newMember, null, 'Không được có người mới trong slot');
+  });
+
+  // Có cảnh báo rõ ràng về việc thiếu nhóm Người Mới
+  assert.ok(
+    result.warnings.some(w => w.includes('Người Mới')),
+    'Phải có thông báo cảnh báo về việc thiếu Người Mới'
+  );
+});
+
+runTest('Edge Case: Luân phiên 4 Tuần (runMonthSchedule) xử lý trơn tru khi Người Cũ = 0 hoặc Người Mới = 0', () => {
+  const onlyNews = sampleStudents.filter(s => s.role === 'new');
+  const monthResultNews = runMonthSchedule(onlyNews);
+  assert.ok(monthResultNews && monthResultNews.weeks, 'Phải tạo thành công lịch 4 tuần khi không có người cũ');
+  assert.strictEqual(monthResultNews.weeks.length, 4, 'Vẫn phải đủ 4 tuần');
+  assert.strictEqual(monthResultNews.totalStudents, onlyNews.length);
+
+  const onlyOlds = sampleStudents.filter(s => s.role === 'old');
+  const monthResultOlds = runMonthSchedule(onlyOlds);
+  assert.ok(monthResultOlds && monthResultOlds.weeks, 'Phải tạo thành công lịch 4 tuần khi không có người mới');
+  assert.strictEqual(monthResultOlds.weeks.length, 4, 'Vẫn phải đủ 4 tuần');
+  assert.strictEqual(monthResultOlds.totalStudents, onlyOlds.length);
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');
@@ -134,3 +190,4 @@ if (passedTests === totalTests) {
 } else {
   process.exit(1);
 }
+
