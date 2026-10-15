@@ -1,0 +1,136 @@
+/**
+ * ============================================================================
+ * UNIT TEST SUITE CHO LÕI THUẬT TOÁN XẾP CA (SCHEDULER ENGINE TESTS)
+ * ============================================================================
+ * Chạy trực tiếp bằng Node.js: node tests/scheduler.test.js
+ * Được quản trị và vận hành bởi QA-Agent
+ */
+
+const assert = require('assert');
+const path = require('path');
+
+// 1. Thiết lập môi trường mô phỏng Browser Window
+global.window = {};
+
+// 2. Nạp Module Scheduler Engine và Mock Data
+require('../js/scheduler.js');
+require('../js/sample30.js');
+
+const {
+  SHIFTS,
+  SHIFT_MAP,
+  runAutoSchedule,
+  runTwoWeekSchedule,
+  runMonthSchedule
+} = window.SchedulerEngine;
+
+const sampleStudents = window.SAMPLE_30_STUDENTS;
+
+console.log('================================================================');
+console.log('🚀 BẮT ĐẦU CHẠY BỘ KIỂM THỬ TỰ ĐỘNG - HỆ THỐNG BAN TUYỂN SINH');
+console.log('================================================================\n');
+
+let passedTests = 0;
+let totalTests = 0;
+
+function runTest(name, fn) {
+  totalTests++;
+  try {
+    fn();
+    console.log(`  ✓ [PASS] ${name}`);
+    passedTests++;
+  } catch (error) {
+    console.error(`  ✕ [FAIL] ${name}`);
+    console.error(`    Chi tiết: ${error.message}\n`);
+  }
+}
+
+// ============================================================================
+// TEST GROUP 1: Cấu trúc ca trực và Khởi tạo động cơ
+// ============================================================================
+runTest('Kiểm tra danh mục 10 ca hành chính (T2-T6, Sáng & Chiều)', () => {
+  assert.strictEqual(SHIFTS.length, 10, 'Phải có đúng 10 ca trực trong tuần');
+  assert.ok(SHIFT_MAP['T2_S'], 'Ca T2_S phải tồn tại');
+  assert.ok(SHIFT_MAP['T6_C'], 'Ca T6_C phải tồn tại');
+});
+
+runTest('Kiểm tra dữ liệu mẫu 30 CTV (12 Người Cũ + 18 Người Mới)', () => {
+  assert.strictEqual(sampleStudents.length, 30, 'Bộ dữ liệu mẫu phải có đúng 30 CTV');
+  const olds = sampleStudents.filter(s => s.role === 'old');
+  const news = sampleStudents.filter(s => s.role === 'new');
+  assert.strictEqual(olds.length, 12, 'Phải có đúng 12 Người Cũ');
+  assert.strictEqual(news.length, 18, 'Phải có đúng 18 Người Mới');
+});
+
+// ============================================================================
+// TEST GROUP 2: Ràng buộc xếp ca 1 tuần (1 Cũ + 1 Mới)
+// ============================================================================
+runTest('Xếp ca 1 tuần: Ràng buộc 1 Cũ + 1 Mới và đúng ca rảnh', () => {
+  const result = runAutoSchedule(sampleStudents);
+  assert.ok(result && result.scheduleTable, 'Kết quả phải trả về bảng phân công');
+
+  let filledCount = 0;
+  Object.entries(result.scheduleTable).forEach(([shiftId, slot]) => {
+    if (slot.oldMember) {
+      assert.strictEqual(slot.oldMember.role, 'old', `Slot ${shiftId} người cũ phải có role="old"`);
+      assert.ok(
+        slot.oldMember.availableShifts.includes(shiftId),
+        `Sinh viên ${slot.oldMember.fullName} không đăng ký rảnh ca ${shiftId}`
+      );
+    }
+    if (slot.newMember) {
+      assert.strictEqual(slot.newMember.role, 'new', `Slot ${shiftId} người mới phải có role="new"`);
+      assert.ok(
+        slot.newMember.availableShifts.includes(shiftId),
+        `Sinh viên ${slot.newMember.fullName} không đăng ký rảnh ca ${shiftId}`
+      );
+    }
+    if (slot.oldMember && slot.newMember) {
+      filledCount++;
+    }
+  });
+
+  assert.ok(filledCount >= 8, `Số ca hoàn chỉnh phải đạt ít nhất 8/10 ca (hiện tại: ${filledCount})`);
+});
+
+// ============================================================================
+// TEST GROUP 3: Thuật toán Luân phiên 4 Tuần (Fairness & Anti-Starvation)
+// ============================================================================
+runTest('Luân phiên 4 Tuần: 100% cả 30 sinh viên đều được phân công trực', () => {
+  const monthResult = runMonthSchedule(sampleStudents);
+  assert.strictEqual(monthResult.weeks.length, 4, 'Lịch tháng phải có đủ 4 tuần');
+
+  const scheduledMssvSet = new Set();
+  monthResult.weeks.forEach((w) => {
+    Object.values(w.scheduleTable).forEach((slot) => {
+      if (slot.oldMember?.studentId) scheduledMssvSet.add(slot.oldMember.studentId);
+      if (slot.newMember?.studentId) scheduledMssvSet.add(slot.newMember.studentId);
+    });
+  });
+
+  assert.strictEqual(
+    scheduledMssvSet.size,
+    30,
+    `Tất cả 30 sinh viên phải được phân công ít nhất 1 ca (Thực tế: ${scheduledMssvSet.size}/30)`
+  );
+});
+
+// ============================================================================
+// TEST GROUP 4: Trường hợp biên (Edge Cases)
+// ============================================================================
+runTest('Edge Case: Danh sách rỗng không làm sập ứng dụng (Graceful Handling)', () => {
+  const emptyResult = runAutoSchedule([]);
+  assert.ok(emptyResult && emptyResult.scheduleTable, 'Danh sách rỗng phải trả về bảng trống hợp lệ');
+  assert.strictEqual(emptyResult.summary.totalStudents, 0);
+  assert.strictEqual(emptyResult.summary.emptyShifts, 10);
+});
+
+console.log('\n================================================================');
+console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
+console.log('================================================================\n');
+
+if (passedTests === totalTests) {
+  process.exit(0);
+} else {
+  process.exit(1);
+}
