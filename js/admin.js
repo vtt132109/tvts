@@ -20,7 +20,8 @@
     ADMIN_USERS: 'ts_scheduler_admin_users',
     AUTH_TOKEN: 'ts_admin_authenticated',
     CURRENT_USER: 'ts_admin_user_data',
-    SWAP_REQUESTS: 'ts_scheduler_swap_requests'
+    SWAP_REQUESTS: 'ts_scheduler_swap_requests',
+    WEB_BACKUPS: 'ts_scheduler_web_backups_v1'
   };
 
   // Danh sách tài khoản cán bộ mặc định có quyền quản trị
@@ -293,6 +294,12 @@
       btnCancelRestorePreview: document.getElementById('btn-cancel-restore-preview'),
       btnConfirmRestore: document.getElementById('btn-confirm-restore'),
       btnStartNewMonth: document.getElementById('btn-start-new-month'),
+
+      // Web Backups (Max 6 Months) Elements
+      btnCreateWebBackup: document.getElementById('btn-create-web-backup'),
+      webBackupTableBody: document.getElementById('web-backup-table-body'),
+      webBackupCountBadge: document.getElementById('web-backup-count-badge'),
+      webBackupStorageInfo: document.getElementById('web-backup-storage-info'),
 
       toastContainer: document.getElementById('toast-container')
     };
@@ -2474,12 +2481,14 @@
 
     elements.btnConfirmRestore?.addEventListener('click', handleConfirmRestore);
     elements.btnStartNewMonth?.addEventListener('click', handleStartNewMonth);
+    elements.btnCreateWebBackup?.addEventListener('click', handleCreateWebBackupPrompt);
   }
 
   function openBackupCenterModal() {
     const modal = elements.modalBackupCenter || document.getElementById('modal-backup-center');
     updateBackupStats();
-    switchBackupTab('tab-export-backup');
+    renderWebBackupsTable();
+    switchBackupTab('tab-web-backups');
     if (modal) {
       modal.style.display = 'flex';
       modal.classList.add('active');
@@ -2560,7 +2569,7 @@
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
     
-    link = document.createElement('a');
+    const link = document.createElement('a');
     link.href = url;
     link.download = `TVTS_Backup_${dateStr}_${timeStr}.json`;
     document.body.appendChild(link);
@@ -2660,10 +2669,15 @@
   }
 
   function handleStartNewMonth() {
-    const confirmMsg = 'BẠN CÓ CHẮC CHẮN MUỐN KHỞI TẠO LỊCH THÁNG MỚI?\\n\\n• Hệ thống sẽ tự động xuất 1 file dự phòng kỳ cũ về máy bạn.\\n• Bảng lịch 4 tuần sẽ được làm sạch để xếp lịch mới.\\n• Toàn bộ danh sách CTV đã đăng ký VẪN ĐƯỢC GIỮ NGUYÊN 100%.';
+    const confirmMsg = 'BẠN CÓ CHẮC CHẮN MUỐN KHỞI TẠO LỊCH THÁNG MỚI?\n\n• Hệ thống sẽ tự động lưu 1 bản snapshot vào danh sách Sao Lưu Trên Web (Lưu 6 tháng).\n• Tự động xuất 1 file dự phòng kỳ cũ về máy bạn.\n• Bảng lịch 4 tuần sẽ được làm sạch để xếp lịch mới.\n• Toàn bộ danh sách CTV đã đăng ký VẪN ĐƯỢC GIỮ NGUYÊN 100%.';
     if (!confirm(confirmMsg)) return;
 
-    // Tự động tải 1 bản snapshot trước khi reset
+    // Tự động lưu 1 snapshot vào Web Backups trước khi reset
+    const now = new Date();
+    const monthTag = `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+    createWebBackup(`Tự động lưu trữ trước khi sang tháng mới (${monthTag})`);
+
+    // Tự động tải 1 bản snapshot file về máy
     handleExportBackupJson();
 
     // Làm sạch bảng 4 tuần
@@ -2701,12 +2715,396 @@
     showToast('Đã khởi tạo kỳ trực tháng mới thành công! Danh sách sinh viên vẫn được bảo toàn nguyên vẹn.', 'success');
   }
 
+  /**
+   * ==========================================================================
+   * HỆ THỐNG SAO LƯU TRỰC TIẾP TRÊN WEB (TỐI ĐA 6 THÁNG / 180 NGÀY)
+   * ==========================================================================
+   */
+  const MAX_WEB_BACKUPS = 6;
+  const RETENTION_PERIOD_MS = 180 * 24 * 60 * 60 * 1000; // 6 tháng (~180 ngày)
+
+  function getWebBackups() {
+    let list = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.WEB_BACKUPS);
+      if (raw) list = JSON.parse(raw);
+    } catch (e) {
+      console.error('Lỗi khi đọc danh sách bản sao lưu web:', e);
+      list = [];
+    }
+
+    if (!Array.isArray(list)) list = [];
+
+    // Tự động dọn dẹp các bản sao lưu cũ quá 6 tháng (180 ngày)
+    const now = Date.now();
+    const initialLen = list.length;
+    list = list.filter(item => {
+      if (!item || !item.createdAt) return false;
+      return (now - item.createdAt) <= RETENTION_PERIOD_MS;
+    });
+
+    // Sắp xếp mới nhất lên đầu
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    // Giới hạn tối đa 6 bản gần nhất
+    if (list.length > MAX_WEB_BACKUPS) {
+      list = list.slice(0, MAX_WEB_BACKUPS);
+    }
+
+    // Nếu có sự thay đổi do dọn dẹp bản cũ quá 6 tháng, lưu ngược lại
+    if (list.length !== initialLen) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
+      } catch (err) {}
+    }
+
+    return list;
+  }
+
+  function saveWebBackups(list) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('Lỗi khi lưu bản sao lưu web:', err);
+      showToast('Lỗi lưu trữ: Bộ nhớ LocalStorage trình duyệt có thể đã đầy!', 'error');
+    }
+  }
+
+  function createWebBackup(customName) {
+    let swapList = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+      if (raw) swapList = JSON.parse(raw);
+    } catch (e) {}
+
+    const now = new Date();
+    const monthNum = now.getMonth() + 1;
+    const yearNum = now.getFullYear();
+    const monthKey = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    const monthLabel = `Tháng ${monthNum}/${yearNum}`;
+
+    const defaultName = customName || `Bản sao lưu ${monthLabel} (${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ngày ${now.getDate()}/${monthNum}/${yearNum})`;
+
+    let studentList = (state.students && state.students.length > 0) ? state.students : [];
+    if (studentList.length === 0) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+        if (raw) studentList = JSON.parse(raw) || [];
+      } catch (e) {}
+    }
+
+    let monthSched = state.monthSchedule;
+    if (!monthSched) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE);
+        if (raw) monthSched = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    let schedRes = state.scheduleResult;
+    if (!schedRes) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+        if (raw) schedRes = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    let regCfg = state.regConfig;
+    if (!regCfg) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.REG_CONFIG);
+        if (raw) regCfg = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    let adminUserList = (state.adminUsers && state.adminUsers.length > 0) ? state.adminUsers : [];
+    if (adminUserList.length === 0) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
+        if (raw) adminUserList = JSON.parse(raw) || [];
+      } catch (e) {}
+    }
+
+    const backupPayload = {
+      students: studentList,
+      monthSchedule: monthSched,
+      scheduleResult: schedRes,
+      regConfig: regCfg,
+      adminUsers: adminUserList,
+      swapRequests: swapList
+    };
+
+    const payloadJson = JSON.stringify(backupPayload);
+    const sizeBytes = typeof Blob !== 'undefined' ? new Blob([payloadJson]).size : payloadJson.length;
+
+    const backupItem = {
+      id: `wbk_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: defaultName,
+      monthKey: monthKey,
+      monthLabel: monthLabel,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + RETENTION_PERIOD_MS,
+      sizeBytes: sizeBytes,
+      stats: {
+        studentCount: studentList.length,
+        weekCount: (monthSched?.weeks || []).length || 4,
+        swapCount: swapList.length,
+        adminCount: adminUserList.length
+      },
+      payload: backupPayload
+    };
+
+    let backups = getWebBackups();
+    backups.unshift(backupItem);
+
+    if (backups.length > MAX_WEB_BACKUPS) {
+      backups = backups.slice(0, MAX_WEB_BACKUPS);
+    }
+
+    saveWebBackups(backups);
+    renderWebBackupsTable();
+    updateBackupStats();
+
+    return backupItem;
+  }
+
+  function handleCreateWebBackupPrompt() {
+    const defaultName = `Sao lưu ${new Date().toLocaleDateString('vi-VN')} (${String(new Date().getHours()).padStart(2, '0')}h${String(new Date().getMinutes()).padStart(2, '0')})`;
+    const customName = prompt('Nhập tên gợi nhớ cho bản sao lưu trên web (hoặc để mặc định):', defaultName);
+    if (customName === null) return; // Người dùng bấm Hủy
+
+    const finalName = customName.trim() || defaultName;
+    createWebBackup(finalName);
+    showToast(`Đã tạo bản sao lưu "${escapeHtml(finalName)}" trên web thành công!`, 'success');
+  }
+
+  function renderWebBackupsTable() {
+    const tbody = elements.webBackupTableBody || document.getElementById('web-backup-table-body');
+    const badge = elements.webBackupCountBadge || document.getElementById('web-backup-count-badge');
+    const storageInfo = elements.webBackupStorageInfo || document.getElementById('web-backup-storage-info');
+
+    if (!tbody) return;
+
+    const backups = getWebBackups();
+
+    if (badge) {
+      badge.textContent = `${backups.length} / ${MAX_WEB_BACKUPS} bản`;
+      badge.style.color = backups.length >= MAX_WEB_BACKUPS ? '#b45309' : 'var(--text-main)';
+    }
+
+    let totalBytes = 0;
+    backups.forEach(b => { totalBytes += (b.sizeBytes || 0); });
+
+    if (storageInfo) {
+      const kb = (totalBytes / 1024).toFixed(1);
+      storageInfo.textContent = `Dung lượng đã dùng: ${kb} KB | Lưu trữ tối đa 6 tháng (${backups.length}/${MAX_WEB_BACKUPS} kỳ)`;
+    }
+
+    if (backups.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 2rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 0.35rem;">📭</div>
+            <div style="font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem;">Chưa có bản sao lưu nào được lưu trên web</div>
+            <div style="font-size: 0.8rem; margin-bottom: 0.85rem;">Nhấn nút bên dưới để tạo ngay bản snapshot đầu tiên của hệ thống.</div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.adminTriggerCreateWebBackup && window.adminTriggerCreateWebBackup()" style="font-weight: 700;">
+              💾 Tạo Bản Sao Lưu Đầu Tiên
+            </button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const now = Date.now();
+
+    tbody.innerHTML = backups.map((item, idx) => {
+      const createdDate = new Date(item.createdAt);
+      const createdStr = `${String(createdDate.getHours()).padStart(2, '0')}:${String(createdDate.getMinutes()).padStart(2, '0')} ngày ${createdDate.getDate()}/${createdDate.getMonth() + 1}/${createdDate.getFullYear()}`;
+      
+      const diffMs = (item.expiresAt || (item.createdAt + RETENTION_PERIOD_MS)) - now;
+      const remDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      const expiryText = remDays > 0 ? `Còn ${remDays} ngày` : 'Sắp hết hạn';
+
+      const sizeKb = ((item.sizeBytes || 0) / 1024).toFixed(1);
+      const stats = item.stats || { studentCount: 0, weekCount: 4, swapCount: 0, adminCount: 2 };
+
+      return `
+        <tr>
+          <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
+          <td>
+            <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${escapeHtml(item.name)}</div>
+            <div style="display: flex; gap: 0.35rem; align-items: center; margin-top: 0.2rem;">
+              <span class="badge" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: var(--radius-full);">
+                🗓️ ${escapeHtml(item.monthLabel || 'Kỳ trực')}
+              </span>
+            </div>
+          </td>
+          <td>
+            <div style="font-weight: 600; font-size: 0.84rem; color: var(--text-main);">${escapeHtml(createdStr)}</div>
+            <div style="font-size: 0.75rem; color: #059669; font-weight: 600; margin-top: 0.15rem;">
+              ⏳ Hạn lưu: ${escapeHtml(expiryText)} (Tối đa 6 tháng)
+            </div>
+          </td>
+          <td>
+            <div style="font-size: 0.82rem; color: var(--text-main);">
+              👥 <strong>${stats.studentCount}</strong> CTV &bull; 📅 <strong>${stats.weekCount}</strong> tuần
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              🔄 ${stats.swapCount} đề xuất đổi ca &bull; 🔑 ${stats.adminCount || 2} cán bộ
+            </div>
+          </td>
+          <td style="text-align: center; font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">
+            ${sizeKb} KB
+          </td>
+          <td style="text-align: center;">
+            <div style="display: flex; gap: 0.35rem; justify-content: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary btn-sm" onclick="window.adminRestoreFromWebBackup('${escapeHtml(item.id)}')" title="Khôi phục nhanh 1-click về bản sao lưu này" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; font-weight: 700;">
+                🔄 Khôi Phục
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminDownloadSingleWebBackup('${escapeHtml(item.id)}')" title="Tải file JSON về máy tính" style="font-size: 0.76rem; padding: 0.25rem 0.45rem;">
+                ⬇️
+              </button>
+              <button type="button" class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteWebBackup('${escapeHtml(item.id)}')" title="Xóa bản sao lưu này" style="font-size: 0.76rem; padding: 0.25rem 0.45rem;">
+                🗑️
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function handleRestoreFromWebBackup(backupId) {
+    const backups = getWebBackups();
+    const target = backups.find(b => b.id === backupId);
+    if (!target || !target.payload) {
+      showToast('Không tìm thấy bản sao lưu hợp lệ!', 'error');
+      return;
+    }
+
+    const createdDate = new Date(target.createdAt);
+    const dateStr = `${createdDate.toLocaleDateString('vi-VN')} ${String(createdDate.getHours()).padStart(2, '0')}:${String(createdDate.getMinutes()).padStart(2, '0')}`;
+    const confirmMsg = `XÁC NHẬN KHÔI PHỤC HỆ THỐNG TỪ BẢN SAO LƯU TRÊN WEB:\n\n• Bản lưu: ${target.name}\n• Thời điểm tạo: ${dateStr}\n• Dữ liệu: ${(target.payload.students || []).length} CTV, ${(target.payload.monthSchedule?.weeks || []).length || 4} tuần lịch trực\n\n⚠️ CẢNH BÁO: Toàn bộ dữ liệu hiện tại trên trình duyệt sẽ được thay thế bằng bản sao lưu này. Bạn có chắc chắn muốn khôi phục không?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const payload = target.payload;
+
+      if (payload.students) {
+        state.students = payload.students;
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+      }
+      if (payload.monthSchedule) {
+        state.monthSchedule = payload.monthSchedule;
+        localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+      }
+      if (payload.scheduleResult) {
+        state.scheduleResult = payload.scheduleResult;
+        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
+      }
+      if (payload.regConfig) {
+        state.regConfig = payload.regConfig;
+        localStorage.setItem(STORAGE_KEYS.REG_CONFIG, JSON.stringify(state.regConfig));
+      }
+      if (payload.adminUsers && payload.adminUsers.length > 0) {
+        state.adminUsers = payload.adminUsers;
+        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
+      }
+      if (payload.swapRequests) {
+        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(payload.swapRequests));
+      }
+
+      window.dispatchEvent(new Event('storage'));
+
+      renderAll();
+      renderRegConfigUI();
+      updateBackupStats();
+      updateSwapCountBadges();
+      renderWebBackupsTable();
+      closeBackupCenterModal();
+
+      showToast(`Đã khôi phục toàn bộ hệ thống từ "${escapeHtml(target.name)}" thành công 100%!`, 'success');
+    } catch (err) {
+      console.error('Lỗi khôi phục web backup:', err);
+      showToast('Đã có lỗi xảy ra trong quá trình ghi dữ liệu khôi phục!', 'error');
+    }
+  }
+
+  function handleDownloadSingleWebBackup(backupId) {
+    const backups = getWebBackups();
+    const target = backups.find(b => b.id === backupId);
+    if (!target || !target.payload) {
+      showToast('Không tìm thấy dữ liệu bản sao lưu!', 'error');
+      return;
+    }
+
+    const backupPayload = {
+      meta: {
+        appName: 'Hệ Thống Phân Công Lịch Trực Ban TVTS HCM-UTE',
+        version: '2.5',
+        backupId: target.id,
+        backupName: target.name,
+        monthKey: target.monthKey,
+        exportedAt: new Date(target.createdAt).toISOString(),
+        exportedBy: state.currentUser ? state.currentUser.fullName : 'Admin'
+      },
+      ...target.payload
+    };
+
+    const jsonString = JSON.stringify(backupPayload, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const safeName = (target.name || 'WebBackup').replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1EA0-\u1EF9]/g, '_');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TVTS_${safeName}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Đã tải xuống file sao lưu "${escapeHtml(target.name)}" (.json)!`, 'success');
+  }
+
+  function handleDeleteWebBackup(backupId) {
+    const backups = getWebBackups();
+    const target = backups.find(b => b.id === backupId);
+    if (!target) return;
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa bản sao lưu "${target.name}" khỏi trình duyệt không? Thao tác này không thể hoàn tác.`)) {
+      return;
+    }
+
+    const updated = backups.filter(b => b.id !== backupId);
+    saveWebBackups(updated);
+    renderWebBackupsTable();
+    updateBackupStats();
+    showToast(`Đã xóa bản sao lưu "${escapeHtml(target.name)}" khỏi web!`, 'info');
+  }
+
   window.adminApproveSwap = (swapId) => handleApproveSwap(swapId);
   window.adminRejectSwap = (swapId) => handleRejectSwap(swapId);
   window.adminOpenSwapModal = () => openSwapMgmtModal();
   window.adminCloseSwapModal = () => closeSwapMgmtModal();
   window.adminOpenBackupModal = () => openBackupCenterModal();
   window.adminCloseBackupModal = () => closeBackupCenterModal();
+  window.adminTriggerCreateWebBackup = () => handleCreateWebBackupPrompt();
+  window.adminRestoreFromWebBackup = (id) => handleRestoreFromWebBackup(id);
+  window.adminDownloadSingleWebBackup = (id) => handleDownloadSingleWebBackup(id);
+  window.adminDeleteWebBackup = (id) => handleDeleteWebBackup(id);
+  window.adminStartNewMonth = () => handleStartNewMonth();
+  window.WebBackupManager = {
+    getWebBackups,
+    createWebBackup,
+    restoreFromWebBackup: handleRestoreFromWebBackup,
+    deleteWebBackup: handleDeleteWebBackup,
+    MAX_WEB_BACKUPS,
+    RETENTION_PERIOD_MS
+  };
 
   /**
    * ==========================================================================
