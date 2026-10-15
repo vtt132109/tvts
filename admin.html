@@ -169,11 +169,11 @@
         <form id="form-auth-credentials">
           <div class="form-group">
             <label class="form-label" for="auth-input-username">Tên Đăng Nhập / Mã Cán Bộ <span class="required">*</span></label>
-            <input type="text" id="auth-input-username" class="form-input" placeholder="Ví dụ: admin hoặc diephoi" required autocomplete="username">
+            <input type="text" id="auth-input-username" class="form-input" placeholder="Ví dụ: admin hoặc diephoi" required autocomplete="username" aria-label="Tên đăng nhập hoặc mã cán bộ">
           </div>
           <div class="form-group">
             <label class="form-label" for="auth-input-password">Mật Khẩu Truy Cập <span class="required">*</span></label>
-            <input type="password" id="auth-input-password" class="form-input" placeholder="Nhập mật khẩu của bạn..." required autocomplete="current-password">
+            <input type="password" id="auth-input-password" class="form-input" placeholder="Nhập mật khẩu của bạn..." required autocomplete="current-password" aria-label="Mật khẩu truy cập quản trị">
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
             <span>Đăng Nhập Quản Trị</span>
@@ -184,7 +184,7 @@
         <form id="form-auth-pin" style="display: none;">
           <div class="form-group">
             <label class="form-label" for="auth-input-pin">Nhập Mã PIN 4-6 Số <span class="required">*</span></label>
-            <input type="password" id="auth-input-pin" class="form-input" placeholder="••••" maxlength="10" autocomplete="off" style="letter-spacing: 0.3em; font-size: 1.3rem; text-align: center;">
+            <input type="password" id="auth-input-pin" class="form-input" placeholder="••••" maxlength="10" autocomplete="off" style="letter-spacing: 0.3em; font-size: 1.3rem; text-align: center;" aria-label="Mã PIN nhanh 4-6 số">
             <div class="form-hint" style="text-align: center;">Mã PIN bí mật do Trưởng ban tuyển sinh cấp.</div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
@@ -405,23 +405,23 @@
             <!-- Chế độ mở cổng -->
             <div>
               <label class="form-label" style="font-weight: 700; margin-bottom: 0.5rem;">Chế Độ Mở Cổng Đăng Ký:</label>
-              <div class="mode-radio-group">
-                <label class="mode-radio-card active" id="card-mode-open">
-                  <input type="radio" name="adminRegMode" value="always_open" checked>
+              <div class="mode-radio-group" role="radiogroup" aria-label="Chế độ mở cổng đăng ký">
+                <label class="mode-radio-card active" id="card-mode-open" for="admin-mode-open">
+                  <input type="radio" id="admin-mode-open" name="adminRegMode" value="always_open" checked aria-label="Chế độ Mở tự do (Luôn mở)">
                   <div>
                     <div class="mode-info-title">🟢 Mở tự do (Luôn mở)</div>
                     <div class="mode-info-sub">Sinh viên có thể đăng ký hoặc cập nhật ca rảnh bất cứ lúc nào.</div>
                   </div>
                 </label>
-                <label class="mode-radio-card" id="card-mode-time">
-                  <input type="radio" name="adminRegMode" value="time_window">
+                <label class="mode-radio-card" id="card-mode-time" for="admin-mode-time">
+                  <input type="radio" id="admin-mode-time" name="adminRegMode" value="time_window" aria-label="Chế độ Mở theo khoảng thời gian xác định">
                   <div>
                     <div class="mode-info-title">⏱️ Mở theo khoảng thời gian xác định</div>
                     <div class="mode-info-sub">Chỉ cho phép đăng ký trong khoảng Ngày & Giờ cài đặt bên phải.</div>
                   </div>
                 </label>
-                <label class="mode-radio-card" id="card-mode-closed">
-                  <input type="radio" name="adminRegMode" value="closed">
+                <label class="mode-radio-card" id="card-mode-closed" for="admin-mode-closed">
+                  <input type="radio" id="admin-mode-closed" name="adminRegMode" value="closed" aria-label="Chế độ Đóng cổng ngay lập tức (Khóa đăng ký)">
                   <div>
                     <div class="mode-info-title">🔴 Đóng cổng ngay lập tức (Khóa đăng ký)</div>
                     <div class="mode-info-sub">Khóa chọn ca mới để ban điều hành chốt danh sách và điều phối.</div>
@@ -436,14 +436,14 @@
                 <label class="form-label" for="admin-reg-start" style="font-weight: 700;">
                   📅 Thời Gian Bắt Đầu Mở Cổng:
                 </label>
-                <input type="datetime-local" id="admin-reg-start" class="form-input">
+                <input type="datetime-local" id="admin-reg-start" class="form-input" aria-label="Thời Gian Bắt Đầu Mở Cổng">
               </div>
 
               <div class="datetime-field-group" style="margin-top: 0.85rem;">
                 <label class="form-label" for="admin-reg-end" style="font-weight: 700;">
                   ⌛ Hạn Chót Đóng Cổng:
                 </label>
-                <input type="datetime-local" id="admin-reg-end" class="form-input">
+                <input type="datetime-local" id="admin-reg-end" class="form-input" aria-label="Hạn Chót Đóng Cổng">
                 <div class="datetime-presets">
                   <span style="font-size: 0.73rem; color: var(--text-muted); align-self: center;">Nhanh:</span>
                   <button type="button" class="preset-chip" id="btn-preset-now">Bắt đầu từ bây giờ</button>
@@ -457,7 +457,7 @@
                 <label class="form-label" for="admin-reg-closed-msg" style="font-weight: 700;">
                   📢 Thông Báo Hiển Thị Khi Đóng Cổng:
                 </label>
-                <input type="text" id="admin-reg-closed-msg" class="form-input" placeholder="Ví dụ: Cổng đăng ký tạm khóa để ban điều hành chốt danh sách...">
+                <input type="text" id="admin-reg-closed-msg" class="form-input" placeholder="Ví dụ: Cổng đăng ký tạm khóa để ban điều hành chốt danh sách..." aria-label="Thông Báo Hiển Thị Khi Đóng Cổng">
               </div>
             </div>
           </div>
@@ -473,8 +473,8 @@
                 Khi cổng đang mở đăng ký, mặc định lịch trực sẽ ẩn. Bật tùy chọn này để cho phép sinh viên xem lịch trực tuần và tra cứu MSSV ngay.
               </div>
             </div>
-            <label style="display: inline-flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none;">
-              <input type="checkbox" id="admin-reg-publish-schedule" name="adminPublishSchedule" style="width: 1.25rem; height: 1.25rem; cursor: pointer; accent-color: var(--primary);">
+            <label for="admin-reg-publish-schedule" style="display: inline-flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="admin-reg-publish-schedule" name="adminPublishSchedule" style="width: 1.25rem; height: 1.25rem; cursor: pointer; accent-color: var(--primary);" aria-label="Hiển Thị Lịch Trực Trên Cổng Sinh Viên">
               <span style="font-weight: 700; font-size: 0.86rem;" id="admin-reg-publish-label">Tạm ẩn lịch trực</span>
             </label>
           </div>
@@ -662,6 +662,7 @@
             </div>
 
             <div class="search-input-wrap">
+              <label for="input-search-student" class="sr-only">Tìm kiếm theo Tên hoặc MSSV</label>
               <span class="search-icon">🔍</span>
               <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV..." aria-label="Tìm kiếm theo Tên hoặc MSSV">
             </div>
@@ -716,7 +717,7 @@
           <label class="form-label" for="modal-candidate-select">
             Chọn Sinh Viên Đảm Nhận:
           </label>
-          <select id="modal-candidate-select" class="form-input">
+          <select id="modal-candidate-select" class="form-input" aria-label="Chọn sinh viên đảm nhận ca trực">
             <!-- JS điền danh sách ứng viên -->
           </select>
           <div class="form-hint">
@@ -752,30 +753,30 @@
               <label class="form-label" for="admin-input-fullname">
                 Họ và Tên <span class="required">*</span>
               </label>
-              <input type="text" id="admin-input-fullname" class="form-input" placeholder="Ví dụ: Trần Quốc Toản" required>
+              <input type="text" id="admin-input-fullname" class="form-input" placeholder="Ví dụ: Trần Quốc Toản" required aria-label="Họ và Tên Sinh Viên">
             </div>
             <div class="form-group">
               <label class="form-label" for="admin-input-studentid">
                 Mã Số Sinh Viên (MSSV) <span class="required">*</span>
               </label>
-              <input type="text" id="admin-input-studentid" class="form-input" placeholder="Ví dụ: 2202111" required>
+              <input type="text" id="admin-input-studentid" class="form-input" placeholder="Ví dụ: 2202111" required aria-label="Mã Số Sinh Viên (MSSV)">
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label class="form-label" for="admin-input-phone">Số Điện Thoại</label>
-              <input type="tel" id="admin-input-phone" class="form-input" placeholder="0912345678">
+              <input type="tel" id="admin-input-phone" class="form-input" placeholder="0912345678" aria-label="Số Điện Thoại">
             </div>
             <div class="form-group">
-              <label class="form-label">Phân Loại <span class="required">*</span></label>
-              <div style="display: flex; gap: 1rem; margin-top: 0.4rem;">
-                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" name="adminStudentRole" value="old">
+              <div class="form-label" id="label-admin-student-role" style="font-weight: 700;">Phân Loại <span class="required">*</span></div>
+              <div style="display: flex; gap: 1rem; margin-top: 0.4rem;" role="radiogroup" aria-labelledby="label-admin-student-role">
+                <label for="admin-role-old" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
+                  <input type="radio" id="admin-role-old" name="adminStudentRole" value="old" aria-label="Người Cũ - Đã có kinh nghiệm">
                   <span>🎓 Người cũ</span>
                 </label>
-                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" name="adminStudentRole" value="new" checked>
+                <label for="admin-role-new" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
+                  <input type="radio" id="admin-role-new" name="adminStudentRole" value="new" checked aria-label="Người Mới - Tập sự">
                   <span>🌱 Người mới</span>
                 </label>
               </div>
@@ -785,7 +786,7 @@
           <!-- Ma trận ca rảnh trong modal -->
           <div class="form-group" style="margin-top: 0.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-              <label class="form-label" style="margin: 0;">Chọn Các Ca Rảnh:</label>
+              <div class="form-label" style="margin: 0; font-weight: 700;">Chọn Các Ca Rảnh:</div>
               <div style="display: flex; gap: 0.3rem;">
                 <button type="button" class="btn-chip" id="btn-admin-quick-all">Cả tuần</button>
                 <button type="button" class="btn-chip" id="btn-admin-quick-clear">Xóa hết</button>
@@ -793,7 +794,7 @@
             </div>
 
             <div class="matrix-wrapper">
-              <table class="matrix-table">
+              <table class="matrix-table" aria-label="Bảng chọn ca rảnh sinh viên">
                 <thead>
                   <tr>
                     <th>Ca</th>
@@ -807,19 +808,19 @@
                 <tbody>
                   <tr>
                     <td style="font-weight: 700; font-size: 0.78rem;">Sáng</td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T2_S"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T3_S"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T4_S"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T5_S"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T6_S"></td>
+                    <td><input type="checkbox" id="admin-cb-T2_S" class="admin-slot-cb" value="T2_S" aria-label="Ca Sáng Thứ Hai"></td>
+                    <td><input type="checkbox" id="admin-cb-T3_S" class="admin-slot-cb" value="T3_S" aria-label="Ca Sáng Thứ Ba"></td>
+                    <td><input type="checkbox" id="admin-cb-T4_S" class="admin-slot-cb" value="T4_S" aria-label="Ca Sáng Thứ Tư"></td>
+                    <td><input type="checkbox" id="admin-cb-T5_S" class="admin-slot-cb" value="T5_S" aria-label="Ca Sáng Thứ Năm"></td>
+                    <td><input type="checkbox" id="admin-cb-T6_S" class="admin-slot-cb" value="T6_S" aria-label="Ca Sáng Thứ Sáu"></td>
                   </tr>
                   <tr>
                     <td style="font-weight: 700; font-size: 0.78rem;">Chiều</td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T2_C"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T3_C"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T4_C"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T5_C"></td>
-                    <td><input type="checkbox" class="admin-slot-cb" value="T6_C"></td>
+                    <td><input type="checkbox" id="admin-cb-T2_C" class="admin-slot-cb" value="T2_C" aria-label="Ca Chiều Thứ Hai"></td>
+                    <td><input type="checkbox" id="admin-cb-T3_C" class="admin-slot-cb" value="T3_C" aria-label="Ca Chiều Thứ Ba"></td>
+                    <td><input type="checkbox" id="admin-cb-T4_C" class="admin-slot-cb" value="T4_C" aria-label="Ca Chiều Thứ Tư"></td>
+                    <td><input type="checkbox" id="admin-cb-T5_C" class="admin-slot-cb" value="T5_C" aria-label="Ca Chiều Thứ Năm"></td>
+                    <td><input type="checkbox" id="admin-cb-T6_C" class="admin-slot-cb" value="T6_C" aria-label="Ca Chiều Thứ Sáu"></td>
                   </tr>
                 </tbody>
               </table>
@@ -882,16 +883,16 @@
         <form id="form-add-admin-user" style="display: none;">
           <div class="form-group">
             <label class="form-label" for="add-user-fullname">Họ và Tên Cán Bộ <span class="required">*</span></label>
-            <input type="text" id="add-user-fullname" class="form-input" placeholder="Ví dụ: ThS. Hoàng Văn Nam" required>
+            <input type="text" id="add-user-fullname" class="form-input" placeholder="Ví dụ: ThS. Hoàng Văn Nam" required aria-label="Họ và Tên Cán Bộ">
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label class="form-label" for="add-user-username">Tên Đăng Nhập (Username) <span class="required">*</span></label>
-              <input type="text" id="add-user-username" class="form-input" placeholder="Ví dụ: namhv" required>
+              <input type="text" id="add-user-username" class="form-input" placeholder="Ví dụ: namhv" required aria-label="Tên Đăng Nhập Cán Bộ">
             </div>
             <div class="form-group">
               <label class="form-label" for="add-user-role">Vai Trò / Chức Vụ <span class="required">*</span></label>
-              <select id="add-user-role" class="form-input">
+              <select id="add-user-role" class="form-input" aria-label="Vai Trò hoặc Chức Vụ">
                 <option value="Điều phối viên tuyển sinh">Điều phối viên tuyển sinh</option>
                 <option value="Cán bộ thường trực">Cán bộ thường trực</option>
                 <option value="Trưởng ban điều hành">Trưởng ban điều hành</option>
@@ -901,11 +902,11 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label class="form-label" for="add-user-pwd">Mật Khẩu <span class="required">*</span></label>
-              <input type="password" id="add-user-pwd" class="form-input" placeholder="Tối thiểu 3 ký tự" required autocomplete="new-password">
+              <input type="password" id="add-user-pwd" class="form-input" placeholder="Tối thiểu 3 ký tự" required autocomplete="new-password" aria-label="Mật Khẩu Mới Cho Cán Bộ">
             </div>
             <div class="form-group">
               <label class="form-label" for="add-user-pin">Mã PIN Nhanh (Tùy chọn)</label>
-              <input type="text" id="add-user-pin" class="form-input" placeholder="4 số (VD: 6789)" maxlength="6">
+              <input type="text" id="add-user-pin" class="form-input" placeholder="4 số (VD: 6789)" maxlength="6" aria-label="Mã PIN Nhanh Cho Cán Bộ">
             </div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
@@ -917,19 +918,19 @@
         <form id="form-change-current-pwd" style="display: none;">
           <div class="form-group">
             <label class="form-label" for="pwd-current">Mật Khẩu Hiện Tại <span class="required">*</span></label>
-            <input type="password" id="pwd-current" class="form-input" placeholder="Nhập mật khẩu đang dùng" required autocomplete="current-password">
+            <input type="password" id="pwd-current" class="form-input" placeholder="Nhập mật khẩu đang dùng" required autocomplete="current-password" aria-label="Mật Khẩu Hiện Tại">
           </div>
           <div class="form-group">
             <label class="form-label" for="pwd-new">Mật Khẩu Mới <span class="required">*</span></label>
-            <input type="password" id="pwd-new" class="form-input" placeholder="Nhập mật khẩu mới" required autocomplete="new-password">
+            <input type="password" id="pwd-new" class="form-input" placeholder="Nhập mật khẩu mới" required autocomplete="new-password" aria-label="Mật Khẩu Mới">
           </div>
           <div class="form-group">
             <label class="form-label" for="pwd-confirm">Xác Nhận Mật Khẩu Mới <span class="required">*</span></label>
-            <input type="password" id="pwd-confirm" class="form-input" placeholder="Nhập lại mật khẩu mới" required autocomplete="new-password">
+            <input type="password" id="pwd-confirm" class="form-input" placeholder="Nhập lại mật khẩu mới" required autocomplete="new-password" aria-label="Xác Nhận Mật Khẩu Mới">
           </div>
           <div class="form-group">
             <label class="form-label" for="pin-new">Cập Nhật Mã PIN Nhanh (Tùy chọn)</label>
-            <input type="text" id="pin-new" class="form-input" placeholder="4 số (VD: 9999)" maxlength="6">
+            <input type="text" id="pin-new" class="form-input" placeholder="4 số (VD: 9999)" maxlength="6" aria-label="Cập Nhật Mã PIN Nhanh">
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
             <span>💾 Lưu Mật Khẩu Mới</span>
@@ -962,12 +963,12 @@
         <div class="excel-controls-bar">
           <div class="excel-control-item">
             <label class="excel-control-label" for="export-start-date">📅 Ngày Bắt Đầu:</label>
-            <input type="date" id="export-start-date" class="form-input excel-input-date" value="2026-07-01">
+            <input type="date" id="export-start-date" class="form-input excel-input-date" value="2026-07-01" aria-label="Ngày Bắt Đầu Xuất Lịch">
           </div>
 
           <div class="excel-control-item">
             <label class="excel-control-label" for="export-range-select">⏱️ Phạm Vi Xuất:</label>
-            <select id="export-range-select" class="form-input excel-select-range">
+            <select id="export-range-select" class="form-input excel-select-range" aria-label="Phạm Vi Xuất Lịch">
               <option value="30days_month" selected>🗓️ Trọn Vẹn 1 Tháng (30 ngày liên tục có T7, CN chuẩn mẫu)</option>
               <option value="20days_4weeks">🗓️ 4 Tuần Hành Chính (20 ngày Thứ 2 đến Thứ 6)</option>
               <option value="14days_full">14 ngày liên tục (2 tuần có T7, CN)</option>
