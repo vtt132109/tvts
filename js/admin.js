@@ -1108,8 +1108,8 @@
           </td>
           <td>
             <div style="display: flex; gap: 0.4rem;">
-              <button class="btn btn-secondary btn-sm" onclick="window.adminEditStudent('${s.id}')" title="Sửa thông tin & ca rảnh">✏️ Sửa</button>
-              <button class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteStudent('${s.id}')" title="Xóa">🗑️</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.adminEditStudent('${escapeHtml(s.id)}')" title="Sửa thông tin & ca rảnh">✏️ Sửa</button>
+              <button class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteStudent('${escapeHtml(s.id)}')" title="Xóa">🗑️</button>
             </div>
           </td>
         </tr>
@@ -1281,8 +1281,8 @@
         return `
           <div class="fairness-item">
             <div class="fairness-item-left">
-              <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">${m.fullName}</span>
-              <span style="font-size: 0.72rem; color: var(--text-muted);">(${m.studentId})</span>
+              <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">${escapeHtml(m.fullName)}</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">(${escapeHtml(m.studentId)})</span>
             </div>
             <div class="fairness-item-count">
               <div class="shift-progress-bar">
@@ -1334,8 +1334,8 @@
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
 
       selectHtml += `
-        <option value="${s.id}" ${isSelected ? 'selected' : ''}>
-          ${s.fullName} (${s.studentId}) - ${availLabel}
+        <option value="${escapeHtml(s.id)}" ${isSelected ? 'selected' : ''}>
+          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}
         </option>
       `;
     });
