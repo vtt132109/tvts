@@ -18,7 +18,37 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
 
 ---
 
-## 📜 GIAO THỨC 2: CONTRACT-FIRST (CHỐNG LỆCH DỮ LIỆU KHI CHẠY SONG SONG)
+## 📋 GIAO THỨC 2: BẢNG TIẾN ĐỘ TRỰC TIẾP (LIVE TASKBOARD TRACKING)
+
+> [!NOTE]
+> Để người dùng luôn nắm bắt được trạng thái công việc mà không cần hỏi:
+
+1. **Khởi Tạo Danh Sách Đầu Việc:**
+   - Khi tiếp nhận tác vụ phức tạp có từ 2 bước trở lên hoặc khi phân công cho nhiều Subagents chạy song song, Parent Agent **BẮT BUỘC PHẢI KHỞI TẠO HOẶC CẬP NHẬT** bảng đầu việc vào [`.antigravity/memory/taskboard.md`](file:///d:/New%20folder%20(236)/.antigravity/memory/taskboard.md).
+2. **Quy Trình Cập Nhật Trạng Thái Của Subagents:**
+   - Khi một Subagent bắt đầu nhận việc: chuyển trạng thái từ `Pending [ ]` sang `In Progress [/]`.
+   - Khi Subagent hoàn thành việc và test đã pass: chuyển trạng thái sang `Completed [x]`.
+   - Nếu gặp sự cố, xung đột schema hoặc vướng lỗi: chuyển sang `Blocked [!]` và ghi rõ lý do.
+
+---
+
+## 🎓 GIAO THỨC 3: NHẬT KÝ TỰ HỌC HỎI TỪ LỖI SAI (LESSONS LEARNED)
+
+> [!TIP]
+> Tích lũy tri thức để hệ thống thông minh hơn sau mỗi sự cố:
+
+1. **Kích Hoạt Tự Học (Auto-Reflection Trigger):**
+   - Khi một lệnh build/test bị thất bại phải sửa lại code.
+   - Hoặc khi người dùng chỉ ra lỗi logic/thiếu sót trong khung chat.
+2. **Quy Chuẩn Đúc Kết:**
+   - Agent **BẮT BUỘC** phải tự đúc kết bài học theo đúng công thức:  
+     `Nguyên nhân gốc rễ (Root Cause) -> Cách phòng tránh & Chuẩn hóa`
+   - Ghi nối tiếp (append) vào [`.antigravity/memory/lessons-learned.md`](file:///d:/New%20folder%20(236)/.antigravity/memory/lessons-learned.md) trước khi kết thúc phiên xử lý lỗi.
+   - Mọi Agent tương lai trước khi viết code phải tham khảo các bài học này để không lặp lại lỗi cũ.
+
+---
+
+## 📜 GIAO THỨC 4: CONTRACT-FIRST (CHỐNG LỆCH DỮ LIỆU KHI CHẠY SONG SONG)
 
 > [!CAUTION]
 > Khi một tác vụ yêu cầu cả `@backend-agent` (xử lý dữ liệu/thuật toán) và `@frontend-agent` (xây dựng giao diện/DOM) chạy song song, việc lệch cấu trúc dữ liệu sẽ phá vỡ hệ thống:
@@ -30,7 +60,7 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
 
 ---
 
-## 🚀 GIAO THỨC 3: AUTO-DELEGATION & PARALLEL SPAWN (ỦY QUYỀN TỰ ĐỘNG)
+## 🚀 GIAO THỨC 5: AUTO-DELEGATION & PARALLEL SPAWN (ỦY QUYỀN TỰ ĐỘNG)
 
 1. **Nhận Diện Ý Định Ngữ Nghĩa (Semantic Trigger):**
    - Khi nhận yêu cầu từ người dùng, Parent Agent tự động đối chiếu nội dung với trường `description` của 3 Subagents trong `.antigravity/agents/`:
@@ -49,21 +79,21 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
 
 ---
 
-## 🛡️ GIAO THỨC 4: PRE-EXECUTION GIT SAFETY GUARD (BẢO HIỂM GIT TỰ ĐỘNG)
+## 🛡️ GIAO THỨC 6: PRE-EXECUTION GIT SAFETY GUARD (BẢO HIỂM GIT TỰ ĐỘNG)
 
 > [!IMPORTANT]
 > Trước khi gọi các Subagent hoặc sửa đổi từ **2 files trở lên**, Parent Agent **BẮT BUỘC** phải bảo hiểm theo 4 bước:
 
 1. **Kiểm tra trạng thái:** `git status --porcelain`.
 2. **Lưu Checkpoint an toàn:** Nếu có code dở dang, chạy:  
-   `git add . && git commit -m "chore(checkpoint): save user state before agent task"`.
+   `git add . ; git commit -m "chore(checkpoint): save user state before agent task"`.
 3. **Tách nhánh cách ly:**  
    `git checkout -b agent/<ten-tac-vu-ngan-gon>-<YYYYMMDD-HHMM>`.
 4. **Thực thi trong nhánh cách ly:** Mọi Subagent chỉ làm việc trên nhánh `agent/*`. Khi hoàn tất, in rõ hướng dẫn gộp nhánh (`/merge-clean`) hoặc hủy bỏ (`/rollback`).
 
 ---
 
-## ⚡ GIAO THỨC 5: CIRCUIT BREAKER (CẦU CHÌ CHỐNG LẶP VÔ TẬN - MAX RETRY = 3)
+## ⚡ GIAO THỨC 7: CIRCUIT BREAKER (CẦU CHÌ CHỐNG LẶP VÔ TẬN - MAX RETRY = 3)
 
 > [!WARNING]
 > Để bảo vệ hạn ngạch API (Quota) và ngăn chặn tình trạng Agent bị "kẹt vòng lặp tự sửa lỗi" (Infinite Retry Loop):
@@ -80,7 +110,7 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
 
 ---
 
-## 🔒 GIAO THỨC 6: SECRET SHIELD (BẢO VỆ TẬP TIN NHẠY CẢM)
+## 🔒 GIAO THỨC 8: SECRET SHIELD (BẢO VỆ TẬP TIN NHẠY CẢM)
 
 > [!CAUTION]
 > Nghiêm cấm mọi hành vi rò rỉ bí mật, khóa mật mã và lịch sử Git nội bộ:
@@ -93,3 +123,20 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
    - **CẤM ĐỌC (`view_file`, `read_file`):** Tuyệt đối không đọc nội dung các file trên.
    - **CẤM IN RA MÀN HÌNH:** Không hiển thị giá trị secret, private key trong bất kỳ log hay tin nhắn chat nào.
    - **CẤM CHỈNH SỬA / XÓA:** Không cho phép bất kỳ tool chỉnh sửa hay lệnh terminal nào sửa đổi hoặc xóa các tệp này.
+
+---
+
+## 🧱 GIAO THỨC 9: DEPENDENCY FIREWALL (TƯỜNG LỬA KIỂM SOÁT THƯ VIỆN)
+
+> [!WARNING]
+> Ngăn chặn việc tự ý cài đặt package ngoài luồng gây phình to mã nguồn hoặc rủi ro bảo mật chuỗi cung ứng (Supply-chain attack):
+
+1. **Cấm Tự Ý Cài Đặt Package:**
+   - Mọi lệnh cài đặt gói phụ thuộc: `npm install *`, `npm i *`, `yarn add *`, `pnpm add *`, `pip install *` **BẮT BUỘC PHẢI HỎI Ý KIẾN NGƯỜI DÙNG** trong khung chat.
+   - Tuyệt đối không được tự động chạy ngầm trong background hay tự ý thêm dependencies vào `package.json`.
+2. **Ưu Tiên Tối Đa Thư Viện Sẵn Có:**
+   - Subagents **BẮT BUỘC PHẢI TẬN DỤNG** các công nghệ và thư viện đã tích hợp sẵn trong dự án:
+     - JavaScript ES6+ thuần (Vanilla JS), bọc IIFE cô lập.
+     - Web Storage API (`localStorage`, `sessionStorage`).
+     - DOM APIs chuẩn trình duyệt, CSS3 Variables.
+     - Node.js built-ins (`fs`, `path`, `assert`) cho test harness.
