@@ -176,21 +176,31 @@
 
 ### Task 13: Màn Hình Xác Thực Đăng Nhập & Khóa Toàn Bộ Trang Admin
 - **Description:**
-  - Mặc định ẩn hoàn toàn bảng điều khiển Admin (`admin.html`) khi chưa xác thực.
-  - Tạo màn hình đăng nhập (Auth Screen) hiện đại: Hỗ trợ đăng nhập bằng Tên đăng nhập + Mật khẩu hoặc Mã PIN nhanh.
-  - Lưu phiên đăng nhập an toàn trong `sessionStorage`, hỗ trợ nút Đăng xuất (Logout) xóa phiên lập tức.
+  - Mặc định ẩn hoàn toàn bảng điều khiển Admin (`admin.html`) khi chưa xác thực (`#admin-dashboard-container` có `style="display: none;"`).
+  - Màn hình đăng nhập (Auth Screen) hiện đại: Hỗ trợ 2 phương thức:
+    1. Tên đăng nhập + Mật khẩu (`admin` / `123`, `diephoi` / `123`).
+    2. Mã PIN nhanh 4 số (`9999` hoặc `8888`).
+  - Tự động ẩn thông báo lỗi khi bắt đầu gõ lại (`input` event listener).
+  - Lưu phiên đăng nhập an toàn trong `sessionStorage` (`ts_admin_authenticated`, `ts_admin_user_data`), hỗ trợ nút Đăng xuất (Logout) xóa sạch phiên lập tức.
+  - Cung cấp lối vào trực tiếp "🔒 Đăng Nhập Cán Bộ" trên header và footer của `index.html`.
 - **Acceptance criteria:**
   - [x] Chưa đăng nhập không thể xem thông tin sinh viên hay điều chỉnh lịch trực.
   - [x] Đăng nhập đúng mật khẩu/PIN mới mở khóa toàn bộ bảng điều khiển.
-  - [x] Có nút Đăng xuất kèm thông tin người đang đăng nhập trên header.
+  - [x] Có nút Đăng xuất kèm thông tin người đang đăng nhập trên header (`#admin-user-profile`).
+  - [x] Tự động ẩn lỗi khi người dùng gõ lại thông tin.
+  - [x] Đạt chuẩn 7/7 tests xác thực trong `tests/auth.test.js`.
+- **Status:** ✅ Đã hoàn thành & Kiểm thử 100%
 
 ### Task 14: Quản Lý Danh Sách Người Được Cấp Quyền Truy Cập
 - **Description:**
-  - Modal quản lý tài khoản cán bộ trong trang Admin.
+  - Modal quản lý tài khoản cán bộ trong trang Admin (`#user-mgmt-modal`).
   - Xem danh sách người được cấp quyền, thêm tài khoản cán bộ mới, đổi mật khẩu và thu hồi quyền (xóa tài khoản).
+  - Chuẩn hóa mô hình dữ liệu tài khoản quản trị trong `data/admin_accounts.json`.
 - **Acceptance criteria:**
   - [x] Admin có thể thêm cán bộ mới được phép vào hệ thống.
   - [x] Cho phép đổi mật khẩu tài khoản hiện tại.
+  - [x] Dữ liệu tài khoản lưu trữ đồng bộ trong `localStorage` (`ts_scheduler_admin_users`).
+- **Status:** ✅ Đã hoàn thành & Kiểm thử 100%
 
 ---
 
