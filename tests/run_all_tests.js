@@ -6,6 +6,7 @@
  * 1. Thuật toán xếp ca Bipartite Matching & Luân phiên 4 tuần (Scheduler)
  * 2. Xác thực cán bộ, mã PIN & Bảo mật XSS escapeHtml (Auth & Security)
  * 3. Đóng/mở cổng, cờ publishSchedule & Tra cứu MSSV (Portal Visibility & Lookup)
+ * 4. Quản lý sao lưu web 6 tháng & Auto-Pruning (Web Backup Manager)
  */
 
 const { spawnSync } = require('child_process');
@@ -14,7 +15,8 @@ const path = require('path');
 const suites = [
   { name: 'Thuật Toán Xếp Ca & Luân Phiên (Scheduler Engine)', script: 'scheduler.test.js' },
   { name: 'Xác Thực, Phân Quyền & Bảo Mật XSS (Auth & Security)', script: 'auth.test.js' },
-  { name: 'Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal Visibility & Lookup)', script: 'portal.test.js' }
+  { name: 'Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal Visibility & Lookup)', script: 'portal.test.js' },
+  { name: 'Quản Lý Sao Lưu Web 6 Tháng (Web Backup Manager)', script: 'backup.test.js' }
 ];
 
 console.log('╔══════════════════════════════════════════════════════════════════╗');
