@@ -154,7 +154,7 @@
     </div>
 
     <!-- Thông báo đăng ký thành công -->
-    <div id="reg-success-alert" style="display: none; margin-bottom: 1.5rem; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: var(--radius-md); padding: 1.25rem 1.5rem;">
+    <div id="reg-success-alert" role="status" aria-live="polite" style="display: none; margin-bottom: 1.5rem; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: var(--radius-md); padding: 1.25rem 1.5rem;">
       <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
         <span style="font-size: 1.5rem; line-height: 1;">🎉</span>
         <div>
@@ -209,7 +209,7 @@
             </div>
 
             <!-- Thông báo khi nhập sai MSSV (không có trong danh sách CTV) -->
-            <div id="student-invalid-mssv-notice" style="display: none; max-width: 600px; margin: 0 auto 1.25rem; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: var(--radius-md); padding: 0.9rem 1.25rem; color: #991b1b; text-align: left; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);">
+            <div id="student-invalid-mssv-notice" role="alert" aria-live="assertive" style="display: none; max-width: 600px; margin: 0 auto 1.25rem; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: var(--radius-md); padding: 0.9rem 1.25rem; color: #991b1b; text-align: left; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);">
               <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span style="font-size: 1.5rem; line-height: 1;">⚠️</span>
                 <div>
@@ -257,28 +257,34 @@
             <div id="student-matrix-area" class="matrix-locked-state">
               
               <!-- Thanh chuyển Tab chọn 4 tuần & Xem Cả Tháng -->
+              <!-- Với role="tablist", MỖI tab bắt buộc có id + aria-controls trỏ tới
+                   vùng nội dung của nó, và vùng nội dung phải có role="tabpanel"
+                   + aria-labelledby trỏ ngược lại. Trước đây có 5 tab nhưng 0
+                   tabpanel và không id nào -> trình đọc màn hình không liên kết
+                   được tab với nội dung, người dùng bàn phím cũng không có
+                   phím mũi tên để chuyển tab. -->
               <div class="month-week-tabs" id="reg-week-tabs" role="tablist" aria-label="Chọn tuần đăng ký ca rảnh">
-                <button type="button" class="month-week-tab active" data-week="1" role="tab" aria-selected="true">
+                <button type="button" class="month-week-tab active" id="reg-tab-week-1" data-week="1" role="tab" aria-selected="true" aria-controls="shift-matrix-container" tabindex="0">
                   <span class="tab-week-title">Tuần 1</span>
                   <span class="tab-week-dates">05/10 - 09/10</span>
                   <span class="tab-week-count" id="badge-week-count-1">0 ca</span>
                 </button>
-                <button type="button" class="month-week-tab" data-week="2" role="tab" aria-selected="false">
+                <button type="button" class="month-week-tab" id="reg-tab-week-2" data-week="2" role="tab" aria-selected="false" aria-controls="shift-matrix-container" tabindex="-1">
                   <span class="tab-week-title">Tuần 2</span>
                   <span class="tab-week-dates">12/10 - 16/10</span>
                   <span class="tab-week-count" id="badge-week-count-2">0 ca</span>
                 </button>
-                <button type="button" class="month-week-tab" data-week="3" role="tab" aria-selected="false">
+                <button type="button" class="month-week-tab" id="reg-tab-week-3" data-week="3" role="tab" aria-selected="false" aria-controls="shift-matrix-container" tabindex="-1">
                   <span class="tab-week-title">Tuần 3</span>
                   <span class="tab-week-dates">19/10 - 23/10</span>
                   <span class="tab-week-count" id="badge-week-count-3">0 ca</span>
                 </button>
-                <button type="button" class="month-week-tab" data-week="4" role="tab" aria-selected="false">
+                <button type="button" class="month-week-tab" id="reg-tab-week-4" data-week="4" role="tab" aria-selected="false" aria-controls="shift-matrix-container" tabindex="-1">
                   <span class="tab-week-title">Tuần 4</span>
                   <span class="tab-week-dates">26/10 - 30/10</span>
                   <span class="tab-week-count" id="badge-week-count-4">0 ca</span>
                 </button>
-                <button type="button" class="month-week-tab tab-view-all" data-week="all" role="tab" aria-selected="false">
+                <button type="button" class="month-week-tab tab-view-all" id="reg-tab-all" data-week="all" role="tab" aria-selected="false" aria-controls="month-overview-container" tabindex="-1">
                   <span class="tab-week-title">📊 Xem Cả Tháng</span>
                   <span class="tab-week-dates">Toàn bộ 4 tuần</span>
                   <span class="tab-week-count" id="badge-week-count-all">0 ca</span>
@@ -315,7 +321,7 @@
               </div>
 
               <!-- Matrix Table (Tuần 1 -> Tuần 4) -->
-              <div class="matrix-wrapper" id="shift-matrix-container">
+              <div class="matrix-wrapper" id="shift-matrix-container" role="tabpanel" aria-labelledby="reg-tab-week-1" tabindex="0">
                 <table class="matrix-table" aria-label="Bảng chọn ca rảnh">
                   <thead>
                     <tr>
@@ -433,12 +439,12 @@
               </div>
 
               <!-- Khung Tổng Quan 4 Tuần (Hiển thị khi chọn Tab [Xem Cả Tháng]) -->
-              <div id="month-overview-container" class="month-overview-wrapper" style="display: none;">
+              <div id="month-overview-container" class="month-overview-wrapper" role="tabpanel" aria-labelledby="reg-tab-all" tabindex="0" style="display: none;">
                 <!-- Nội dung sẽ được render động bởi js/student.js -->
               </div>
 
               <!-- Thanh Hành Động Gửi Đăng Ký & Xóa Toàn Bộ Ca (Task 3) -->
-              <div class="student-action-bar" style="margin-top: 1.5rem; display: flex; gap: 0.85rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+              <div class="student-action-bar" style="margin-top: 1.5rem; padding-bottom: env(safe-area-inset-bottom, 0px); display: flex; gap: 0.85rem; justify-content: center; align-items: center; flex-wrap: wrap;">
                 <button type="button" class="btn btn-danger-outline" id="btn-clear-all-shifts" style="border-color: #fca5a5; color: #dc2626; min-height: 48px; padding: 0.75rem 1.25rem; font-weight: 700;">
                   <span>🗑️ Hủy Đăng Ký / Xóa Hết Ca</span>
                 </button>
@@ -525,11 +531,11 @@
   </main>
 
   <!-- Modal Đề Xuất Đổi Ca / Nhờ Trực Hộ (Task 26) -->
-  <div class="modal-overlay modal-backdrop" id="modal-student-swap" style="display: none;">
+  <div class="modal-overlay modal-backdrop" id="modal-student-swap" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-student-swap-title" tabindex="-1">
     <div class="modal-box" style="max-width: 620px;">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">🔄 Đề Xuất Đổi Ca / Nhờ Trực Hộ</h3>
+          <h3 class="modal-title" id="modal-student-swap-title">🔄 Đề Xuất Đổi Ca / Nhờ Trực Hộ</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
             Gửi yêu cầu hoán đổi ca hoặc nhờ CTV khác trực thay lên Ban Điều Hành
           </p>
@@ -545,7 +551,7 @@
             <span id="swap-sender-role-badge" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-weight: 700;"></span>
           </label>
           <div style="display: flex; gap: 0.5rem;">
-            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)…" style="flex: 1; font-weight: 600;" required autocomplete="off" aria-label="Mã Số Sinh Viên của bạn">
+            <input type="text" id="input-swap-sender-mssv" class="form-input" inputmode="numeric" pattern="[0-9]*" maxlength="12" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)…" style="flex: 1; font-weight: 600;" required autocomplete="off" aria-label="Mã Số Sinh Viên của bạn">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-swap-load-shifts" style="white-space: nowrap; font-weight: 700; border-color: var(--primary); color: var(--primary);">
               <span>🔍 Tải Ca Trực</span>
             </button>
@@ -637,7 +643,8 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/cloud_sync.js?v=20261016_1755"></script>
+  <script src="js/a11y_modal.js?v=20261016_1755"></script>
+<script src="js/cloud_sync.js?v=20261016_1755"></script>
   <script src="js/month_calendar.js?v=20261016_1755"></script>
   <script src="js/scheduler.js?v=20261016_1755"></script>
   <script src="js/sample30.js?v=20261016_1755"></script>

@@ -384,6 +384,101 @@ console.log('\n▶ [GROUP 6] Cơ Chế Offline-First & An Toàn Khi Mất Mạng
 }
 
 // -----------------------------------------------------------------------------
+// GROUP 7: BẪY HTTP 200 + {"error": ...} CỦA FIREBASE REST
+// -----------------------------------------------------------------------------
+// Khi Security Rules từ chối, Firebase KHÔNG trả HTTP 4xx/5xx mà trả
+// HTTP 200 kèm body {"error": "Permission denied"}. Trước đây code chỉ
+// kiểm tra response.ok nên:
+//   - báo thành công,
+//   - áp payload rỗng -> GHI ĐÈ MẤT toàn bộ dữ liệu cục bộ,
+//   - người dùng tin rằng đã kéo dữ liệu về.
+console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Security Rules):');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  // Đặt dữ liệu cục bộ quan trọng để chứng minh KHÔNG bị ghi đè
+  const localStudents = [
+    { id: 'st_1', fullName: 'Nguyễn Văn A', studentId: '2102001' },
+    { id: 'st_2', fullName: 'Trần Thị B', studentId: '2102002' }
+  ];
+  env.localStorage.setItem('ts_scheduler_students', JSON.stringify(localStudents));
+
+  csm.saveConfig({ enabled: true, databaseUrl: 'https://test-rtdb.firebaseio.com' });
+
+  // Mô phỏng CHÍNH XÁC phản hồi của Firebase khi Rules chặn
+  const permissionDenied = async () => ({
+    ok: true,           // <-- HTTP 200 !
+    status: 200,
+    statusText: 'OK',
+    json: async () => ({ error: 'Permission denied' }),
+    text: async () => '{"error":"Permission denied"}'
+  });
+  env.window.fetch = permissionDenied;
+  env.sandbox.fetch = permissionDenied;
+
+  const pull = await csm.pullFromCloud();
+
+  assert(pull.success === false,
+    '7.1: HTTP 200 + {"error":"Permission denied"} phải được coi là THẤT BẠI, không phải thành công');
+  assert(typeof pull.error === 'string' && /Permission denied/.test(pull.error),
+    `7.2: Thông báo lỗi phải nêu rõ nguyên nhân từ Firebase. Thực tế: ${pull.error}`);
+  assert(/Security Rules/.test(pull.error || ''),
+    '7.3: Thông báo lỗi phải chỉ đường dẫn tới chỗ cần sửa (Firebase Security Rules)');
+
+  // Điểm mấu chốt: dữ liệu cục bộ phải được giữ nguyên
+  const after = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
+  assert(after.length === 2 && after[0].fullName === 'Nguyễn Văn A',
+    '7.4: TUYỆT ĐỐI không được ghi đè dữ liệu cục bộ khi Cloud trả về lỗi');
+
+  // Cùng bẫy đó cho chiều push
+  const push = await csm.pushToCloud();
+  assert(push.success === false,
+    '7.5: pushToCloud cũng phải phát hiện {"error":...} dù HTTP 200');
+  assert(/Permission denied/.test(push.error || ''),
+    `7.6: Lỗi push phải nêu rõ nguyên nhân. Thực tế: ${push.error}`);
+}
+
+{
+  // Phải phân biệt được với Cloud THẬT SỰ chưa có dữ liệu (body null)
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({ enabled: true, databaseUrl: 'https://test-rtdb.firebaseio.com' });
+
+  const emptyResponse = async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    json: async () => null,
+    text: async () => 'null'
+  });
+  env.window.fetch = emptyResponse;
+  env.sandbox.fetch = emptyResponse;
+
+  const pull = await csm.pullFromCloud();
+  assert(pull.success === true && pull.data === null,
+    '7.7: Cloud rỗng (body null) vẫn là trường hợp bình thường, không phải lỗi');
+}
+
+{
+  // Lỗi HTTP thật (4xx/5xx) vẫn phải được bắt như trước
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({ enabled: true, databaseUrl: 'https://test-rtdb.firebaseio.com' });
+
+  const serverError = async () => ({
+    ok: false, status: 500, statusText: 'Internal Server Error',
+    json: async () => ({}),
+    text: async () => 'server exploded'
+  });
+  env.window.fetch = serverError;
+  env.sandbox.fetch = serverError;
+
+  const pull = await csm.pullFromCloud();
+  assert(pull.success === false && /500/.test(pull.error || ''),
+    `7.8: Lỗi HTTP 500 vẫn phải bị bắt. Thực tế: ${pull.error}`);
+}
+
+// -----------------------------------------------------------------------------
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');

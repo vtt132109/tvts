@@ -551,6 +551,34 @@
         const targetWeek = tab.getAttribute('data-week');
         switchRegWeek(targetWeek === 'all' ? 'all' : (parseInt(targetWeek, 10) || 1));
       });
+
+      // Điều hướng bằng bàn phím theo chuẩn ARIA Tabs (WAI-ARIA APG):
+      // ←/→ chuyển tab liền kề, Home/End về đầu/cuối. Trước đây hoàn toàn
+      // không có, nên người dùng bàn phím chỉ có thể chuyển tab bằng Tab+Enter
+      // và không có manh mốc trực quan nào rằng đây là nhóm chọn một.
+      tab.addEventListener('keydown', (e) => {
+        const tabs = Array.from(elements.regWeekTabs || []);
+        const idx = tabs.indexOf(tab);
+        if (idx < 0 || tabs.length === 0) return;
+
+        let nextIdx = -1;
+        switch (e.key) {
+          case 'ArrowRight':
+          case 'ArrowDown':  nextIdx = (idx + 1) % tabs.length; break;
+          case 'ArrowLeft':
+          case 'ArrowUp':    nextIdx = (idx - 1 + tabs.length) % tabs.length; break;
+          case 'Home':       nextIdx = 0; break;
+          case 'End':        nextIdx = tabs.length - 1; break;
+          default: return;
+        }
+
+        e.preventDefault();
+        const target = tabs[nextIdx];
+        // Roving tabindex: tab mới chọn phải nhận tiêu điểm.
+        target.focus();
+        const targetWeek = target.getAttribute('data-week');
+        switchRegWeek(targetWeek === 'all' ? 'all' : (parseInt(targetWeek, 10) || 1));
+      });
     });
 
     // Checkbox Ma Trận Ca Rảnh
@@ -1262,6 +1290,15 @@
       const isActive = (week === 'all' && wVal === 'all') || (String(week) === wVal);
       tab.classList.toggle('active', isActive);
       tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      // ROVING TABINDEX: trong nhóm tab chỉ tab đang chọn mới nằm trong
+      // chuỗi Tab. Trước đây cả 5 tab đều tabindex=0 -> người dùng bàn phím
+      // phải bấm Tab qua cả 5 tab mới tới được nội dung.
+      tab.setAttribute('tabindex', isActive ? '0' : '-1');
+      // aria-labelledby của panel phải trỏ tới tab ĐANG CHỌN, không phải
+      // tab tuần 1 cố định.
+      const panelId = tab.getAttribute('aria-controls');
+      const panel = panelId ? document.getElementById(panelId) : null;
+      if (panel && tab.id) panel.setAttribute('aria-labelledby', tab.id);
     });
 
     if (week === 'all') {
@@ -1374,6 +1411,20 @@
 
     elements.monthOverviewContainer.innerHTML = html;
   }
+
+  /**
+   * Chuyển từ chế độ "Xem cả tháng" sang chỉnh sửa một tuần cụ thể.
+   * (Nút ✏️ trong bảng tổng quan trước đây gọi hàm này nhưng hàm chưa
+   *  tồn tại, khiến nút bấm không có tác dụng gì.)
+   * @param {number} week - 1..4
+   */
+  window.studentSwitchToWeek = (week) => {
+    const w = Math.min(Math.max(parseInt(week, 10) || 1, 1), 4);
+    switchRegWeek(w);
+    if (elements.studentMatrixArea) {
+      elements.studentMatrixArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
 
   function updateCheckboxVisual(cb) {
     const parent = cb.closest('.slot-toggle');
@@ -2357,7 +2408,7 @@
     localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(allSwaps));
 
     // Thông báo đồng bộ sang trang Admin
-    window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] } }));
 
     closeSwapModal();
     showToast('Đã gửi đề xuất đến Ban Điều Hành! Bạn có thể theo dõi trạng thái ngay tại Thẻ lịch trực.', 'success');
@@ -2389,11 +2440,18 @@
     openSwapModal(shiftId, weekNum);
   };
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = 'info', duration) {
+    // LỖI phải được đọc NGAY bởi trình đọc màn hình, không phải đợi đến
+    // khi trình đọc rảnh (vùng toast là aria-live="polite").
+    if (type === 'error' && window.ModalA11y && typeof window.ModalA11y.announceAlert === 'function') {
+      window.ModalA11y.announceAlert(String(message).replace(/<[^>]*>/g, ''));
+    }
+
     if (!elements.toastContainer) return;
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    if (type === 'error') toast.setAttribute('role', 'alert');
     // Bắt buộc escapeHtml: message có thể chứa tên/MSSV do người dùng nhập.
     toast.innerHTML = `
       <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
@@ -2402,12 +2460,15 @@
 
     elements.toastContainer.appendChild(toast);
 
+    // Tôn trọng tham số thời lượng thay vì luôn cứng 3.2 giây.
+    const lifetime = Number(duration) > 0 ? Number(duration) : 3200;
+
     setTimeout(() => {
       toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(100%)';
       setTimeout(() => toast.remove(), 300);
-    }, 3200);
+    }, lifetime);
   }
 
   // Quản lý Chế độ Sáng / Tối (Dark / Light Theme Switcher)

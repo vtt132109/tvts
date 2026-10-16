@@ -277,10 +277,24 @@
     const badRoles = [];
 
     const normalized = students.filter(Boolean).map((s, idx) => {
-      let id = s.id || s.studentId || `stu_${idx + 1}`;
+      // id falsy (0, '', null) phải coi như THIẾU, không âm thầm rơi về stu_N
+      // vì stu_N có thể trùng với id thật của sinh viên khác.
+      const rawId = (s.id !== undefined && s.id !== null && s.id !== '')
+        ? String(s.id)
+        : (s.studentId !== undefined && s.studentId !== null && s.studentId !== ''
+          ? String(s.studentId)
+          : `stu_${idx + 1}`);
+
+      let id = rawId;
       if (seenIds.has(id)) {
-        warn(`Mã định danh bị trùng "${id}" — đã tự động đổi thành "${id}_${idx + 1}".`);
-        id = `${id}_${idx + 1}`;
+        // Vòng lặp: id mới có thể TRÙNG với một id đã tồn tại khác
+        // (vd đã có cả "x_3"). Nếu chỉ thử 1 lần sẽ tạo 2 sinh viên cùng id,
+        // khiến 2 người bị gộp làm 1 và ca bị gán ngoài ca đã đăng ký.
+        let suffix = idx + 1;
+        const base = rawId;
+        while (seenIds.has(`${base}_${suffix}`)) suffix++;
+        warn(`Mã định danh bị trùng "${rawId}" — đã tự động đổi thành "${base}_${suffix}".`);
+        id = `${base}_${suffix}`;
       }
       seenIds.add(id);
 
@@ -301,21 +315,39 @@
         avail = [];
       }
 
-      // Vai trò chỉ chấp nhận đúng 'old' | 'new'. Giá trị lạ (kể cả mặc định 'old')
-      // trước đây bị âm thầm đổi thành Chính Thức — giờ ghi nhận cảnh báo.
-      let role = s.role;
-      if (role !== 'old' && role !== 'new') {
-        if (role !== undefined && role !== null && role !== '') {
-          badRoles.push(`"${s.fullName || id}": ${JSON.stringify(role)}`);
+      // Vai trò chỉ chấp nhận 'old' | 'new' (không phân biệt hoa thường, và chấp
+      // nhận cả tên hiển thị tiếng Việt). Trước đây mọi giá trị lạ đều bị
+      // âm thầm đổi thành 'old' (Chính Thức) — khiến một Tập sự gõ sai
+      // "NEW" bị nâng quyền, đồng thời phá vỡ luật 1 Cũ + 1 Mới cho toàn danh sách.
+      // Nay: chuẩn hoá + LUÔN ghi cảnh báo, kể cả khi thiếu hoàn toàn.
+      let role = null;
+      if (typeof s.role === 'string') {
+        const r = s.role.trim().toLowerCase();
+        if (r === 'old' || r === 'new') {
+          role = r;
+        } else if (r === 'chính thức' || r === 'chinh thuc' || r === 'ct' || r === 'veteran' || r === 'cu') {
+          role = 'old';
+        } else if (r === 'tập sự' || r === 'tập sư' || r === 'tap su' || r === 'ts' || r === 'newcomer') {
+          role = 'new';
         }
-        role = 'old';
+      } else if (s.role === true || s.role === false) {
+        role = s.role ? 'old' : 'new';
+      }
+
+      if (role === null) {
+        const raw = s.role === undefined || s.role === null || s.role === ''
+          ? '(thiếu)' : JSON.stringify(s.role);
+        badRoles.push(`"${s.fullName || id}": ${raw}`);
+        // Mặc định là 'new' (Tập sự) — KHÔNG tự nâng quyền lên Chính Thức.
+        role = 'new';
       }
 
       return { ...s, id, role, availableShifts: avail };
     });
 
     if (badRoles.length > 0) {
-      warn(`Phân loại vai trò không hợp lệ, đã mặc định là "Chính Thức" cho: ${badRoles.join(', ')}.`);
+      warn(`Phân loại vai trò không hợp lệ hoặc thiếu, đã tạm xếp là "Tập Sự" cho: ${badRoles.join(', ')}. `
+        + 'Vui lòng sửa lại trong Bảng Quản Lý Sinh Viên.');
     }
 
     return normalized;
