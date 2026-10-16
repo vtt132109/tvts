@@ -4592,8 +4592,7 @@ body {
 }
 
 .badge-role-old::before {
-  content: '🎓';
-  font-size: 0.85em;
+  content: none;
 }
 
 .badge-role-new {
@@ -4611,8 +4610,7 @@ body {
 }
 
 .badge-role-new::before {
-  content: '🌱';
-  font-size: 0.85em;
+  content: none;
 }
 
 /* Bento Payroll Summary Cards (#modal-month-payroll) */
@@ -4879,6 +4877,212 @@ input[type="checkbox"]:checked {
   .modal-box,
   .modal-content {
     animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   ENTERPRISE DASHBOARD & STREAMLINED STUDENT PORTAL STYLES (UI/UX PRO MAX)
+   ========================================================================== */
+
+/* 1. Professional Admin Hero (Replacing Disco Gradient) */
+.schedule-hero-enterprise {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 16px);
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .schedule-hero-enterprise {
+  background: var(--bg-card, #131b2e);
+  border-color: var(--border-color, #243049);
+}
+
+.schedule-hero-enterprise .hero-left h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.schedule-hero-enterprise .hero-left p {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.schedule-hero-enterprise .hero-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.schedule-hero-enterprise .action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+/* 2. Bulk Multi-Select Actions Bar */
+.bulk-actions-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 50;
+  background: var(--bg-card);
+  border: 2px solid var(--primary, #4f46e5);
+  border-radius: var(--radius-md, 12px);
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  animation: bentoModalIn 0.2s ease-out;
+}
+
+/* 3. Streamlined Student Portal (Single Centered Flow) */
+.student-streamlined-card {
+  max-width: 960px;
+  margin: 0 auto 2.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 16px);
+  padding: 1.75rem 2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.mssv-focus-bar {
+  background: var(--bg-page, #f8fafc);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md, 12px);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mssv-focus-bar:focus-within {
+  border-color: var(--primary, #4f46e5);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  background: var(--bg-card);
+}
+
+.mssv-focus-input {
+  width: 100%;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm, 8px);
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  outline: none;
+}
+
+.mssv-focus-input:focus {
+  border-color: var(--primary);
+}
+
+/* 4. Matrix Gate Overlay (Locked until MSSV entered) */
+.matrix-gate-locked {
+  position: relative;
+}
+
+.matrix-gate-notice {
+  background: #fffbeb;
+  border: 1.5px dashed #f59e0b;
+  color: #b45309;
+  border-radius: var(--radius-md, 10px);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.92rem;
+}
+
+[data-theme="dark"] .matrix-gate-notice {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.matrix-locked-state {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: grayscale(0.5);
+  user-select: none;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* 5. Month Selector Tabs (Current vs Previous Month) */
+.month-selector-tabs {
+  display: inline-flex;
+  background: var(--bg-page, #f1f5f9);
+  padding: 4px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-color);
+  gap: 4px;
+}
+
+.month-sel-btn {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm, 8px);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.month-sel-btn.active {
+  background: var(--bg-card, #ffffff);
+  color: var(--primary, #4f46e5);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .month-selector-tabs {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .month-sel-btn.active {
+  background: #1e293b;
+  color: #818cf8;
+}
+
+/* 6. Sticky Bottom Action Bar for Mobile Registration */
+@media (max-width: 768px) {
+  .student-bottom-action-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    display: flex;
+    gap: 0.65rem;
+    align-items: center;
   }
 }
 
