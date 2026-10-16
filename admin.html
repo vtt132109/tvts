@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
   <title>Bảng Điều Hành Quản Trị & Xếp Ca - Tư Vấn Tuyển Sinh</title>
   <meta name="description" content="Trang quản trị dành riêng cho ban điều hành văn phòng tư vấn tuyển sinh để quản lý thông tin sinh viên và tự động xếp lịch trực.">
   
@@ -135,6 +136,8 @@
   </script>
 </head>
 <body>
+  <!-- Skip Link for Keyboard Navigation (Accessibility) -->
+  <a href="#admin-dashboard-container" class="skip-link">Chuyển đến bảng điều khiển</a>
 
   <!-- In ấn banner -->
   <div class="print-header-banner">
@@ -173,7 +176,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="auth-input-password">Mật Khẩu Truy Cập <span class="required">*</span></label>
-            <input type="password" id="auth-input-password" class="form-input" placeholder="Nhập mật khẩu của bạn..." required autocomplete="current-password" aria-label="Mật khẩu truy cập quản trị">
+            <input type="password" id="auth-input-password" class="form-input" placeholder="Nhập mật khẩu của bạn…" required autocomplete="current-password" aria-label="Mật khẩu truy cập quản trị">
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
             <span>Đăng Nhập Quản Trị</span>
@@ -455,7 +458,7 @@
                 <label class="form-label" for="admin-reg-closed-msg" style="font-weight: 700;">
                   📢 Thông Báo Hiển Thị Khi Đóng Cổng:
                 </label>
-                <input type="text" id="admin-reg-closed-msg" class="form-input" placeholder="Ví dụ: Cổng đăng ký tạm khóa để ban điều hành chốt danh sách..." aria-label="Thông Báo Hiển Thị Khi Đóng Cổng">
+                <input type="text" id="admin-reg-closed-msg" class="form-input" placeholder="Ví dụ: Cổng đăng ký tạm khóa để ban điều hành chốt danh sách…" aria-label="Thông Báo Hiển Thị Khi Đóng Cổng">
               </div>
             </div>
           </div>
@@ -506,7 +509,7 @@
             </button>
           </div>
 
-          <!-- Khối bên phải: Chọn nhanh danh sách tháng (10, 11, 12, 13...) + Tự động sao lưu -->
+          <!-- Khối bên phải: Chọn nhanh danh sách tháng (10, 11, 12, 13…) + Tự động sao lưu -->
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 0.4rem;">
               <label for="admin-select-quick-month" style="font-size: 0.84rem; font-weight: 700; color: var(--text-muted); cursor: pointer;">Chuyển nhanh:</label>
@@ -526,7 +529,7 @@
           </div>
         </div>
         <div style="margin-top: 0.65rem; font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
-          <span>💡 <em>Khi bạn chuyển sang tháng tiếp theo (vd: Tháng 11, 12, 13...), hệ thống sẽ <strong>tự động sao lưu toàn bộ ca trực & công của tháng cũ</strong> vào Đám mây để lưu trữ vĩnh viễn.</em></span>
+          <span>💡 <em>Khi bạn chuyển sang tháng tiếp theo (vd: Tháng 11, 12, 13…), hệ thống sẽ <strong>tự động sao lưu toàn bộ ca trực & công của tháng cũ</strong> vào Đám mây để lưu trữ vĩnh viễn.</em></span>
         </div>
       </div>
 
@@ -700,7 +703,7 @@
             <div class="search-input-wrap">
               <label for="input-search-student" class="sr-only">Tìm kiếm theo Tên hoặc MSSV</label>
               <span class="search-icon">🔍</span>
-              <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV..." aria-label="Tìm kiếm theo Tên hoặc MSSV">
+              <input type="text" id="input-search-student" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV…" aria-label="Tìm kiếm theo Tên hoặc MSSV">
             </div>
           </div>
 
@@ -753,7 +756,7 @@
           <h3 class="modal-title">🔄 Điều Chỉnh Phân Công Ca Trực</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted);" id="modal-slot-title">Ca trực</p>
         </div>
-        <button class="modal-close-btn" id="btn-close-modal">&times;</button>
+        <button class="modal-close-btn" id="btn-close-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body">
         <div style="margin-bottom: 1rem;">
@@ -790,7 +793,7 @@
           <h3 class="modal-title" id="student-modal-title">Thêm Sinh Viên Mới</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted);">Nhập thông tin và chọn ca rảnh</p>
         </div>
-        <button class="modal-close-btn" id="btn-close-student-modal">&times;</button>
+        <button class="modal-close-btn" id="btn-close-student-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
         <form id="admin-student-form">
@@ -895,7 +898,7 @@
           <h3 class="modal-title">🔑 Quản Lý Quyền Truy Cập & Cán Bộ</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted);">Cấp quyền cho cán bộ tuyển sinh & quản lý mật khẩu bảo vệ</p>
         </div>
-        <button class="modal-close-btn" id="btn-close-user-mgmt-modal">&times;</button>
+        <button class="modal-close-btn" id="btn-close-user-mgmt-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
         
@@ -1003,7 +1006,7 @@
             <p style="color: #d1fae5; font-size: 0.8rem; margin: 0;">Chuẩn mẫu tuyển sinh HCM-UTE 2026 • 1-Click sao chép dán trực tiếp (Ctrl+V) vào Google Sheets</p>
           </div>
         </div>
-        <button class="modal-close-btn" id="btn-close-excel-modal" style="color: #ffffff; background: rgba(255,255,255,0.15);">&times;</button>
+        <button class="modal-close-btn" id="btn-close-excel-modal" style="color: #ffffff; background: rgba(255,255,255,0.15);" aria-label="Đóng hộp thoại xuất Excel">&times;</button>
       </div>
 
       <div class="modal-body" style="padding: 1.25rem;">
@@ -1087,7 +1090,7 @@
         <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>📥 Nhập Danh Sách Sinh Viên Từ File Excel / CSV</span>
         </h3>
-        <button type="button" class="modal-close-btn" id="btn-close-import-modal">&times;</button>
+        <button type="button" class="modal-close-btn" id="btn-close-import-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body">
         <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
@@ -1179,7 +1182,7 @@
         <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>🔄 Quản Lý & Phê Duyệt Đề Xuất Đổi Ca / Nhờ Trực Hộ</span>
         </h3>
-        <button type="button" class="modal-close-btn" id="btn-close-swap-mgmt-modal">&times;</button>
+        <button type="button" class="modal-close-btn" id="btn-close-swap-mgmt-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body">
         <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
@@ -1230,7 +1233,7 @@
         <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>💾 Trung Tâm Sao Lưu & Khôi Phục Dữ Liệu Tuyển Sinh</span>
         </h3>
-        <button type="button" class="modal-close-btn" id="btn-close-backup-modal">&times;</button>
+        <button type="button" class="modal-close-btn" id="btn-close-backup-modal" aria-label="Đóng hộp thoại">&times;</button>
       </div>
       <div class="modal-body">
         
@@ -1498,7 +1501,7 @@
           <!-- Ô Tìm Kiếm Nhanh CTV -->
           <div class="search-input-wrap" style="min-width: 250px; flex: 1; max-width: 380px;">
             <span class="search-icon">🔍</span>
-            <input type="text" id="input-search-payroll" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV..." aria-label="Tìm kiếm CTV trong bảng chấm công">
+            <input type="text" id="input-search-payroll" class="form-input" placeholder="Tìm kiếm theo Tên hoặc MSSV…" aria-label="Tìm kiếm CTV trong bảng chấm công">
           </div>
 
           <!-- Nút In & Xuất Excel -->
@@ -1718,8 +1721,8 @@
     </div>
   </div>
 
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
+  <!-- Toast Notification Container (Accessibility compliant) -->
+  <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
   <script src="js/cloud_sync.js?v=20261016_1755"></script>

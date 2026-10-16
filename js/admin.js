@@ -1413,7 +1413,7 @@
 
     if (animate && elements.btnAutoSchedule) {
       const originalText = elements.btnAutoSchedule.innerHTML;
-      elements.btnAutoSchedule.innerHTML = '<span>⚡ Đang tối ưu thuật toán...</span>';
+      elements.btnAutoSchedule.innerHTML = '<span>⚡ Đang tối ưu thuật toán…</span>';
       elements.btnAutoSchedule.disabled = true;
 
       setTimeout(() => {
@@ -2774,7 +2774,7 @@
     closeImportModal();
 
     if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
-      showToast('⏳ Đang lưu dữ liệu và đồng bộ lên Firebase Đám Mây...', 'info', 2500);
+      showToast('⏳ Đang lưu dữ liệu và đồng bộ lên Firebase Đám Mây…', 'info', 2500);
       try {
         const syncRes = await window.CloudSyncManager.pushToCloud();
         if (syncRes && syncRes.success) {
@@ -4173,7 +4173,7 @@
           <!-- Search & Filter Controls -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
             <div style="position: relative; flex: 1; min-width: 240px; max-width: 400px;">
-              <input type="text" id="payroll-search-input" placeholder="🔍 Tìm theo Tên hoặc MSSV..." style="width: 100%; padding: 0.5rem 0.85rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; outline: none;">
+              <input type="text" id="payroll-search-input" placeholder="🔍 Tìm theo Tên hoặc MSSV…" style="width: 100%; padding: 0.5rem 0.85rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; outline: none;">
             </div>
             <div style="display: flex; gap: 0.4rem;">
               <button type="button" class="btn btn-secondary btn-sm payroll-role-filter active" data-role="all" style="font-weight: 700;">Tất cả (${totalStudents})</button>
@@ -4406,7 +4406,7 @@
 
             <div class="form-group" style="margin-bottom: 0.85rem;">
               <label class="form-label" for="event-input-note" style="font-weight: 700; font-size: 0.88rem;">Ghi Chú</label>
-              <input type="text" id="event-input-note" class="form-input" placeholder="Ghi chú thêm về trang thiết bị, phương tiện..." value="${escapeHtml(ev.note || '')}" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+              <input type="text" id="event-input-note" class="form-input" placeholder="Ghi chú thêm về trang thiết bị, phương tiện…" value="${escapeHtml(ev.note || '')}" style="width: 100%; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 8px;">
             </div>
 
             <div class="form-group">
@@ -5990,7 +5990,7 @@
         return;
       }
 
-      showToast('Đang kiểm tra kết nối tới Firebase...', 'info');
+      showToast('Đang kiểm tra kết nối tới Firebase…', 'info');
       if (window.CloudSyncManager) {
         const res = await window.CloudSyncManager.testConnection({ databaseUrl, syncPath, apiKey });
         if (res.success) {
@@ -6004,7 +6004,7 @@
     // Nút Đẩy dữ liệu lên Cloud
     document.getElementById('btn-cloud-modal-push')?.addEventListener('click', async () => {
       if (!window.CloudSyncManager) return;
-      showToast('Đang đẩy dữ liệu lên Firebase Đám mây...', 'info');
+      showToast('Đang đẩy dữ liệu lên Firebase Đám mây…', 'info');
       const res = await window.CloudSyncManager.pushToCloud();
       if (res.success) {
         showToast('Đẩy toàn bộ dữ liệu lên Đám mây thành công!', 'success');
@@ -6017,7 +6017,7 @@
     // Nút Kéo dữ liệu từ Cloud về máy này
     document.getElementById('btn-cloud-modal-pull')?.addEventListener('click', async () => {
       if (!window.CloudSyncManager) return;
-      showToast('Đang kéo dữ liệu từ Firebase Đám mây về...', 'info');
+      showToast('Đang kéo dữ liệu từ Firebase Đám mây về…', 'info');
       const res = await window.CloudSyncManager.pullFromCloud();
       if (res.success) {
         loadAdminUsers();
@@ -6037,7 +6037,7 @@
       const statusBox = document.getElementById('auth-cloud-sync-status');
       if (statusBox) {
         statusBox.style.display = 'block';
-        statusBox.textContent = '⏳ Đang kết nối Đám mây kéo mã PIN & tài khoản...';
+        statusBox.textContent = '⏳ Đang kết nối Đám mây kéo mã PIN & tài khoản…';
         statusBox.style.color = '#0284c7';
       }
 
@@ -6078,7 +6078,7 @@
         showToast('⚠️ Hệ thống Cloud Sync chưa sẵn sàng!', 'warning');
         return;
       }
-      showToast('⏳ Đang lưu và đẩy dữ liệu lên Firebase Đám Mây...', 'info', 2000);
+      showToast('⏳ Đang lưu và đẩy dữ liệu lên Firebase Đám Mây…', 'info', 2000);
       try {
         saveStudents(true);
         saveSchedule(true);
