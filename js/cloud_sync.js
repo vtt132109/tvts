@@ -116,8 +116,17 @@
       }
     }
 
+    let localAdmins = readKey(STORAGE_KEYS.ADMIN_USERS, []);
+    if (!Array.isArray(localAdmins) || localAdmins.length === 0) {
+      localAdmins = [
+        { id: 'usr_admin', username: 'admin', password: '123', pin: '9999', fullName: 'Trưởng Ban Tuyển Sinh', role: 'Trưởng ban điều hành' },
+        { id: 'usr_diephoi', username: 'diephoi', password: '123', pin: '8888', fullName: 'Cán Bộ Điều Phối Tuyển Sinh', role: 'Điều phối viên tuyển sinh' },
+        { id: 'usr_1792146825856', username: 'thien', password: 'Thien3056', pin: '3056', fullName: 'Phạm Minh Thiện', role: 'Trưởng ban điều hành' }
+      ];
+    }
+
     const payload = {
-      adminUsers: readKey(STORAGE_KEYS.ADMIN_USERS, []),
+      adminUsers: localAdmins,
       students: readKey(STORAGE_KEYS.STUDENTS, []),
       scheduleResult: readKey(STORAGE_KEYS.SCHEDULE, null),
       twoWeekSchedule: readKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, null),
@@ -143,7 +152,18 @@
     try {
       // 1. Đồng bộ danh sách tài khoản cán bộ & Mã PIN mới nhất
       if (Array.isArray(payload.adminUsers) && payload.adminUsers.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(payload.adminUsers));
+        let currentLocal = [];
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
+          if (raw) currentLocal = JSON.parse(raw) || [];
+        } catch (e) {}
+
+        const mergedMap = new Map();
+        currentLocal.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
+        payload.adminUsers.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
+
+        const mergedList = Array.from(mergedMap.values());
+        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(mergedList));
       }
 
       // 2. Đồng bộ danh sách sinh viên đăng ký
