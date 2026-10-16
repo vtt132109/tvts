@@ -489,11 +489,52 @@
       <!-- Hộp cảnh báo nếu có ca thiếu người -->
       <div id="schedule-warnings-box" style="margin-bottom: 1.5rem; display: none;"></div>
 
+      <!-- Thanh Điều Hướng Tháng & Tự Động Sao Lưu (Task Month Switcher & Auto-Backup) -->
+      <div class="card schedule-month-card" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem; background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+          <!-- Khối bên trái: Nút Tháng Trước, Tiêu đề Tháng hiện tại, Nút Tháng Tiếp Theo -->
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-prev-month" title="Quay lại tháng trước">
+              <span>◀ Tháng Trước</span>
+            </button>
+            <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-body, rgba(99, 102, 241, 0.05)); padding: 0.35rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <span style="font-size: 1.15rem; font-weight: 800; color: var(--primary);">📅 <span id="admin-current-month-title">Tháng 10/2026</span></span>
+              <span class="badge" id="admin-month-status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 0.76rem; font-weight: 700;">Đang Áp Dụng</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-admin-next-month" title="Chuyển sang tháng tiếp theo (Tự động sao lưu tháng hiện tại)">
+              <span>Tháng Tiếp Theo ▶</span>
+            </button>
+          </div>
+
+          <!-- Khối bên phải: Chọn nhanh danh sách tháng (10, 11, 12, 13...) + Tự động sao lưu -->
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <label for="admin-select-quick-month" style="font-size: 0.84rem; font-weight: 700; color: var(--text-muted); cursor: pointer;">Chuyển nhanh:</label>
+              <select id="admin-select-quick-month" class="form-input" style="padding: 0.4rem 0.75rem; font-size: 0.86rem; width: auto; font-weight: 700; min-width: 170px;" aria-label="Chọn tháng cần quản lý">
+                <option value="2026-09">Tháng 09/2026</option>
+                <option value="2026-10" selected>Tháng 10/2026 (Hiện tại)</option>
+                <option value="2026-11">Tháng 11/2026</option>
+                <option value="2026-12">Tháng 12/2026</option>
+                <option value="2027-01">Tháng 01/2027 (Kỳ 13)</option>
+                <option value="2027-02">Tháng 02/2027</option>
+                <option value="2027-03">Tháng 03/2027</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-manual-backup-month" title="Chủ động sao lưu snapshot cho tháng này ngay bây giờ" onclick="window.adminQuickBackupCurrentMonth && window.adminQuickBackupCurrentMonth()">
+              <span>💾 Sao Lưu Tháng Này</span>
+            </button>
+          </div>
+        </div>
+        <div style="margin-top: 0.65rem; font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+          <span>💡 <em>Khi bạn chuyển sang tháng tiếp theo (vd: Tháng 11, 12, 13...), hệ thống sẽ <strong>tự động sao lưu toàn bộ ca trực & công của tháng cũ</strong> vào Đám mây để lưu trữ vĩnh viễn.</em></span>
+        </div>
+      </div>
+
       <!-- Bảng Thời Khóa Biểu Tuần -->
       <div class="card timetable-card">
         <div class="card-header">
           <div>
-            <h3 class="card-title">🕒 Bảng Phân Công 10 Ca Trực Trong Tuần (Thứ 2 - Thứ 6)</h3>
+            <h3 class="card-title">🕒 Bảng Phân Công 10 Ca Trực Trong Tuần - <span id="admin-timetable-month-subtitle" style="color:var(--primary);">Tháng 10/2026</span> (Thứ 2 - Thứ 6)</h3>
             <p class="card-desc">Nhấn nút 🔄 trong từng thẻ nhân sự để hoán đổi hoặc chỉ định người trực thủ công</p>
           </div>
           <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
