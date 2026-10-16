@@ -23,11 +23,11 @@
     EVENTS: 'ts_scheduler_events_v1'
   };
 
-  // Cấu hình đồng bộ mặc định
+  // Cấu hình đồng bộ mặc định (Tích hợp sẵn Cơ sở dữ liệu Firebase của Ban Tuyển Sinh)
   const DEFAULT_CONFIG = {
-    enabled: false,
+    enabled: true,
     provider: 'firebase',
-    databaseUrl: '',
+    databaseUrl: 'https://vtt123-76e07-default-rtdb.firebaseio.com',
     apiKey: '',
     syncPath: 'tvts_production_data',
     autoSync: true,
@@ -56,6 +56,10 @@
       const raw = localStorage.getItem(STORAGE_KEYS.CLOUD_CONFIG);
       if (raw) {
         const parsed = JSON.parse(raw);
+        if (!parsed.databaseUrl) {
+          parsed.databaseUrl = DEFAULT_CONFIG.databaseUrl;
+          parsed.enabled = true;
+        }
         return Object.assign({}, DEFAULT_CONFIG, parsed, {
           deviceId: getOrCreateDeviceId()
         });
