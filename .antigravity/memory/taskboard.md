@@ -50,4 +50,6 @@
 - `18:51`: Bổ sung Giao Thức 10 (Browser Console Auto-Heal) vào `rules.md`.
 - `18:52`: Thiết lập bộ lọc `.antigravity/ignore` và đồng bộ `contextFilter` / `secretShield` trong `settings.json`.
 - `18:53`: Thiết lập 2 workflows `/seed-data` và `/clean-project` kèm bộ scripts hỗ trợ, xác thực Chrome DevTools 0 error và CI Harness đạt 72/72 PASS (100%).
+- `13:40`: Tạo nhánh `agent/remove-add-event-20261016-1340` theo yêu cầu của Tris: Gỡ bỏ hoàn toàn phần Thêm Sự Kiện (các nút Thêm Sự Kiện trên Header, Sticky Bar, Hero Toolbar và Modal Thêm Sự Kiện #modal-add-event).
+- `13:45`: Tối ưu hóa Bảng Chấm Công Tháng (#modal-month-payroll) tập trung thuần túy vào công trực văn phòng 4 tuần, cân bằng chuẩn 306 thẻ <div> trong admin.html, kiểm tra trực quan Chrome DevTools và xác nhận CI Harness đạt 72/72 PASS (100%).
 
