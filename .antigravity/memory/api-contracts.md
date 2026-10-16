@@ -226,3 +226,61 @@ interface MonthlyPayrollItem {
 2. **Công sự kiện:** Quét qua tất cả `events` trong tháng. Với mỗi sự kiện mà `assignedStudentIds` chứa ID của sinh viên, tăng `eventCount += 1` và `eventWorkUnits += event.workUnits`.
 3. **Tổng công:** `totalWorkUnits = officeShiftsCount + eventWorkUnits`.
 4. Khi bấm vào xem bất kỳ tháng nào (ví dụ: Tháng 10), hệ thống trích xuất bảng chấm công hoàn chỉnh này cho quản trị viên xem, tìm kiếm, lọc theo vai trò, in ấn hoặc xuất Excel.
+
+---
+
+## 9. 📅 Đăng Ký Ca Rảnh Trọn Tháng & Hiển Thị Ngày Cụ Thể (Monthly Shift Registration Contract)
+
+Nhằm đáp ứng yêu cầu cho CTV đăng ký ca rảnh trọn vẹn cả 1 tháng và hiển thị ngày tháng cụ thể cho từng buổi trực:
+
+### A. Cấu trúc mở rộng của Sinh viên (`Student`):
+```typescript
+interface Student {
+  id: string;               // Mã định danh (vd: 's_1728999999_0')
+  studentId: string;        // MSSV chính thức (vd: '2102001')
+  fullName: string;         // Họ và tên
+  phone?: string;           // Số điện thoại / Zalo
+  role: 'old' | 'new';      // Vai trò
+  
+  // Mở rộng đăng ký theo tháng:
+  registrationMonth?: string; // Khóa tháng (vd: '2026-10' hoặc 'Tháng 10/2026')
+  monthlyAvailableShifts?: {
+    [weekNumber: number]: string[]; // { 1: ['T2_S', 'T4_C'], 2: ['T3_S'], 3: ['T2_C', 'T5_S'], 4: ['T6_C'] }
+  };
+  
+  // Tương thích ngược tuyệt đối:
+  availableShifts: string[];  // Hợp nhất (Union) toàn bộ ca rảnh trong tháng
+  createdAt: number;
+  updatedAt?: number;
+}
+```
+
+### B. Cấu trúc Lịch Ngày Hành Chính 4 Tuần Trong Tháng (`MonthCalendarHelper`):
+Mỗi tháng có 4 tuần trực từ Thứ 2 đến Thứ 6. Tự động tính toán ngày dương lịch cụ thể:
+```typescript
+interface MonthWeekInfo {
+  weekNumber: number;         // 1, 2, 3, 4
+  label: string;              // 'Tuần 1 (05/10 - 09/10/2026)'
+  startDateStr: string;       // '05/10'
+  endDateStr: string;         // '09/10'
+  days: {
+    [dayKey in 'T2' | 'T3' | 'T4' | 'T5' | 'T6']: {
+      dayKey: string;         // 'T2'
+      dayName: string;        // 'Thứ 2'
+      dateStr: string;        // '05/10'
+      fullDate: string;       // '2026-10-05'
+      shifts: {
+        S: { id: string; name: string; time: string; fullLabel: string }; // 'T2_S', 'Thứ 2 (05/10) - Sáng'
+        C: { id: string; name: string; time: string; fullLabel: string }; // 'T2_C', 'Thứ 2 (05/10) - Chiều'
+      };
+    };
+  };
+}
+```
+
+### C. Nguyên tắc xử lý thuật toán tại `js/scheduler.js`:
+- Trong `solveMultiWeekSchedule(allStudents, totalWeeks = 4)`:
+  - Khi phân bổ cho tuần thứ `w` (`1 <= w <= totalWeeks`):
+    - Nếu sinh viên có `s.monthlyAvailableShifts && s.monthlyAvailableShifts[w]`: sử dụng mảng ca rảnh riêng biệt của tuần `w`.
+    - Nếu không có (sinh viên cũ hoặc trong test case chỉ có `availableShifts`): tự động fallback về `s.availableShifts`.
+- Bảo đảm tính công bằng lũy kế (cumulative fairness) và chống đói ca vẫn phát huy hiệu quả tối đa theo đúng ca rảnh mà sinh viên đã chọn trong từng tuần.

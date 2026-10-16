@@ -275,11 +275,29 @@
         id = `${id}_${idx + 1}`;
       }
       seenIds.add(id);
+
+      let avail;
+      if (Array.isArray(s.availableShifts)) {
+        avail = [...s.availableShifts];
+      } else if (s.monthlyAvailableShifts && typeof s.monthlyAvailableShifts === 'object') {
+        const set = new Set();
+        Object.values(s.monthlyAvailableShifts).forEach(arr => {
+          if (Array.isArray(arr)) {
+            arr.forEach(shift => {
+              if (shift && typeof shift === 'string') set.add(shift.trim());
+            });
+          }
+        });
+        avail = Array.from(set);
+      } else {
+        avail = [];
+      }
+
       return {
         ...s,
         id,
         role: s.role === 'new' ? 'new' : 'old',
-        availableShifts: Array.isArray(s.availableShifts) ? s.availableShifts : []
+        availableShifts: avail
       };
     });
   }
@@ -376,16 +394,255 @@
   const runAutoSchedule = solveWeeklySchedule;
 
   /**
+   * MonthCalendarHelper: Tiện ích tính toán lịch dương hành chính 4 tuần trong tháng
+   * Tuân thủ Single Source of Truth theo Section 9B trong .antigravity/memory/api-contracts.md
+   */
+  const DAY_KEYS = ['T2', 'T3', 'T4', 'T5', 'T6'];
+  const DAY_NAMES = {
+    'T2': 'Thứ 2',
+    'T3': 'Thứ 3',
+    'T4': 'Thứ 4',
+    'T5': 'Thứ 5',
+    'T6': 'Thứ 6'
+  };
+
+  const MonthCalendarHelper = {
+    DAY_KEYS,
+    DAY_NAMES,
+
+    /**
+     * Tìm ngày Thứ 2 đầu tiên của tháng làm việc
+     * @param {number|string} arg1 - Năm (vd: 2026) hoặc Tháng (vd: 10)
+     * @param {number} [arg2] - Tháng hoặc Năm
+     * @returns {Date} Đối tượng Date ứng với Thứ 2 đầu tiên
+     */
+    getFirstMonday(arg1 = 2026, arg2 = 10) {
+      const { month, year } = this.parseMonthYear(arg1, arg2);
+      const d = new Date(year, month - 1, 1);
+      const day = d.getDay(); // 0: CN, 1: T2, 2: T3, 3: T4, 4: T5, 5: T6, 6: T7
+      let diff = 0;
+      if (day === 1) {
+        diff = 0;
+      } else if (day === 0) {
+        diff = 1;
+      } else {
+        diff = (8 - day) % 7;
+      }
+      return new Date(year, month - 1, 1 + diff);
+    },
+
+    /**
+     * Bí danh getFirstMondayOfMonth tương thích với getFirstMonday
+     */
+    getFirstMondayOfMonth(arg1 = 2026, arg2 = 10) {
+      return this.getFirstMonday(arg1, arg2);
+    },
+
+    /**
+     * Chuẩn hóa tham số đầu vào năm và tháng (hỗ trợ chuỗi '2026-10', '10/2026', hoặc số)
+     * @param {string|number} arg1 - Tháng hoặc chuỗi khóa tháng hoặc Năm
+     * @param {number} [arg2] - Năm hoặc Tháng
+     * @returns {{ month: number, year: number }}
+     */
+    parseMonthYear(arg1 = 10, arg2 = 2026) {
+      let month = 10;
+      let year = 2026;
+
+      if (typeof arg1 === 'string') {
+        const ym = arg1.match(/^(\d{4})[-/](\d{1,2})$/);
+        const my = arg1.match(/^(\d{1,2})[-/](\d{4})$/);
+        if (ym) {
+          year = parseInt(ym[1], 10);
+          month = parseInt(ym[2], 10);
+        } else if (my) {
+          month = parseInt(my[1], 10);
+          year = parseInt(my[2], 10);
+        }
+      } else if (typeof arg1 === 'number') {
+        if (arg1 > 100) {
+          year = arg1;
+          month = typeof arg2 === 'number' ? arg2 : 10;
+        } else {
+          month = arg1;
+          year = typeof arg2 === 'number' && arg2 > 100 ? arg2 : 2026;
+        }
+      }
+      return { month, year };
+    },
+
+    /**
+     * Lấy cấu trúc 4 tuần làm việc (Thứ 2 đến Thứ 6) trong tháng
+     * Hỗ trợ getMonthWeeks(month, year) lẫn getMonthWeeks(year, month) hoặc string
+     * @param {string|number} [arg1=10]
+     * @param {number} [arg2=2026]
+     * @returns {Array<object>} Mảng gồm đúng 4 tuần làm việc
+     */
+    getMonthWeeks(arg1 = 10, arg2 = 2026) {
+      const { month, year } = this.parseMonthYear(arg1, arg2);
+      const firstMonday = this.getFirstMonday(year, month);
+
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const weeks = [];
+
+      for (let w = 1; w <= 4; w++) {
+        const weekMonday = new Date(firstMonday.getFullYear(), firstMonday.getMonth(), firstMonday.getDate() + (w - 1) * 7);
+        const weekFriday = new Date(weekMonday.getFullYear(), weekMonday.getMonth(), weekMonday.getDate() + 4);
+
+        const startDateStr = `${pad2(weekMonday.getDate())}/${pad2(weekMonday.getMonth() + 1)}`;
+        const endDateStr = `${pad2(weekFriday.getDate())}/${pad2(weekFriday.getMonth() + 1)}`;
+        const label = `Tuần ${w} (${startDateStr} - ${endDateStr}/${weekFriday.getFullYear()})`;
+
+        const days = {};
+        DAY_KEYS.forEach((dayKey, idx) => {
+          const dayDate = new Date(weekMonday.getFullYear(), weekMonday.getMonth(), weekMonday.getDate() + idx);
+          const dateStr = `${pad2(dayDate.getDate())}/${pad2(dayDate.getMonth() + 1)}`;
+          const fullDate = `${dayDate.getFullYear()}-${pad2(dayDate.getMonth() + 1)}-${pad2(dayDate.getDate())}`;
+          const dayName = DAY_NAMES[dayKey];
+
+          days[dayKey] = {
+            dayKey,
+            dayName,
+            dateStr,
+            fullDate,
+            date: dayDate,
+            shifts: {
+              S: {
+                id: `${dayKey}_S`,
+                name: 'Sáng',
+                time: '07:30 - 11:30',
+                fullLabel: `${dayName} (${dateStr}) - Sáng`
+              },
+              C: {
+                id: `${dayKey}_C`,
+                name: 'Chiều',
+                time: '13:00 - 16:30',
+                fullLabel: `${dayName} (${dateStr}) - Chiều`
+              }
+            },
+            toString() {
+              return this.fullDate;
+            }
+          };
+        });
+
+        weeks.push({
+          weekNumber: w,
+          label,
+          startDateStr,
+          endDateStr,
+          days
+        });
+      }
+
+      return weeks;
+    },
+
+    /**
+     * Tra cứu ngày cụ thể của một ca trực theo tuần và thứ
+     * @param {number|string} arg1 - Năm (vd: 2026) hoặc Tháng (vd: 10)
+     * @param {number} [arg2] - Tháng (vd: 10) hoặc Năm (vd: 2026)
+     * @param {number} weekNumber - Tuần số (1 - 4)
+     * @param {string} dayKey - Khóa thứ ('T2' .. 'T6' hoặc mã ca 'T2_S')
+     * @returns {object} Thông tin chi tiết ngày cụ thể
+     */
+    getShiftDate(arg1 = 2026, arg2 = 10, weekNumber = 1, dayKey = 'T2') {
+      const { month, year } = this.parseMonthYear(arg1, arg2);
+      const cleanKey = String(dayKey || 'T2').split('_')[0].toUpperCase();
+      const weekIdx = Math.max(0, Math.min(3, (parseInt(weekNumber, 10) || 1) - 1));
+      const weeks = this.getMonthWeeks(month, year);
+      const week = weeks[weekIdx];
+      if (!week || !week.days || !week.days[cleanKey]) {
+        return null;
+      }
+      return week.days[cleanKey];
+    },
+
+    /**
+     * Hợp nhất (Union) toàn bộ ca rảnh trong tháng từ cấu trúc monthlyAvailableShifts
+     * Khử trùng lặp và giữ nguyên định dạng mảng
+     * @param {object} monthlyAvailableShifts - { 1: ['T2_S'], 2: ['T3_C'], ... }
+     * @returns {string[]} Mảng ca rảnh hợp nhất
+     */
+    mergeMonthlyShifts(monthlyAvailableShifts) {
+      if (!monthlyAvailableShifts || typeof monthlyAvailableShifts !== 'object') {
+        return [];
+      }
+      const set = new Set();
+      Object.keys(monthlyAvailableShifts).forEach(wKey => {
+        const shifts = monthlyAvailableShifts[wKey];
+        if (Array.isArray(shifts)) {
+          shifts.forEach(shiftId => {
+            if (shiftId && typeof shiftId === 'string') {
+              set.add(shiftId.trim());
+            }
+          });
+        }
+      });
+      return Array.from(set);
+    },
+
+    /**
+     * Sao chép ca 1 tuần ra cả 4 tuần (clone week to month)
+     * Bảo đảm Deep Copy, không bị đột biến tham chiếu giữa các tuần
+     * @param {string[]} sourceWeekShifts - Mảng mã ca nguồn (vd: ['T2_S', 'T4_C'])
+     * @param {number} [totalWeeks=4] - Số tuần cần clone (mặc định: 4)
+     * @returns {object} { 1: [...], 2: [...], 3: [...], 4: [...] }
+     */
+    cloneWeekToMonth(sourceWeekShifts, totalWeeks = 4) {
+      const safeShifts = Array.isArray(sourceWeekShifts)
+        ? sourceWeekShifts.filter(s => typeof s === 'string' && s.trim().length > 0)
+        : [];
+      const result = {};
+      const weeks = Math.max(1, parseInt(totalWeeks, 10) || 4);
+      for (let w = 1; w <= weeks; w++) {
+        result[w] = [...safeShifts];
+      }
+      return result;
+    },
+
+    /**
+     * Chuẩn hóa hồ sơ đăng ký của sinh viên theo chuẩn Section 9A:
+     * - Tự động tính availableShifts = Union(monthlyAvailableShifts) nếu có
+     * - Tự động clone availableShifts thành monthlyAvailableShifts nếu sinh viên kiểu cũ
+     * @param {object} studentInput
+     * @returns {object} Đối tượng Student hoàn chỉnh
+     */
+    prepareStudentRegistration(studentInput) {
+      if (!studentInput || typeof studentInput !== 'object') {
+        throw new Error('Dữ liệu sinh viên đăng ký không hợp lệ');
+      }
+      const student = { ...studentInput };
+
+      if (student.monthlyAvailableShifts && typeof student.monthlyAvailableShifts === 'object') {
+        student.availableShifts = this.mergeMonthlyShifts(student.monthlyAvailableShifts);
+      } else if (Array.isArray(student.availableShifts)) {
+        student.monthlyAvailableShifts = this.cloneWeekToMonth(student.availableShifts, 4);
+      } else {
+        student.availableShifts = [];
+        student.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+      }
+
+      if (!student.registrationMonth) {
+        student.registrationMonth = '2026-10';
+      }
+
+      return student;
+    }
+  };
+
+  /**
    * XẾP LỊCH ĐA TUẦN / TRỌN VẸN 1 THÁNG (solveMultiWeekSchedule / runMonthSchedule)
    * Tối ưu hóa phân bổ công bằng tuyệt đối (Fairness & Anti-Starvation):
    * - Mỗi ca đúng 1 Người Cũ + 1 Người Mới
    * - Xoay vòng qua các tuần (mặc định 4 tuần = 1 tháng = 40 ca)
+   * - Hỗ trợ đăng ký ca rảnh trọn tháng có ngày cụ thể (monthlyAvailableShifts)
    * - Người có ít ca ở các tuần trước được đẩy lên ưu tiên cao nhất ở tuần sau
    * - Đảm bảo mọi sinh viên đăng ký đều được phân công trực công bằng
    */
-  function solveMultiWeekSchedule(allStudents, totalWeeks = 4) {
+  function solveMultiWeekSchedule(allStudents, totalWeeks = 4, year = 2026, month = 10) {
     const numWeeks = Math.max(1, parseInt(totalWeeks, 10) || 4);
     const safeStudents = normalizeStudents(allStudents);
+    const calendarWeeks = MonthCalendarHelper.getMonthWeeks(year, month);
 
     // Trường hợp biên: Danh sách sinh viên rỗng
     if (safeStudents.length === 0) {
@@ -393,12 +650,16 @@
       for (let w = 1; w <= numWeeks; w++) {
         const emptyWeek = solveWeeklySchedule([], [], {});
         emptyWeek.weekNumber = w;
+        emptyWeek.calendarInfo = calendarWeeks[w - 1] || null;
         emptyWeeks.push(emptyWeek);
       }
       return {
         success: true,
         timestamp: Date.now(),
         totalWeeks: numWeeks,
+        year: parseInt(year, 10) || 2026,
+        month: parseInt(month, 10) || 10,
+        calendarWeeks,
         weeks: emptyWeeks,
         week1: emptyWeeks[0] || null,
         week2: emptyWeeks[1] || null,
@@ -422,18 +683,33 @@
 
     // Lặp qua từng tuần trong chu kỳ
     for (let w = 1; w <= numWeeks; w++) {
+      // Áp dụng ca rảnh riêng của tuần w nếu sinh viên có monthlyAvailableShifts (Section 9C api-contracts.md)
+      // Nếu không có, tự động fallback về s.availableShifts
+      const weekStudents = safeStudents.map(s => {
+        let shiftsForWeek = s.availableShifts || [];
+        if (s.monthlyAvailableShifts && (Array.isArray(s.monthlyAvailableShifts[w]) || Array.isArray(s.monthlyAvailableShifts[String(w)]))) {
+          const arr = s.monthlyAvailableShifts[w] || s.monthlyAvailableShifts[String(w)];
+          shiftsForWeek = arr;
+        }
+        return {
+          ...s,
+          availableShifts: shiftsForWeek
+        };
+      });
+
       // Ưu tiên những bạn có ít ca lũy kế nhất trong các tuần trước (chống đói ca)
-      const priorityIds = [...safeStudents]
+      const priorityIds = [...weekStudents]
         .sort((a, b) => {
           const diff = (historicalCounts[a.id] || 0) - (historicalCounts[b.id] || 0);
           if (diff !== 0) return diff;
-          // Tie-breaker: ưu tiên người có ít lựa chọn ca hơn trước
+          // Tie-breaker: ưu tiên người có ít lựa chọn ca hơn trước trong tuần này
           return (a.availableShifts?.length || 0) - (b.availableShifts?.length || 0);
         })
         .map(s => s.id);
 
-      const weekSchedule = solveWeeklySchedule(safeStudents, priorityIds, historicalCounts);
+      const weekSchedule = solveWeeklySchedule(weekStudents, priorityIds, historicalCounts);
       weekSchedule.weekNumber = w;
+      weekSchedule.calendarInfo = calendarWeeks[w - 1] || null;
       weeks.push(weekSchedule);
 
       // Cập nhật số ca lũy kế sau tuần này
@@ -485,6 +761,9 @@
       success: true,
       timestamp: Date.now(),
       totalWeeks: numWeeks,
+      year: parseInt(year, 10) || 2026,
+      month: parseInt(month, 10) || 10,
+      calendarWeeks,
       weeks,
       week1: weeks[0] || null,
       week2: weeks[1] || null,
@@ -500,12 +779,12 @@
   }
 
   // Bí danh tương thích ngược
-  function runMonthSchedule(allStudents) {
-    return solveMultiWeekSchedule(allStudents, 4);
+  function runMonthSchedule(allStudents, year = 2026, month = 10) {
+    return solveMultiWeekSchedule(allStudents, 4, year, month);
   }
 
-  function runTwoWeekSchedule(allStudents) {
-    return solveMultiWeekSchedule(allStudents, 4);
+  function runTwoWeekSchedule(allStudents, year = 2026, month = 10) {
+    return solveMultiWeekSchedule(allStudents, 4, year, month);
   }
 
   // Đóng gói đối tượng động cơ xếp ca chuẩn
@@ -513,6 +792,7 @@
     SHIFTS,
     SHIFT_MAP,
     getShiftName,
+    MonthCalendarHelper,
     solveWeeklySchedule,
     solveMultiWeekSchedule,
     // Bí danh tương thích
@@ -527,6 +807,7 @@
   // Xuất ra phạm vi toàn cục Browser và môi trường Node.js
   if (typeof window !== 'undefined') {
     window.SchedulerEngine = SchedulerEngine;
+    window.MonthCalendarHelper = MonthCalendarHelper;
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = SchedulerEngine;
