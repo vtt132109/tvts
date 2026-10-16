@@ -295,24 +295,30 @@
       students = [];
     }
 
-    const hasOfficial = Array.isArray(students) && students.length > 0 && students.some(s => s.studentId === '25161393' || s.studentId === '22133044');
+    if (Array.isArray(students) && students.length > 0) {
+      // Đã có dữ liệu trong hệ thống -> GIỮ NGUYÊN 100%, TUYỆT ĐỐI KHÔNG GHI ĐÈ!
+      return students;
+    }
 
-    if (!hasOfficial) {
-      const sample = (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0)
-        ? window.SAMPLE_HCM_UTE_STUDENTS
-        : ((window.SampleDataManager && typeof window.SampleDataManager.getSample30Students === 'function')
-          ? window.SampleDataManager.getSample30Students()
-          : []);
+    // Chỉ khi hoàn toàn chưa có sinh viên nào trong máy mới nạp mẫu ban đầu
+    const sample = (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0)
+      ? window.SAMPLE_HCM_UTE_STUDENTS
+      : ((window.SampleDataManager && typeof window.SampleDataManager.getSample30Students === 'function')
+        ? window.SampleDataManager.getSample30Students()
+        : []);
 
-      if (sample && sample.length > 0) {
-        students = JSON.parse(JSON.stringify(sample));
-        try {
-          localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-          if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+    if (sample && sample.length > 0) {
+      students = JSON.parse(JSON.stringify(sample));
+      try {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+        if (window.CloudSyncManager) {
+          if (typeof window.CloudSyncManager.pushToCloud === 'function') {
+            window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+          } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
             window.CloudSyncManager.triggerAutoPush();
           }
-        } catch (err) {}
-      }
+        }
+      } catch (err) {}
     }
     return students;
   }
@@ -1056,8 +1062,12 @@
           updatedAt: Date.now()
         };
         localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-        if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-          window.CloudSyncManager.triggerAutoPush();
+        if (window.CloudSyncManager) {
+          if (typeof window.CloudSyncManager.pushToCloud === 'function') {
+            window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+          } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+            window.CloudSyncManager.triggerAutoPush();
+          }
         }
         handleMssvAutoDetect();
       }
@@ -1398,8 +1408,12 @@
     };
 
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-      window.CloudSyncManager.triggerAutoPush();
+    if (window.CloudSyncManager) {
+      if (typeof window.CloudSyncManager.pushToCloud === 'function') {
+        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+      } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+        window.CloudSyncManager.triggerAutoPush();
+      }
     }
 
     if (totalMonthShifts === 0) {
