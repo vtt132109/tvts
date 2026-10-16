@@ -761,16 +761,17 @@
         parsedStudents = [];
       }
 
-      const hasOfficial = Array.isArray(parsedStudents) && parsedStudents.length > 0 && parsedStudents.some(s => s.studentId === '25161393' || s.studentId === '22133044');
-      if (!hasOfficial) {
+      if (Array.isArray(parsedStudents) && parsedStudents.length > 0) {
+        // Đã có dữ liệu trong LocalStorage/Cloud -> GIỮ NGUYÊN 100%, TUYỆT ĐỐI KHÔNG GHI ĐÈ!
+        state.students = parsedStudents;
+      } else {
+        // Chỉ khi máy hoàn toàn trống chưa có dữ liệu nào (lần đầu tiên mở web) mới nạp mẫu ban đầu
         if (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0) {
           state.students = JSON.parse(JSON.stringify(window.SAMPLE_HCM_UTE_STUDENTS));
-          saveStudents();
+          saveStudents(true);
         } else {
-          state.students = parsedStudents;
+          state.students = [];
         }
-      } else {
-        state.students = parsedStudents;
       }
 
       const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
@@ -805,14 +806,18 @@
     }
   }
 
-  function saveStudents() {
+  function saveStudents(syncImmediate = true) {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
-    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-      window.CloudSyncManager.triggerAutoPush();
+    if (window.CloudSyncManager) {
+      if (syncImmediate && typeof window.CloudSyncManager.pushToCloud === 'function') {
+        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+      } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+        window.CloudSyncManager.triggerAutoPush();
+      }
     }
   }
 
-  function saveSchedule() {
+  function saveSchedule(syncImmediate = true) {
     if (state.currentSchedule) {
       localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
     } else {
@@ -825,8 +830,12 @@
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
     }
-    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-      window.CloudSyncManager.triggerAutoPush();
+    if (window.CloudSyncManager) {
+      if (syncImmediate && typeof window.CloudSyncManager.pushToCloud === 'function') {
+        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+      } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+        window.CloudSyncManager.triggerAutoPush();
+      }
     }
   }
 
@@ -2293,24 +2302,20 @@
   }
 
   function parseStudentsCsv(csvText) {
-    const lines = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    if (!csvText || typeof csvText !== 'string') return [];
+    const cleanText = csvText.replace(/^\uFEFF/, '');
+    const lines = cleanText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
     if (lines.length < 2) return [];
 
     const candidates = [];
-    const validShiftIds = SHIFTS.map(s => s.id);
+    const validShiftIds = (SHIFTS || []).map(s => s.id);
 
-    // Bỏ qua dòng tiêu đề
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      // Phân tách CSV xử lý dấu ngoặc kép RFC 4180
+    function parseCsvRow(lineStr) {
       const row = [];
       let inQuotes = false;
       let currentVal = '';
-
-      for (let c = 0; c < line.length; c++) {
-        const ch = line[c];
+      for (let c = 0; c < lineStr.length; c++) {
+        const ch = lineStr[c];
         if (ch === '"') {
           inQuotes = !inQuotes;
         } else if (ch === ',' && !inQuotes) {
@@ -2321,34 +2326,79 @@
         }
       }
       row.push(currentVal.trim());
+      return row.map(v => v.replace(/^"|"$/g, '').trim());
+    }
 
-      const fullName = (row[0] || '').replace(/^"|"$/g, '').trim();
-      const studentId = (row[1] || '').replace(/^"|"$/g, '').trim();
-      const phone = (row[2] || '').replace(/^"|"$/g, '').trim();
-      const roleRaw = (row[3] || '').toLowerCase();
-      const shiftsRaw = (row[4] || '').replace(/^"|"$/g, '').trim();
+    let headerRow = parseCsvRow(lines[0]);
+    let colIdx = {
+      fullName: -1,
+      studentId: -1,
+      phone: -1,
+      role: -1,
+      shifts: -1
+    };
+
+    headerRow.forEach((col, idx) => {
+      const h = col.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (colIdx.fullName === -1 && (h.includes('ho ten') || h.includes('ho va ten') || h.includes('ten') || h.includes('fullname') || h.includes('name'))) {
+        colIdx.fullName = idx;
+      } else if (colIdx.studentId === -1 && (h.includes('mssv') || h.includes('ma so sinh vien') || h.includes('ma sv') || h.includes('student id') || h.includes('studentid') || h === 'id')) {
+        colIdx.studentId = idx;
+      } else if (colIdx.phone === -1 && (h.includes('sdt') || h.includes('dien thoai') || h.includes('phone') || h.includes('so dien thoai') || h.includes('mobile'))) {
+        colIdx.phone = idx;
+      } else if (colIdx.role === -1 && (h.includes('vai tro') || h.includes('phan loai') || h.includes('doi tuong') || h.includes('loai') || h.includes('role'))) {
+        colIdx.role = idx;
+      } else if (colIdx.shifts === -1 && (h.includes('ca') || h.includes('shift') || h.includes('dang ky'))) {
+        colIdx.shifts = idx;
+      }
+    });
+
+    let startIndex = 1;
+    if (colIdx.fullName === -1 && colIdx.studentId === -1) {
+      colIdx = { fullName: 0, studentId: 1, phone: 2, role: 3, shifts: 4 };
+      if (/^\d{6,10}$/.test(headerRow[1]) || /^\d{6,10}$/.test(headerRow[0])) {
+        startIndex = 0;
+      }
+    } else {
+      if (colIdx.fullName === -1) colIdx.fullName = 0;
+      if (colIdx.studentId === -1) colIdx.studentId = 1;
+      if (colIdx.phone === -1) colIdx.phone = 2;
+      if (colIdx.role === -1) colIdx.role = 3;
+      if (colIdx.shifts === -1) colIdx.shifts = 4;
+    }
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const row = parseCsvRow(line);
+      let fullName = (row[colIdx.fullName] || '').trim();
+      let studentId = (row[colIdx.studentId] || '').trim();
+      const phone = (row[colIdx.phone] || '').trim();
+      const roleRaw = (row[colIdx.role] || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const shiftsRaw = (row[colIdx.shifts] || '').trim();
+
+      if (/^\d{6,10}$/.test(fullName) && !/^\d{6,10}$/.test(studentId)) {
+        const tmp = fullName;
+        fullName = studentId;
+        studentId = tmp;
+      }
 
       if (!fullName || !studentId) continue;
 
-      const isOld = roleRaw.includes('cũ') || roleRaw.includes('old') || roleRaw.includes('kinh nghiệm');
+      const isOld = roleRaw.includes('cu') || roleRaw.includes('chinh thuc') || roleRaw.includes('old') || roleRaw.includes('kinh nghiem');
       const role = isOld ? 'old' : 'new';
 
-      // Phân tích danh sách ca rảnh
       const availableShifts = [];
-      const shiftTokens = shiftsRaw.split(/[,;\s]+/).map(t => t.trim().toUpperCase());
-      
+      const shiftTokens = shiftsRaw.split(/[,;\s]+/).map(t => t.trim().toUpperCase().replace('-', '_'));
+
       shiftTokens.forEach(token => {
         if (validShiftIds.includes(token)) {
           if (!availableShifts.includes(token)) availableShifts.push(token);
         }
       });
 
-      // Nếu không nhập mã ca chuẩn, gán mặc định ít nhất các ca rảnh hợp lý
-      if (availableShifts.length === 0) {
-        availableShifts.push('T2_S', 'T3_C', 'T4_S', 'T5_C', 'T6_S');
-      }
-
-      const isExisting = state.students.some(s => s.studentId.toLowerCase() === studentId.toLowerCase());
+      const isExisting = (state.students || []).some(s => s.studentId && s.studentId.toLowerCase() === studentId.toLowerCase());
 
       candidates.push({
         fullName,
@@ -2398,48 +2448,82 @@
     if (elements.btnConfirmImport) {
       elements.btnConfirmImport.disabled = false;
       elements.btnConfirmImport.style.opacity = '1';
-      elements.btnConfirmImport.innerHTML = `<span>✓ Xác Nhận Nạp ${candidates.length} Sinh Viên</span>`;
+      elements.btnConfirmImport.innerHTML = `<span>☁️ Xác Nhận Nạp & Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`;
     }
   }
 
-  function confirmImportStudents() {
+  async function confirmImportStudents() {
     const candidates = state.importedCandidates || [];
     if (candidates.length === 0) return;
+
+    const modeRadio = document.querySelector('input[name="importMode"]:checked');
+    const isReplace = modeRadio && modeRadio.value === 'replace';
+
+    if (isReplace) {
+      const ok = confirm(`Bạn đã chọn chế độ "🔄 Thay thế toàn bộ". Thao tác này sẽ XÓA TOÀN BỘ danh sách hiện tại và thay thế bằng ${candidates.length} sinh viên mới này. Bạn có chắc chắn muốn tiếp tục không?`);
+      if (!ok) return;
+      state.students = [];
+    }
 
     let addedCount = 0;
     let updatedCount = 0;
 
     candidates.forEach(c => {
-      const existingIdx = state.students.findIndex(s => s.studentId.toLowerCase() === c.studentId.toLowerCase());
+      const existingIdx = state.students.findIndex(s => s.studentId && s.studentId.toLowerCase() === c.studentId.toLowerCase());
+      
+      const monthlyShifts = c.monthlyAvailableShifts || {
+        1: [...c.availableShifts],
+        2: [...c.availableShifts],
+        3: [...c.availableShifts],
+        4: [...c.availableShifts]
+      };
+
       if (existingIdx !== -1) {
         state.students[existingIdx] = {
           ...state.students[existingIdx],
           fullName: c.fullName,
-          phone: c.phone || state.students[existingIdx].phone,
-          role: c.role,
-          availableShifts: c.availableShifts,
+          phone: c.phone || state.students[existingIdx].phone || '',
+          role: c.role || state.students[existingIdx].role || 'old',
+          availableShifts: c.availableShifts.length > 0 ? c.availableShifts : (state.students[existingIdx].availableShifts || []),
+          monthlyAvailableShifts: c.availableShifts.length > 0 ? monthlyShifts : (state.students[existingIdx].monthlyAvailableShifts || monthlyShifts),
           updatedAt: Date.now()
         };
         updatedCount++;
       } else {
         state.students.push({
-          id: 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          id: 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
           fullName: c.fullName,
           studentId: c.studentId,
-          phone: c.phone,
-          role: c.role,
+          phone: c.phone || '',
+          role: c.role || 'new',
           availableShifts: c.availableShifts,
+          monthlyAvailableShifts: monthlyShifts,
           createdAt: Date.now()
         });
         addedCount++;
       }
     });
 
-    saveStudents();
+    saveStudents(true);
     runFullSchedule();
     renderAll();
     closeImportModal();
-    showToast(`Đã nạp thành công ${candidates.length} sinh viên (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success');
+
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+      showToast('⏳ Đang lưu dữ liệu và đồng bộ lên Firebase Đám Mây...', 'info', 2500);
+      try {
+        const syncRes = await window.CloudSyncManager.pushToCloud();
+        if (syncRes && syncRes.success) {
+          showToast(`☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Đã nạp ${candidates.length} CTV (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount}). Tải lại web dữ liệu vẫn nguyên vẹn 100%!`, 'success', 6000);
+        } else {
+          showToast(`Đã lưu cục bộ! Đẩy lên Cloud gặp cảnh báo: ${syncRes?.error || 'Chưa hoàn tất'}`, 'warning', 4000);
+        }
+      } catch (cloudErr) {
+        showToast(`Đã lưu cục bộ! Lỗi kết nối Cloud: ${cloudErr.message}`, 'warning', 4000);
+      }
+    } else {
+      showToast(`Đã nạp thành công ${candidates.length} sinh viên (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success', 4000);
+    }
   }
 
   /**
@@ -5720,6 +5804,32 @@
         }
       }
     };
+
+    // Đồng bộ tức thì lên Cloud qua các nút bấm ☁️ Lưu Lên Cloud
+    window.adminForceSyncCloud = async function() {
+      if (!window.CloudSyncManager) {
+        showToast('⚠️ Hệ thống Cloud Sync chưa sẵn sàng!', 'warning');
+        return;
+      }
+      showToast('⏳ Đang lưu và đẩy dữ liệu lên Firebase Đám Mây...', 'info', 2000);
+      try {
+        saveStudents(true);
+        saveSchedule(true);
+        const res = await window.CloudSyncManager.pushToCloud();
+        if (res && res.success) {
+          showToast('☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Dữ liệu đã an toàn trên mọi thiết bị và không bị mất khi tải lại trang.', 'success', 5000);
+          updateCloudUIStatus();
+        } else {
+          showToast('Lỗi đẩy dữ liệu lên Cloud: ' + (res?.error || 'Không xác định'), 'error', 4000);
+        }
+      } catch (err) {
+        showToast('Lỗi đẩy dữ liệu lên Cloud: ' + err.message, 'error', 4000);
+      }
+    };
+
+    // Bắt sự kiện cho các nút Lưu Lên Cloud
+    document.getElementById('btn-hero-sync-cloud')?.addEventListener('click', window.adminForceSyncCloud);
+    document.getElementById('btn-sync-students-cloud')?.addEventListener('click', window.adminForceSyncCloud);
   }
 
   window.adminReloadAdminUsers = function() {

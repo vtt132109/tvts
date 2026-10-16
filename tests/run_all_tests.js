@@ -20,7 +20,8 @@ const suites = [
   { name: 'Quản Lý Sự Kiện & Bảng Chấm Công Tháng (Payroll & Events)', script: 'payroll_events.test.js' },
   { name: 'Đăng Ký Ca Rảnh Trọn Tháng & Hiển Thị Ngày (Monthly Registration)', script: 'monthly_registration.test.js' },
   { name: 'Đồng Bộ Đám Mây Đa Thiết Bị & Khắc Phục Tab Ẩn Danh (Cloud Sync Engine)', script: 'cloud_sync.test.js' },
-  { name: 'Xác Thực MSSV Nghiêm Ngặt & Bảo Toàn Danh Sách 30 CTV (Strict MSSV Validation)', script: 'student_strict_validation.test.js' }
+  { name: 'Xác Thực MSSV Nghiêm Ngặt & Bảo Toàn Danh Sách 30 CTV (Strict MSSV Validation)', script: 'student_strict_validation.test.js' },
+  { name: 'Lưu Trữ Đám Mây & Chống Ghi Đè Dữ Liệu Khi Tải Lại Trang (Cloud Persistence & Anti-Overwrite)', script: 'cloud_persistence.test.js' }
 ];
 
 console.log('╔══════════════════════════════════════════════════════════════════╗');
