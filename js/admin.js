@@ -570,6 +570,15 @@
       elements.authErrorBox.style.display = 'flex';
       if (elements.authErrorMsg) elements.authErrorMsg.textContent = msg;
     }
+    try {
+      const card = document.querySelector('.auth-card');
+      if (card) {
+        card.classList.remove('shake-error');
+        void card.offsetWidth;
+        card.classList.add('shake-error');
+        setTimeout(() => card.classList.remove('shake-error'), 600);
+      }
+    } catch (e) {}
   }
 
   function hideAuthError() {
