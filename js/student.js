@@ -1130,6 +1130,9 @@
         updatedAt: Date.now()
       };
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+      if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+        window.CloudSyncManager.triggerAutoPush();
+      }
 
       showSuccessBanner(`Cập nhật thành công! Đã lưu lại thông tin và <strong>${totalMonthShifts} lượt ca rảnh trong tháng</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) của bạn (${escapeHtml(fullName)} - MSSV: ${escapeHtml(studentId)}).`);
       showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
@@ -1143,6 +1146,9 @@
       };
       students.push(newStudent);
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+      if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+        window.CloudSyncManager.triggerAutoPush();
+      }
 
       showSuccessBanner(`Đăng ký thành công! Chào mừng bạn <strong>${escapeHtml(fullName)}</strong> (${selectedRole === 'old' ? 'Người Cũ' : 'Người Mới'}). Bạn đã đăng ký <strong>${totalMonthShifts} ca rảnh trong tháng 10/2026</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}).`);
       showToast('Đăng ký lịch trực trọn tháng thành công!', 'success');
