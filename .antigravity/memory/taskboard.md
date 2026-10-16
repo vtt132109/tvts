@@ -15,9 +15,9 @@
 ---
 
 ## 🎯 Tác Vụ Hiện Tại (Active Task Session)
-- **Tên phiên làm việc:** Đăng Ký Ca Rảnh Trọn Tháng & Hiển Thị Ngày Cụ Thể (Monthly Shift Registration)
-- **Nhánh Git phụ trách:** `agent/monthly-shift-registration-20261016-1355`
-- **Thời điểm khởi tạo:** 2026-10-16 13:55
+- **Tên phiên làm việc:** Đồng Bộ Đám Mây Đa Thiết Bị & Khắc Phục Tab Ẩn Danh (Firebase Cloud Sync Engine)
+- **Nhánh Git phụ trách:** `agent/firebase-cloud-sync-20261016-1725`
+- **Thời điểm khởi tạo:** 2026-10-16 17:25
 - **Tiến độ tổng thể:** `[x] 100%`
 
 ---
@@ -26,11 +26,11 @@
 
 | ID | Đầu Việc / Tính Năng | Agent Phụ Trách | Phạm Vi Files (`allowed_paths`) | Trạng Thái | Ghi Chú & Bằng Chứng |
 |---|---|---|---|:---:|---|
-| MONTHREG-00 | Đặc tả hợp đồng dữ liệu `monthlyAvailableShifts` & `MonthCalendarHelper` | Parent Agent | `.antigravity/memory/api-contracts.md` | `[x]` | Đã hoàn tất Section 9 trong api-contracts.md |
-| MONTHREG-01 | Mở rộng Scheduler Engine hỗ trợ `monthlyAvailableShifts` từng tuần & nạp mẫu 30 CTV | `@backend-agent` | `js/scheduler.js`, `js/sample30.js`, `data/` | `[x]` | Hoàn thành MonthCalendarHelper, hỗ trợ ca riêng từng tuần trong solveMultiWeekSchedule, nạp 30 CTV mẫu |
-| MONTHREG-02 | Giao diện chọn ca nguyên 1 tháng kèm ngày dương lịch cụ thể (Tabs tuần, copy nhanh cả tháng) | `@frontend-agent` | `index.html`, `admin.html`, `css/style.css`, `js/student.js` | `[x]` | Hoàn tất Tabs 4 tuần + xem cả tháng, badge ngày cụ thể, toolbar tiện ích, bộ đếm tuần và nạp lại ca khi gõ MSSV cũ |
-| MONTHREG-03 | Xây dựng test suite tự động kiểm thử đăng ký ca rảnh trọn tháng & giải đa tuần | `@qa-agent` | `tests/monthly_registration.test.js`, `tests/run_all_tests.js` | `[x]` | Hoàn thành 30/30 tests PASS, tích hợp CI Harness đạt 102/102 PASS (100%) |
-| MONTHREG-04 | Thẩm định 5 chiều, kiểm tra F12 Console & chạy `/merge-clean` | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | 102/102 test cases PASS, Console sạch lỗi, merge-clean hoàn tất |
+| CLOUD-00 | Đặc tả hợp đồng dữ liệu `CloudSyncPayload` & `CloudSyncConfig` | Parent Agent | `.antigravity/memory/api-contracts.md` | `[x]` | Đã hoàn tất Section 10 trong api-contracts.md |
+| CLOUD-01 | Xây dựng module lõi `js/cloud_sync.js` hỗ trợ Firebase REST API, Auto-pull & Auto-push | `@backend-agent` | `js/cloud_sync.js`, `js/admin.js`, `js/student.js` | `[x]` | Hoàn thành module CloudSyncManager với REST API thuần, auto-push khi đổi PIN/ca |
+| CLOUD-02 | Thiết kế giao diện Trung Tâm Đồng Bộ Đám Mây (`#modal-cloud-sync`) & trạng thái Header | `@frontend-agent` | `admin.html`, `index.html`, `css/style.css` | `[x]` | Hoàn thành Header button, quick pull trên login screen và modal cấu hình Firebase |
+| CLOUD-03 | Xây dựng bộ test suite tự động `tests/cloud_sync.test.js` kiểm thử push/pull/fallback | `@qa-agent` | `tests/cloud_sync.test.js`, `tests/run_all_tests.js` | `[x]` | 38/38 tests PASS, nâng tổng CI Harness lên 140/140 tests PASS 100% |
+| CLOUD-04 | Kiểm thử F12 Console & thực hiện `/merge-clean` | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | Console 0 runtime error, HTML <div> balanced, merge-clean hoàn tất |
 
 ---
 
@@ -56,4 +56,6 @@
 - `14:08`: `@backend-agent` và `@frontend-agent` hoàn tất đồng bộ module `js/month_calendar.js`, bộ Tabs 4 tuần, hiển thị ngày dương lịch cụ thể (05/10 - 09/10), thanh công cụ chọn nhanh và sao chép tuần ra cả tháng.
 - `14:10`: Kiểm tra toàn diện CI Harness đạt 102/102 PASS (100%), thực hiện quy trình `/merge-clean` sáp nhập an toàn vào nhánh `main`.
 - `17:08`: Gỡ bỏ hoàn toàn hộp thông tin đăng nhập mặc định (`.auth-demo-accounts`) trên màn hình đăng nhập quản trị `admin.html` theo yêu cầu của Tris, kiểm tra F12 Console 0 runtime error, CI Harness đạt 102/102 PASS (100%).
+- `17:25`: Khởi tạo kiến trúc Đồng Bộ Đám Mây Firebase (`js/cloud_sync.js`), tích hợp modal quản trị và cơ chế auto-pull ở màn hình đăng nhập, giải quyết triệt để vấn đề Tab Ẩn danh.
+- `17:28`: Toàn bộ 7 test suites đạt 140/140 PASS (100%), F12 Console 0 runtime error, hoàn tất `/merge-clean` sáp nhập vào `main`.
 
