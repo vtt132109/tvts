@@ -37,13 +37,36 @@
     deviceId: ''
   };
 
+  // Danh sách tài khoản khởi tạo CHỈ dùng khi máy chưa có dữ liệu nào.
+// LƯU Ý BẢO MẬT: đây là thông tin công khai trong mã nguồn. Ban Tuyển Sinh
+// phải đổi mật khẩu & PIN ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
+// Tài khoản thật KHÔNG được commit vào kho công khai.
+  const FALLBACK_ADMIN_USERS = [
+    {
+      id: 'usr_admin',
+      username: 'admin',
+      password: '123',
+      pin: '9999',
+      fullName: 'Trưởng Ban Tuyển Sinh',
+      role: 'Trưởng ban điều hành'
+    },
+    {
+      id: 'usr_diephoi',
+      username: 'diephoi',
+      password: '123',
+      pin: '8888',
+      fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
+      role: 'Điều phối viên tuyển sinh'
+    }
+  ];
+
   // Khởi tạo Device ID duy nhất cho mỗi máy/tab
   function getOrCreateDeviceId() {
     let devId = '';
     try {
       devId = localStorage.getItem('ts_cloud_device_id');
       if (!devId) {
-        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
         localStorage.setItem('ts_cloud_device_id', devId);
       }
     } catch (e) {
@@ -107,6 +130,45 @@
     return finalUrl;
   }
 
+  /**
+ * Ghi an toàn vào localStorage, có bắt QuotaExceededError.
+ * @returns {boolean} true nếu ghi thành công
+ */
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      const isQuota = e && (e.name === 'QuotaExceededError'
+        || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+        || e.code === 22 || e.code === 1014);
+      if (isQuota) {
+        console.warn(`[CloudSync] Đã đầy dung lượng lưu trữ khi ghi "${key}".`);
+        try {
+          window.dispatchEvent(new CustomEvent('ts:storage-full', {
+            detail: { key, message: 'Bộ nhớ trình duyệt đã đầy. Hãy xoá bản sao lưu cũ hoặc xuất file .json để lưu an toàn.' }
+          }));
+        } catch (e2) {}
+      } else {
+        console.warn(`[CloudSync] Lỗi ghi "${key}":`, e);
+      }
+      return false;
+    }
+  }
+
+  /** Đo dung lượng localStorage đã dùng (byte, xấp xỉ). */
+  function estimateStorageUsage() {
+    let total = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k) || '';
+        total += (k ? k.length : 0) + v.length;
+      }
+    } catch (e) {}
+    return total * 2; // UTF-16
+  }
+
   // Đóng gói toàn bộ LocalStorage thành Payload đồng bộ
   function buildPayload() {
     function readKey(k, defaultValue) {
@@ -125,11 +187,7 @@
 
     let localAdmins = readKey(STORAGE_KEYS.ADMIN_USERS, []);
     if (!Array.isArray(localAdmins) || localAdmins.length === 0) {
-      localAdmins = [
-        { id: 'usr_admin', username: 'admin', password: '123', pin: '9999', fullName: 'Trưởng Ban Tuyển Sinh', role: 'Trưởng ban điều hành' },
-        { id: 'usr_diephoi', username: 'diephoi', password: '123', pin: '8888', fullName: 'Cán Bộ Điều Phối Tuyển Sinh', role: 'Điều phối viên tuyển sinh' },
-        { id: 'usr_1792146825856', username: 'thien', password: 'Thien3056', pin: '3056', fullName: 'Phạm Minh Thiện', role: 'Trưởng ban điều hành' }
-      ];
+      localAdmins = FALLBACK_ADMIN_USERS;
     }
 
     const payload = {
@@ -159,6 +217,20 @@
       return { success: false, error: 'Payload không hợp lệ' };
     }
 
+    const touchedKeys = [];
+
+    /** Ghi an toàn, ghi nhận key đã thay đổi để phát sự kiện cho UI. */
+    function writeKey(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        touchedKeys.push(key);
+        return true;
+      } catch (e) {
+        console.warn(`[CloudSync] Không ghi được "${key}":`, e);
+        return false;
+      }
+    }
+
     try {
       // 1. Đồng bộ danh sách tài khoản cán bộ & Mã PIN mới nhất
       if (Array.isArray(payload.adminUsers) && payload.adminUsers.length > 0) {
@@ -172,58 +244,63 @@
         currentLocal.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
         payload.adminUsers.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
 
-        const mergedList = Array.from(mergedMap.values());
-        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(mergedList));
+        writeKey(STORAGE_KEYS.ADMIN_USERS, Array.from(mergedMap.values()));
       }
 
       // 2. Đồng bộ danh sách sinh viên đăng ký
       if (Array.isArray(payload.students)) {
-        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(payload.students));
+        writeKey(STORAGE_KEYS.STUDENTS, payload.students);
       }
 
       // 3. Đồng bộ lịch phân ca tháng & tuần
       if (payload.monthSchedule) {
-        localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(payload.monthSchedule));
+        writeKey(STORAGE_KEYS.MONTH_SCHEDULE, payload.monthSchedule);
       }
       if (payload.scheduleResult) {
-        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(payload.scheduleResult));
+        writeKey(STORAGE_KEYS.SCHEDULE, payload.scheduleResult);
       }
       if (payload.twoWeekSchedule) {
-        localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(payload.twoWeekSchedule));
+        writeKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, payload.twoWeekSchedule);
       }
 
       // 4. Đồng bộ cấu hình cổng tuyển sinh
       if (payload.regConfig && typeof payload.regConfig === 'object') {
-        localStorage.setItem(STORAGE_KEYS.REG_CONFIG, JSON.stringify(payload.regConfig));
+        writeKey(STORAGE_KEYS.REG_CONFIG, payload.regConfig);
       }
 
       // 5. Đồng bộ sự kiện & sao lưu
       if (Array.isArray(payload.events)) {
-        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(payload.events));
+        writeKey(STORAGE_KEYS.EVENTS, payload.events);
       }
       if (Array.isArray(payload.webBackups)) {
-        localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(payload.webBackups));
+        writeKey(STORAGE_KEYS.WEB_BACKUPS, payload.webBackups);
       }
       if (Array.isArray(payload.swapRequests)) {
-        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(payload.swapRequests));
+        writeKey(STORAGE_KEYS.SWAP_REQUESTS, payload.swapRequests);
       }
       const allMonthsData = payload.allMonthSchedules || payload.allMonths;
       if (allMonthsData && typeof allMonthsData === 'object') {
-        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonthsData));
+        writeKey(STORAGE_KEYS.ALL_MONTHS, allMonthsData);
       }
       if (payload.activeMonth !== undefined && payload.activeMonth !== null) {
         const activeMonthVal = typeof payload.activeMonth === 'object' ? JSON.stringify(payload.activeMonth) : String(payload.activeMonth);
-        localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, activeMonthVal);
+        if (safeSetItem(STORAGE_KEYS.ACTIVE_MONTH, activeMonthVal)) {
+          touchedKeys.push(STORAGE_KEYS.ACTIVE_MONTH);
+        }
       }
 
       // Cập nhật timestamp lần đồng bộ
       const cfg = getConfig();
       cfg.lastSyncTime = Date.now();
-      localStorage.setItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(cfg));
+      // Ghi nhận mốc thời gian của bản trên Cloud để phát hiện xung đột ở lần sau
+      if (payload.updatedAt) cfg.lastCloudUpdatedAt = payload.updatedAt;
+      safeSetItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(cfg));
 
-      // Phát sự kiện để các view lắng nghe và re-render tự động
+      // Phát sự kiện để các view lắng nghe và re-render tự động.
+      // Lưu ý: Event('storage') thuần KHÔNG có .key nên các nhánh e.key===... không
+      // bao giờ chạy. Dùng CustomEvent 'ts:data-changed' kèm danh sách key.
       try {
-        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: touchedKeys } }));
         window.dispatchEvent(new CustomEvent('ts:cloud-synced', { detail: { payload } }));
       } catch (evErr) {}
 
@@ -233,7 +310,7 @@
       }
 
       notifyStatusChange();
-      return { success: true, timestamp: cfg.lastSyncTime };
+      return { success: true, timestamp: cfg.lastSyncTime, keys: touchedKeys };
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -267,6 +344,10 @@
 
       const result = await response.json();
       cfg.lastSyncTime = Date.now();
+      // Ghi nhận mốc đã đẩy lên Cloud, dùng để phát hiện xung đột ở lần kéo sau
+      cfg.lastCloudUpdatedAt = payload.updatedAt || cfg.lastSyncTime;
+      // Không còn thay đổi cục bộ chưa được đẩy
+      cfg.localUpdatedAt = 0;
       saveConfig(cfg);
 
       return {
@@ -315,6 +396,34 @@
         };
       }
 
+      // Phát hiện xung đột: Cloud có bản mới hơn bản lần cuối máy này đồng bộ không?
+      const lastCloudUpdatedAt = cfg.lastCloudUpdatedAt || 0;
+      const cloudUpdatedAt = data.updatedAt || 0;
+      if (lastCloudUpdatedAt && cloudUpdatedAt && cloudUpdatedAt > lastCloudUpdatedAt) {
+        const localTouchedAt = cfg.localUpdatedAt || 0;
+        if (localTouchedAt > cloudUpdatedAt) {
+          // Máy này có thay đổi mới hơn cả Cloud -> hỏi người dùng trước khi ghi đè
+          const ok = typeof window.confirm === 'function'
+            ? window.confirm(
+              '⚠️ Phát hiện xung đột dữ liệu:\n\n' +
+              '• Máy này vừa có thay đổi LÚC NÀY (chưa kịp đẩy lên Đám mây).\n' +
+              '• Đám mây cũng có bản cập nhật từ thiết bị khác.\n\n' +
+              'Chọn "OK" để GHI ĐÈ dữ liệu trên máy bằng bản từ Đám mây.\n' +
+              'Chọn "Cancel" để GIỮ dữ liệu trên máy và bỏ qua lần kéo này.'
+            )
+            : true;
+
+          if (!ok) {
+            return {
+              success: false,
+              conflict: true,
+              error: 'Đã bỏ qua kéo dữ liệu để giữ thay đổi cục bộ.',
+              message: 'Phát hiện xung đột dữ liệu — đã giữ bản trên máy này.'
+            };
+          }
+        }
+      }
+
       const applyRes = applyPayload(data);
       if (!applyRes.success) {
         throw new Error(applyRes.error);
@@ -323,6 +432,7 @@
       return {
         success: true,
         timestamp: Date.now(),
+        keys: applyRes.keys,
         message: 'Đã kéo và đồng bộ dữ liệu mới nhất từ Đám mây về máy này thành công!',
         data
       };
@@ -381,11 +491,15 @@
   function notifyStatusChange() {
     try {
       const cfg = getConfig();
+      const usedBytes = estimateStorageUsage();
       const event = new CustomEvent('ts:cloud-status', {
         detail: {
           enabled: Boolean(cfg.enabled && cfg.databaseUrl),
           lastSyncTime: cfg.lastSyncTime,
-          databaseUrl: cfg.databaseUrl
+          databaseUrl: cfg.databaseUrl,
+          lastCloudUpdatedAt: cfg.lastCloudUpdatedAt || null,
+          storageUsedBytes: usedBytes,
+          storageUsedMB: Math.round((usedBytes / (1024 * 1024)) * 100) / 100
         }
       });
       window.dispatchEvent(event);
@@ -409,6 +523,12 @@
   function triggerAutoPush() {
     const cfg = getConfig();
     if (!cfg.enabled || !cfg.databaseUrl || !cfg.autoSync) return;
+
+    // Đánh dấu có thay đổi cục bộ chưa đẩy lên Cloud (phục vụ phát hiện xung đột)
+    try {
+      cfg.localUpdatedAt = Date.now();
+      localStorage.setItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(cfg));
+    } catch (e) {}
 
     if (autoPushTimer) clearTimeout(autoPushTimer);
     autoPushTimer = setTimeout(() => {
@@ -447,7 +567,9 @@
     pullFromCloud,
     testConnection,
     triggerAutoPush,
-    autoInit
+    autoInit,
+    safeSetItem,
+    estimateStorageUsage
   };
 
 })();

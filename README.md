@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-12%2F12%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-195%2F195%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -66,17 +66,38 @@ tvts/
 │
 ├── js/
 │   ├── scheduler.js                     # Thuật toán ghép cặp Bipartite Matching & luân phiên 4 tuần
+│   ├── month_calendar.js                # Tính lịch 4 tuần hành chính theo tháng/năm bất kỳ
+│   ├── cloud_sync.js                    # Đồng bộ hai chiều Firebase REST + phát hiện xung đột + quota guard
 │   ├── sample30.js                      # Dữ liệu mẫu 30 CTV (12 Cũ + 18 Mới) dùng kiểm thử
-│   ├── student.js                       # Logic cổng sinh viên (kiểm tra trùng, lưu ca, tra cứu MSSV)
-│   └── admin.js                         # Logic quản trị (xác thực, mã PIN, điều khiển cổng, xuất Excel)
+│   ├── student.js                       # Logic cổng sinh viên (MSSV-first, lưu ca, tra cứu lịch)
+│   └── admin.js                         # Logic quản trị (xác thực, xếp ca, bulk, sự kiện, xuất Excel)
 │
 ├── data/
-│   └── admin_accounts.json              # Dữ liệu tài khoản quản trị và mã PIN mặc định
+│   ├── admin_accounts.json              # Tài khoản quản trị mặc định (KHÔNG chứa tài khoản thật)
+│   ├── default_students.json            # Danh sách CTV mặc định
+│   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │
-├── tests/
+├── tests/                               # 11 bộ kiểm thử tự động — 195 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
-│   ├── scheduler.test.js                # Kiểm thử thuật toán xếp ca & luân phiên 4 tuần
-│   └── auth.test.js                     # Kiểm thử xác thực Admin, phân quyền & mã PIN
+│   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
+│   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
+│   ├── portal.test.js                   # Đóng/mở cổng & tra cứu MSSV
+│   ├── backup.test.js                   # Sao lưu web 6 tháng & auto-pruning
+│   ├── payroll_events.test.js           # Bảng chấm công tháng & quản lý sự kiện
+│   ├── monthly_registration.test.js     # Đăng ký ca rảnh trọn tháng
+│   ├── cloud_sync.test.js               # Đồng bộ đám mây đa thiết bị
+│   ├── student_strict_validation.test.js# Xác thực MSSV nghiêm ngặt
+│   ├── cloud_persistence.test.js        # Chống ghi đè dữ liệu khi tải lại trang
+│   ├── admin_month_navigation.test.js   # Điều hướng tháng & tự động sao lưu
+│   └── regression_guard.test.js         # Hồi quy: khóa lại các bug đã sửa
+│
+├── scripts/
+│   ├── clean_code.js                    # Kiểm tra cú pháp, cân bằng thẻ HTML & chạy test
+│   └── seed_mock_data.js                # Nạp dữ liệu giả lập cho môi trường demo
+│
+├── tasks/                               # Kế hoạch & danh sách nhiệm vụ
+│   ├── plan.md
+│   └── todo.md
 │
 ├── .antigravity/                        # HỆ THỐNG MULTI-AGENT TỰ TRỊ CAO CẤP
 │   ├── rules.md                         # 9 giao thức cốt lõi: Memory, Contract-First, Safety Guard...
@@ -187,21 +208,48 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js
 ```
 
-### Kết Quả Kiểm Thử (12/12 Tests PASS - 100% Success)
-- **Suite 1: Scheduler Engine (5/5 PASS):**
-  - Danh mục 10 ca hành chính (T2-T6, Sáng & Chiều).
-  - Kiểm tra tập dữ liệu mẫu 30 CTV (12 Cũ + 18 Mới).
-  - Xếp ca 1 tuần thỏa mãn 1 Cũ + 1 Mới và đúng ca rảnh.
-  - Luân phiên 4 tuần: 100% cả 30 sinh viên đều được phân công trực.
-  - Xử lý mượt mà khi danh sách rỗng (Graceful Edge Case Handling).
-- **Suite 2: Auth Guard & Security (7/7 PASS):**
-  - Khởi tạo API xác thực `window.AdminAuth`.
-  - Đăng nhập thành công với tài khoản Trưởng ban (`admin`).
-  - Đăng nhập thành công với tài khoản Điều phối (`diephoi`).
-  - Đăng nhập thành công bằng Mã PIN nhanh (`9999` & `8888`).
-  - Từ chối khi nhập sai mật khẩu hoặc tài khoản.
-  - Từ chối khi nhập sai Mã PIN.
-  - Quy trình đăng xuất (Logout) xóa sạch phiên và khóa hệ thống.
+### Kết Quả Kiểm Thử (195/195 Tests PASS — 100%)
+
+| # | Bộ Kiểm Thử | Kết Quả |
+|---|---|---|
+| 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
+| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 15/15 |
+| 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
+| 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
+| 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
+| 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
+| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 41/41 |
+| 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 4/4 |
+| 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
+| 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
+| 11 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **33/33** |
+
+**Suite 11 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
+- Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
+- `showToast()` **escape HTML** bắt buộc (chống XSS qua tên/MSSV người dùng nhập).
+- Cloud Sync phát `ts:data-changed` kèm danh sách key, bắt `QuotaExceededError`, phát hiện xung đột dữ liệu hai chiều.
+- Payload lịch tháng **giảm từ 336 KB → 108 KB (-68%)** nhờ bỏ alias trùng lặp và không nhân bản hồ sơ sinh viên.
+- Không còn selector chết, `.substr()`, hay định nghĩa trùng `window.*`.
+- Không còn tài khoản/mật khẩu thật hay file chứa thông tin cá nhân (PII) trong mã nguồn công khai.
+
+### Kiểm Tra Chất Lượng
+```powershell
+node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ test
+```
+
+---
+
+## 🔐 7. Lưu Ý Bảo Mật
+
+> ⚠️ **Quan trọng:** Đây là ứng dụng web tĩnh, xác thực chạy hoàn toàn phía trình duyệt.
+> Mật khẩu và mã PIN mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
+> nội bộ của Ban Tuyển Sinh.
+
+- **Bắt buộc đổi mật khẩu & PIN** ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
+  Hệ thống tự hiển thị cảnh báo bảo mật và nhấp nháy nút đổi mật khẩu nếu chưa đổi.
+- **Không commit** file CSV/XLSX chứa Họ tên, MSSV, SĐT, số tài khoản ngân hàng — đã chặn trong `.gitignore`.
+- **Database Firebase** nên thiết lập Rules chặn ghi từ người lạ và bật xác thực.
+- Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).
 
 ---
 

@@ -14,3 +14,14 @@ Thumbs.db
 .agents/
 skills-lock.json
 
+# === DỮ LIỆU CHỨA THÔNG TIN CÁ NHÂN (PII) ===
+# File khảo sát CTV chứa Họ tên, MSSV, SĐT, Email và Số tài khoản ngân hàng.
+# TUYỆT ĐỐI KHÔNG commit lên kho công khai.
+*.csv
+*.xlsx
+*.xls
+*.tsv
+
+# Bản xuất sao lưu chứa toàn bộ dữ liệu hệ thống
+*-sao-luu-*.json
+backup-*.json

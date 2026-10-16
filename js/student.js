@@ -19,120 +19,223 @@
     PREV_MONTH_SCHEDULE: 'ts_scheduler_prev_month_result',
     REG_CONFIG: 'ts_scheduler_reg_config',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
-    WEB_BACKUPS: 'ts_scheduler_web_backups_v1'
+    WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
+    ALL_MONTHS: 'ts_scheduler_all_months_v1',
+    ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
-  // Cấu hình 4 tuần hành chính trong Tháng 10/2026 (Section 9 API Contract)
-  const MONTH_WEEKS_CONFIG = [
-    {
-      weekNumber: 1,
-      name: 'Tuần 1',
-      dateRange: '05/10 - 09/10',
-      fullRange: '05/10/2026 - 09/10/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '05/10', fullDate: '2026-10-05' },
-        T3: { name: 'Thứ Ba', dateStr: '06/10', fullDate: '2026-10-06' },
-        T4: { name: 'Thứ Tư', dateStr: '07/10', fullDate: '2026-10-07' },
-        T5: { name: 'Thứ Năm', dateStr: '08/10', fullDate: '2026-10-08' },
-        T6: { name: 'Thứ Sáu', dateStr: '09/10', fullDate: '2026-10-09' }
-      }
-    },
-    {
-      weekNumber: 2,
-      name: 'Tuần 2',
-      dateRange: '12/10 - 16/10',
-      fullRange: '12/10/2026 - 16/10/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '12/10', fullDate: '2026-10-12' },
-        T3: { name: 'Thứ Ba', dateStr: '13/10', fullDate: '2026-10-13' },
-        T4: { name: 'Thứ Tư', dateStr: '14/10', fullDate: '2026-10-14' },
-        T5: { name: 'Thứ Năm', dateStr: '15/10', fullDate: '2026-10-15' },
-        T6: { name: 'Thứ Sáu', dateStr: '16/10', fullDate: '2026-10-16' }
-      }
-    },
-    {
-      weekNumber: 3,
-      name: 'Tuần 3',
-      dateRange: '19/10 - 23/10',
-      fullRange: '19/10/2026 - 23/10/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '19/10', fullDate: '2026-10-19' },
-        T3: { name: 'Thứ Ba', dateStr: '20/10', fullDate: '2026-10-20' },
-        T4: { name: 'Thứ Tư', dateStr: '21/10', fullDate: '2026-10-21' },
-        T5: { name: 'Thứ Năm', dateStr: '22/10', fullDate: '2026-10-22' },
-        T6: { name: 'Thứ Sáu', dateStr: '23/10', fullDate: '2026-10-23' }
-      }
-    },
-    {
-      weekNumber: 4,
-      name: 'Tuần 4',
-      dateRange: '26/10 - 30/10',
-      fullRange: '26/10/2026 - 30/10/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '26/10', fullDate: '2026-10-26' },
-        T3: { name: 'Thứ Ba', dateStr: '27/10', fullDate: '2026-10-27' },
-        T4: { name: 'Thứ Tư', dateStr: '28/10', fullDate: '2026-10-28' },
-        T5: { name: 'Thứ Năm', dateStr: '29/10', fullDate: '2026-10-29' },
-        T6: { name: 'Thứ Sáu', dateStr: '30/10', fullDate: '2026-10-30' }
-      }
-    }
-  ];
+  /**
+   * Tháng/năm đang được Ban Điều Hành áp dụng.
+   * Nguồn sự thật duy nhất: localStorage `ACTIVE_MONTH` (do Admin ghi khi chuyển kỳ).
+   * Dự phòng: đọc từ chính lịch đang lưu, cuối cùng mới về 10/2026.
+   */
+  function getActiveMonth() {
+    let month = null;
+    let year = null;
 
-  // Cấu hình 4 tuần hành chính trong Tháng 09/2026 (Tháng Trước)
-  const PREV_MONTH_WEEKS_CONFIG = [
-    {
-      weekNumber: 1,
-      name: 'Tuần 1 (T9)',
-      dateRange: '07/09 - 11/09',
-      fullRange: '07/09/2026 - 11/09/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '07/09', fullDate: '2026-09-07' },
-        T3: { name: 'Thứ Ba', dateStr: '08/09', fullDate: '2026-09-08' },
-        T4: { name: 'Thứ Tư', dateStr: '09/09', fullDate: '2026-09-09' },
-        T5: { name: 'Thứ Năm', dateStr: '10/09', fullDate: '2026-09-10' },
-        T6: { name: 'Thứ Sáu', dateStr: '11/09', fullDate: '2026-09-11' }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_MONTH);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          month = parseInt(parsed.month, 10);
+          year = parseInt(parsed.year, 10);
+        }
       }
-    },
-    {
-      weekNumber: 2,
-      name: 'Tuần 2 (T9)',
-      dateRange: '14/09 - 18/09',
-      fullRange: '14/09/2026 - 18/09/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '14/09', fullDate: '2026-09-14' },
-        T3: { name: 'Thứ Ba', dateStr: '15/09', fullDate: '2026-09-15' },
-        T4: { name: 'Thứ Tư', dateStr: '16/09', fullDate: '2026-09-16' },
-        T5: { name: 'Thứ Năm', dateStr: '17/09', fullDate: '2026-09-17' },
-        T6: { name: 'Thứ Sáu', dateStr: '18/09', fullDate: '2026-09-18' }
-      }
-    },
-    {
-      weekNumber: 3,
-      name: 'Tuần 3 (T9)',
-      dateRange: '21/09 - 25/09',
-      fullRange: '21/09/2026 - 25/09/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '21/09', fullDate: '2026-09-21' },
-        T3: { name: 'Thứ Ba', dateStr: '22/09', fullDate: '2026-09-22' },
-        T4: { name: 'Thứ Tư', dateStr: '23/09', fullDate: '2026-09-23' },
-        T5: { name: 'Thứ Năm', dateStr: '24/09', fullDate: '2026-09-24' },
-        T6: { name: 'Thứ Sáu', dateStr: '25/09', fullDate: '2026-09-25' }
-      }
-    },
-    {
-      weekNumber: 4,
-      name: 'Tuần 4 (T9)',
-      dateRange: '28/09 - 02/10',
-      fullRange: '28/09/2026 - 02/10/2026',
-      days: {
-        T2: { name: 'Thứ Hai', dateStr: '28/09', fullDate: '2026-09-28' },
-        T3: { name: 'Thứ Ba', dateStr: '29/09', fullDate: '2026-09-29' },
-        T4: { name: 'Thứ Tư', dateStr: '30/09', fullDate: '2026-09-30' },
-        T5: { name: 'Thứ Năm', dateStr: '01/10', fullDate: '2026-10-01' },
-        T6: { name: 'Thứ Sáu', dateStr: '02/10', fullDate: '2026-10-02' }
-      }
+    } catch (e) {}
+
+    if (!month || !year) {
+      try {
+        const sched = readMonthScheduleStore();
+        if (sched && sched.month && sched.year) {
+          month = parseInt(sched.month, 10);
+          year = parseInt(sched.year, 10);
+        }
+      } catch (e) {}
     }
-  ];
+
+    if (!month || !year) return { month: 10, year: 2026 };
+    return { month, year };
+  }
+
+  /** Tháng liền trước tháng đang áp dụng. */
+  function getPrevActiveMonth() {
+    const cur = getActiveMonth();
+    let m = cur.month - 1;
+    let y = cur.year;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    return { month: m, year: y };
+  }
+
+  /** Nhãn tháng dạng "Tháng 10/2026". */
+  function formatMonthLabel(month, year) {
+    return `Tháng ${String(month).padStart(2, '0')}/${year}`;
+  }
+
+  /**
+   * Sinh cấu hình 4 tuần cho một tháng bất kỳ từ MonthCalendarHelper.
+   * Loại bỏ hoàn toàn việc hardcode ngày tháng trong mã nguồn.
+   */
+  function buildMonthWeeksConfig(month, year, weekSuffix = '') {
+    const helper = (window.SchedulerEngine && window.SchedulerEngine.MonthCalendarHelper)
+      || window.MonthCalendarHelper;
+    if (!helper || typeof helper.getMonthWeeks !== 'function') return [];
+
+    const weeks = helper.getMonthWeeks(month, year) || [];
+    const fullDayNames = {
+      T2: 'Thứ Hai', T3: 'Thứ Ba', T4: 'Thứ Tư', T5: 'Thứ Năm', T6: 'Thứ Sáu'
+    };
+
+    return weeks.map(w => {
+      const days = {};
+      ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(dayKey => {
+        const d = (w.days && w.days[dayKey]) || {};
+        days[dayKey] = {
+          name: fullDayNames[dayKey] || d.dayName || dayKey,
+          dateStr: d.dateStr || '',
+          fullDate: d.fullDate || ''
+        };
+      });
+
+      const startFull = expandShortDate(w.startDateStr, year);
+      const endFull = expandShortDate(w.endDateStr, year);
+
+      return {
+        weekNumber: w.weekNumber,
+        name: `Tuần ${w.weekNumber}${weekSuffix}`,
+        dateRange: `${w.startDateStr} - ${w.endDateStr}`,
+        fullRange: `${startFull} - ${endFull}`,
+        startDateStr: w.startDateStr,
+        endDateStr: w.endDateStr,
+        days
+      };
+    });
+  }
+
+  /** "05/10" -> "05/10/2026" (năm suy ra từ ngày đầu tháng của tháng đang xét). */
+  function expandShortDate(shortStr, fallbackYear) {
+    if (!shortStr) return '';
+    const parts = String(shortStr).split('/');
+    if (parts.length !== 2) return shortStr;
+    return `${parts[0]}/${parts[1]}/${fallbackYear}`;
+  }
+
+  /** Cấu hình tuần của tháng đang áp dụng (tính động, không hardcode). */
+  function getCurrentMonthWeeksConfig() {
+    const cur = getActiveMonth();
+    return buildMonthWeeksConfig(cur.month, cur.year);
+  }
+
+  /**
+   * Lịch tháng trước: ưu tiên kho ALL_MONTHS, sau đó tới bản sao lưu web,
+   * cuối cùng mới sinh mẫu bằng SchedulerEngine. Luôn gắn đúng tháng/năm.
+   */
+  function getPrevMonthSchedule() {
+    const prev = getPrevActiveMonth();
+    const key = `${prev.year}-${String(prev.month).padStart(2, '0')}`;
+
+    // 1. Kho lưu trữ toàn bộ tháng (Admin ghi khi chuyển kỳ)
+    try {
+      const rawAll = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
+      if (rawAll) {
+        const allMonths = JSON.parse(rawAll) || {};
+        if (allMonths[key] && allMonths[key].weeks) {
+          return allMonths[key];
+        }
+      }
+    } catch (e) {}
+
+    // 2. Bản sao lưu web
+    try {
+      const rawBackups = localStorage.getItem(STORAGE_KEYS.WEB_BACKUPS);
+      if (rawBackups) {
+        const backups = JSON.parse(rawBackups) || [];
+        const label = `${String(prev.month).padStart(2, '0')}/${prev.year}`;
+        const hit = backups.find(b => b.monthKey === key)
+          || backups.find(b => b.name && b.name.includes(label));
+        if (hit && hit.payload && hit.payload.monthSchedule) {
+          try {
+            localStorage.setItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE, JSON.stringify(hit.payload.monthSchedule));
+          } catch (e) {}
+          return hit.payload.monthSchedule;
+        }
+      }
+    } catch (e) {}
+
+    // 3. Cache cục bộ
+    try {
+      const cached = localStorage.getItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.month === prev.month && parsed.year === prev.year) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+
+    // 4. Sinh lịch mẫu chân thực cho đúng tháng trước
+    let prevSched = null;
+    try {
+      const students = loadAllStudents();
+      if (window.SchedulerEngine && typeof window.SchedulerEngine.runMonthSchedule === 'function' && students.length > 0) {
+        prevSched = window.SchedulerEngine.runMonthSchedule(students, prev.year, prev.month);
+      }
+    } catch (err) {
+      console.warn('[Portal] Không thể tự động sinh lịch tháng trước:', err);
+    }
+
+    if (prevSched) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE, JSON.stringify(prevSched));
+      } catch (e) {}
+      return prevSched;
+    }
+
+    return null;
+  }
+
+  /** Đọc lịch tháng hiện tại từ store (có fallback về bản 2-tuần cũ). */
+  function readMonthScheduleStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE)
+        || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('[Portal] Không đọc được lịch tháng từ bộ nhớ:', e);
+    }
+    return null;
+  }
+
+  /** Đọc lịch tuần (bản cũ 1-tuần) nếu có. */
+  function readWeekScheduleStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  }
+
+  /** Lấy danh sách CTV từ store, không ghi đè dữ liệu đang có. */
+  function loadAllStudents() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) return list;
+      }
+    } catch (e) {}
+    try {
+      const sample = (typeof window.getSample30Students === 'function')
+        ? window.getSample30Students()
+        : (window.SAMPLE_30_STUDENTS || []);
+      return Array.isArray(sample) ? sample : [];
+    } catch (e) {
+      return [];
+    }
+  }
 
   // State
   let viewWeek = 1;
@@ -141,7 +244,7 @@
   let detectedStudent = null;
   let currentLookupStudent = null;
   let currentLookupShifts = [];
-  let selectedMonth = 'current'; // 'current' (Tháng 10/2026) | 'prev' (Tháng 09/2026)
+  let selectedMonth = 'current'; // 'current' (tháng đang áp dụng) | 'prev' (tháng liền trước)
 
   // Quản lý ca rảnh từng tuần trong tháng (MONTHREG-02)
   let currentRegWeek = 1; // 1, 2, 3, 4, hoặc 'all'
@@ -172,12 +275,11 @@
       inputFullName: document.getElementById('input-fullname'),
       inputStudentId: document.getElementById('input-studentid'),
       inputPhone: document.getElementById('input-phone'),
-      roleInputs: document.querySelectorAll('input[name="studentRole"]'),
+      // Duplicate MSSV Alert Elements
       matrixCheckboxes: document.querySelectorAll('.slot-checkbox'),
       slotToggles: document.querySelectorAll('.slot-toggle'),
       selectedCountDisplay: document.getElementById('selected-shift-count'),
       btnSubmit: document.getElementById('btn-submit-reg'),
-      btnSubmit2: document.getElementById('btn-submit-reg-2'),
 
       // Gate Locking Elements (Task 1)
       matrixGateNotice: document.getElementById('matrix-gate-notice'),
@@ -191,6 +293,8 @@
       studentMonthSelector: document.getElementById('student-month-selector'),
       btnMonthCurrent: document.getElementById('btn-month-current'),
       btnMonthPrev: document.getElementById('btn-month-prev'),
+      regTitleMonth: document.getElementById('reg-month-title'),
+      regMatrixMonthLabel: document.getElementById('reg-matrix-month-label'),
 
       // Monthly Registration Tab & Toolbar Elements
       regWeekTabs: document.querySelectorAll('#reg-week-tabs .month-week-tab'),
@@ -223,8 +327,7 @@
       shiftMatrixContainer: document.getElementById('shift-matrix-container'),
       matrixQuickToolbar: document.getElementById('matrix-quick-toolbar'),
 
-      // Duplicate MSSV Alert Elements
-      mssvAlertBox: document.getElementById('mssv-registered-alert-box'),
+      // MSSV Status Elements
       mssvLiveTag: document.getElementById('mssv-live-tag'),
       mssvInputHint: document.getElementById('mssv-input-hint'),
 
@@ -342,48 +445,40 @@
   }
 
   /**
-   * Lấy dữ liệu Lịch Trực Tháng 09/2026 (Tháng Trước)
+   * Đồng bộ mọi nhãn ngày tháng trên giao diện theo tháng đang áp dụng.
+   * Loại bỏ hoàn toàn việc hiển thị tháng tĩnh viết cứng trong index.html.
    */
-  function getPrevMonthSchedule() {
-    try {
-      const cached = localStorage.getItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE);
-      if (cached) return JSON.parse(cached);
-    } catch (e) {}
+  function syncMonthLabelsUI() {
+    const curM = getActiveMonth();
+    const prevM = getPrevActiveMonth();
+    const curLabel = formatMonthLabel(curM.month, curM.year);
+    const prevLabel = formatMonthLabel(prevM.month, prevM.year);
+    const weeks = getCurrentMonthWeeksConfig();
 
-    // Tra cứu trong các bản sao lưu web nếu có
-    try {
-      const rawBackups = localStorage.getItem(STORAGE_KEYS.WEB_BACKUPS);
-      if (rawBackups) {
-        const backups = JSON.parse(rawBackups);
-        const sepBackup = backups.find(b => b.monthKey === '2026-09' || (b.name && b.name.includes('09/2026')));
-        if (sepBackup && sepBackup.payload?.monthSchedule) {
-          localStorage.setItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE, JSON.stringify(sepBackup.payload.monthSchedule));
-          return sepBackup.payload.monthSchedule;
-        }
-      }
-    } catch (e) {}
-
-    // Tự động sinh lịch mẫu chân thực cho Tháng 09/2026 bằng SchedulerEngine
-    let prevSched = null;
-    try {
-      const students = (typeof window.getSample30Students === 'function') 
-        ? window.getSample30Students() 
-        : (window.SAMPLE_30_STUDENTS || []);
-      if (window.SchedulerEngine && typeof window.SchedulerEngine.runMonthSchedule === 'function' && students.length > 0) {
-        prevSched = window.SchedulerEngine.runMonthSchedule(students, 2026, 9);
-      }
-    } catch (err) {
-      console.warn('Không thể tự động sinh lịch Tháng 09:', err);
+    // Tiêu đề card đăng ký ca rảnh
+    if (elements.regTitleMonth) {
+      elements.regTitleMonth.textContent = `📝 Đăng Ký Ca Rảnh Trọn Tháng (${curLabel})`;
+    }
+    if (elements.regMatrixMonthLabel) {
+      elements.regMatrixMonthLabel.textContent = `Ca trực ${curLabel}`;
     }
 
-    if (prevSched) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE, JSON.stringify(prevSched));
-      } catch (e) {}
-      return prevSched;
+    // Tab chuyển tháng xem lịch chung
+    if (elements.btnMonthCurrent) {
+      elements.btnMonthCurrent.textContent = `📅 ${curLabel} (Hiện tại)`;
+    }
+    if (elements.btnMonthPrev) {
+      elements.btnMonthPrev.textContent = `⏮️ ${prevLabel} (Tháng trước)`;
     }
 
-    return null;
+    // Ngày trên từng tab tuần + ngày trên từng cột ma trận
+    weeks.forEach((w, idx) => {
+      const tabDates = document.querySelector(`#reg-week-tabs .month-week-tab[data-week="${w.weekNumber}"] .tab-week-dates`);
+      if (tabDates) tabDates.textContent = w.dateRange;
+      if (idx === 0 && elements.currentWeekLabel) {
+        elements.currentWeekLabel.innerHTML = `📍 Đang chọn ca cho: <strong>${escapeHtml(w.name)} (${escapeHtml(w.fullRange)})</strong>`;
+      }
+    });
   }
 
   function initStudentPortal() {
@@ -391,6 +486,7 @@
     ensureOfficialStudentsLoaded();
     initThemeToggle();
     evaluateRegistrationWindow();
+    syncMonthLabelsUI();
     bindEvents();
     switchRegWeek(1);
     updateSelectedCount();
@@ -400,14 +496,50 @@
     // Cập nhật trạng thái đếm ngược thời gian mở cổng mỗi 30 giây
     setInterval(evaluateRegistrationWindow, 30000);
 
+    // Đồng bộ chéo tab: khi Admin (tab khác) cập nhật dữ liệu
     window.addEventListener('storage', (e) => {
-      if (e.key === STORAGE_KEYS.SCHEDULE || e.key === STORAGE_KEYS.TWO_WEEK_SCHEDULE || e.key === STORAGE_KEYS.STUDENTS) {
+      if (!e.key) return;
+      if (e.key === STORAGE_KEYS.SCHEDULE
+        || e.key === STORAGE_KEYS.TWO_WEEK_SCHEDULE
+        || e.key === STORAGE_KEYS.MONTH_SCHEDULE
+        || e.key === STORAGE_KEYS.ALL_MONTHS
+        || e.key === STORAGE_KEYS.ACTIVE_MONTH
+        || e.key === STORAGE_KEYS.STUDENTS) {
+        syncMonthLabelsUI();
         renderCommonSchedule();
+        if (currentLookupStudent) {
+          handleLookupMySchedule();
+        }
         showToast('Lịch trực vừa được Admin cập nhật thời gian thực!', 'info');
       } else if (e.key === STORAGE_KEYS.REG_CONFIG) {
         evaluateRegistrationWindow();
         showToast('Admin vừa thay đổi thời gian mở cổng đăng ký!', 'info');
       }
+    });
+
+    // Cloud Sync kéo dữ liệu mới về: bắt buộc cập nhật giao diện nếu có thay đổi.
+    // (Sự kiện storage thuần không mang .key nên không dùng được cho nhánh này.)
+    window.addEventListener('ts:data-changed', (e) => {
+      const keys = (e.detail && Array.isArray(e.detail.keys)) ? e.detail.keys : [];
+      const touched = (key) => !keys.length || keys.includes(key);
+      if (touched(STORAGE_KEYS.ACTIVE_MONTH) || touched(STORAGE_KEYS.MONTH_SCHEDULE)
+        || touched(STORAGE_KEYS.ALL_MONTHS) || touched(STORAGE_KEYS.SCHEDULE)
+        || touched(STORAGE_KEYS.TWO_WEEK_SCHEDULE) || touched(STORAGE_KEYS.STUDENTS)) {
+        syncMonthLabelsUI();
+        switchRegWeek(currentRegWeek);
+        renderCommonSchedule();
+        if (currentLookupStudent) handleLookupMySchedule();
+      }
+      if (touched(STORAGE_KEYS.REG_CONFIG)) evaluateRegistrationWindow();
+      if (touched(STORAGE_KEYS.SWAP_REQUESTS) && elements.swapModal?.classList.contains('active')) {
+        openSwapModal(null, null, currentLookupStudent?.studentId || null);
+      }
+    });
+
+    // Cảnh báo đầy dung lượng lưu trữ
+    window.addEventListener('ts:storage-full', (e) => {
+      const msg = (e.detail && e.detail.message) || 'Bộ nhớ trình duyệt đã đầy!';
+      showToast('⚠️ ' + msg, 'error', 8000);
     });
   }
 
@@ -521,11 +653,6 @@
     });
 
     elements.btnSubmit?.addEventListener('click', (e) => {
-      e.preventDefault();
-      processStudentRegistration();
-    });
-
-    elements.btnSubmit2?.addEventListener('click', (e) => {
       e.preventDefault();
       processStudentRegistration();
     });
@@ -785,35 +912,14 @@
       elements.btnSubmit.style.opacity = '0.6';
       elements.btnSubmit.style.cursor = 'not-allowed';
       elements.btnSubmit.innerHTML = '<span>🔒 Cổng Đăng Ký Đang Đóng</span>';
-
-      if (elements.btnSubmit2) {
-        elements.btnSubmit2.disabled = true;
-        elements.btnSubmit2.style.opacity = '0.6';
-        elements.btnSubmit2.style.cursor = 'not-allowed';
-        elements.btnSubmit2.innerHTML = '<span>🔒 Cổng Đăng Ký Đang Đóng</span>';
-      }
     } else {
       elements.btnSubmit.disabled = false;
       elements.btnSubmit.style.opacity = '1';
       elements.btnSubmit.style.cursor = 'pointer';
 
-      if (elements.btnSubmit2) {
-        elements.btnSubmit2.disabled = false;
-        elements.btnSubmit2.style.opacity = '1';
-        elements.btnSubmit2.style.cursor = 'pointer';
-      }
-
-      if (detectedStudent) {
-        elements.btnSubmit.innerHTML = '<span>🔄 Cập Nhật Ca Trực & Thông Tin</span>';
-        if (elements.btnSubmit2) {
-          elements.btnSubmit2.innerHTML = '<span>🔄 Cập Nhật Ca Trực & Thông Tin</span>';
-        }
-      } else {
-        elements.btnSubmit.innerHTML = '<span>Gửi Đăng Ký Ca Trực</span>';
-        if (elements.btnSubmit2) {
-          elements.btnSubmit2.innerHTML = '<span>✓ Gửi Đăng Ký Ca Trực Ngay</span>';
-        }
-      }
+      elements.btnSubmit.innerHTML = detectedStudent
+        ? '<span>🔄 Cập Nhật Ca Trực & Thông Tin</span>'
+        : '<span>Gửi Đăng Ký Ca Trực</span>';
     }
   }
 
@@ -964,14 +1070,6 @@
     }
   }
 
-  function renderMssvAlertBox() {
-    // Đã loại bỏ hoàn toàn khối thông báo banner mssv-detected-card theo yêu cầu của Tris
-    if (elements.mssvAlertBox) {
-      elements.mssvAlertBox.style.display = 'none';
-      elements.mssvAlertBox.innerHTML = '';
-    }
-  }
-
   function clearDetectedStudentState(resetInputs = false) {
     detectedStudent = null;
     const identityCard = document.getElementById('student-identity-card');
@@ -979,10 +1077,6 @@
     if (identityCard) identityCard.style.display = 'none';
     if (invalidNotice) invalidNotice.style.display = 'none';
 
-    if (elements.mssvAlertBox) {
-      elements.mssvAlertBox.style.display = 'none';
-      elements.mssvAlertBox.innerHTML = '';
-    }
     if (elements.mssvLiveTag) {
       elements.mssvLiveTag.style.display = 'none';
     }
@@ -1178,14 +1272,15 @@
         renderMonthOverview();
       }
       if (elements.currentWeekLabel) {
-        elements.currentWeekLabel.innerHTML = '📊 Đang xem: <strong>Tổng Quan Lịch Rảnh Trọn Tháng 10/2026 (4 Tuần)</strong>';
+        const cur = getActiveMonth();
+        elements.currentWeekLabel.innerHTML = `📊 Đang xem: <strong>Tổng Quan Lịch Rảnh Trọn ${escapeHtml(formatMonthLabel(cur.month, cur.year))} (4 Tuần)</strong>`;
       }
     } else {
       // Hiển thị bảng chọn ca tuần cụ thể
       if (elements.shiftMatrixContainer) elements.shiftMatrixContainer.style.display = 'block';
       if (elements.monthOverviewContainer) elements.monthOverviewContainer.style.display = 'none';
 
-      const weekCfg = MONTH_WEEKS_CONFIG[week - 1];
+      const weekCfg = getCurrentMonthWeeksConfig()[week - 1];
       if (weekCfg) {
         // Cập nhật nhãn tuần & ngày cụ thể
         if (elements.currentWeekLabel) {
@@ -1227,7 +1322,7 @@
     if (!elements.monthOverviewContainer) return;
 
     let html = '';
-    MONTH_WEEKS_CONFIG.forEach(cfg => {
+    getCurrentMonthWeeksConfig().forEach(cfg => {
       const wShifts = monthlyAvailableShifts[cfg.weekNumber] || [];
       const count = wShifts.length;
 
@@ -1420,7 +1515,8 @@
       showSuccessBanner(`Đã cập nhật: Bạn đã đăng ký <strong>0 ca rảnh (nghỉ tháng này)</strong> cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
       showToast('🎉 Đã ghi nhận đăng ký của bạn: 0 ca rảnh (nghỉ tháng này)!', 'success');
     } else {
-      showSuccessBanner(`Cập nhật thành công! Đã lưu <strong>${totalMonthShifts} ca rảnh trong tháng 10/2026</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
+      const activeM = getActiveMonth();
+      showSuccessBanner(`Cập nhật thành công! Đã lưu <strong>${totalMonthShifts} ca rảnh trong ${escapeHtml(formatMonthLabel(activeM.month, activeM.year))}</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
       showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
     }
 
@@ -1443,10 +1539,15 @@
 
   /**
    * Hiển thị Lịch Trực Chung (Read-Only)
-   * Hỗ trợ xem Tháng 10/2026 (Hiện tại) & Tháng 09/2026 (Tháng trước) (Task 4)
+   * Hỗ trợ xem tháng đang áp dụng và tháng liền trước (tự động theo ACTIVE_MONTH)
    */
   function renderCommonSchedule() {
     if (!elements.timetableGrid) return;
+
+    const curMonth = getActiveMonth();
+    const prevMonth = getPrevActiveMonth();
+    const curLabel = formatMonthLabel(curMonth.month, curMonth.year);
+    const prevLabel = formatMonthLabel(prevMonth.month, prevMonth.year);
 
     let scheduleResult = null;
     try {
@@ -1457,14 +1558,12 @@
           scheduleResult = prevSched.weeks?.[wIdx] || (viewWeek === 2 ? prevSched.week2 : prevSched.week1);
         }
       } else {
-        const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-        if (rawMonth) {
-          const month = JSON.parse(rawMonth);
+        const month = readMonthScheduleStore();
+        if (month) {
           const wIdx = Math.min(Math.max(1, viewWeek), 4) - 1;
           scheduleResult = month.weeks?.[wIdx] || (viewWeek === 2 ? month.week2 : month.week1);
         } else {
-          const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
-          if (raw) scheduleResult = JSON.parse(raw);
+          scheduleResult = readWeekScheduleStore();
         }
       }
     } catch (err) {
@@ -1498,7 +1597,7 @@
 
     if (elements.scheduleStatusBanner) {
       if (selectedMonth === 'prev') {
-        elements.scheduleStatusBanner.innerHTML = `<span class="badge" style="background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe;">⏮️ Lịch Lưu Trữ Tháng 09/2026 (Tuần ${viewWeek})</span>`;
+        elements.scheduleStatusBanner.innerHTML = `<span class="badge" style="background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe;">⏮️ Lịch Lưu Trữ ${escapeHtml(prevLabel)} (Tuần ${viewWeek})</span>`;
       } else {
         elements.scheduleStatusBanner.innerHTML = `<span class="badge" style="background: var(--success-bg); color: var(--success); border: 1px solid #a7f3d0;">✓ Lịch trực Tuần ${viewWeek} đã công bố</span>`;
       }
@@ -1506,12 +1605,12 @@
 
     if (elements.scheduleUpdateTime) {
       if (selectedMonth === 'prev') {
-        elements.scheduleUpdateTime.textContent = `Lịch Trực Lưu Trữ Tháng 09/2026 - Tuần ${viewWeek}`;
+        elements.scheduleUpdateTime.textContent = `Lịch Trực Lưu Trữ ${prevLabel} - Tuần ${viewWeek}`;
       } else if (scheduleResult.timestamp) {
         const timeStr = new Date(scheduleResult.timestamp).toLocaleString('vi-VN');
         elements.scheduleUpdateTime.textContent = `Lịch Tuần ${viewWeek} (Cập nhật: ${timeStr})`;
       } else {
-        elements.scheduleUpdateTime.textContent = `Lịch Tuần ${viewWeek} (Tháng 10/2026)`;
+        elements.scheduleUpdateTime.textContent = `Lịch Tuần ${viewWeek} (${curLabel})`;
       }
     }
 
@@ -1656,17 +1755,13 @@
       return;
     }
 
-    // 1. Lấy lịch Tháng 10/2026 (Hiện tại)
-    let currentSched = null;
-    try {
-      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-      if (rawMonth) {
-        currentSched = JSON.parse(rawMonth);
-      } else {
-        const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
-        if (raw) currentSched = JSON.parse(raw);
-      }
-    } catch (e) {}
+    const curMonth = getActiveMonth();
+    const prevMonth = getPrevActiveMonth();
+    const curLabel = formatMonthLabel(curMonth.month, curMonth.year);
+    const prevLabel = formatMonthLabel(prevMonth.month, prevMonth.year);
+
+    // 1. Lấy lịch tháng đang áp dụng
+    let currentSched = readMonthScheduleStore() || readWeekScheduleStore();
 
     // Nếu chưa có dữ liệu lịch phân công công bố
     if (!currentSched) {
@@ -1679,7 +1774,7 @@
       return;
     }
 
-    // 2. Lấy lịch Tháng 09/2026 (Tháng trước)
+    // 2. Lấy lịch tháng liền trước
     const prevSched = getPrevMonthSchedule();
 
     const currentShifts = extractStudentShiftsFromSchedule(mssv, currentSched);
@@ -1688,7 +1783,7 @@
     if (currentShifts.length === 0 && prevShifts.length === 0) {
       elements.lookupResult.innerHTML = `
         <div style="padding: 1.25rem; background: var(--bg-card-hover); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem; color: var(--text-muted); text-align: center;">
-          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong Tháng 10/2026 và Tháng 09/2026.<br>
+          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong ${escapeHtml(curLabel)} và ${escapeHtml(prevLabel)}.<br>
           <span style="font-size: 0.82rem;">(Vui lòng kiểm tra lại MSSV hoặc liên hệ Ban Điều Hành nếu bạn đã đăng ký).</span>
         </div>
       `;
@@ -1699,21 +1794,9 @@
     // Tìm thông tin sinh viên từ danh sách đăng ký hoặc dữ liệu mẫu hoặc từ chính slot ca trực
     let studentInfo = null;
     try {
-      const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-      if (rawStudents) {
-        const list = JSON.parse(rawStudents);
-        studentInfo = list.find(s => s.studentId && s.studentId.toLowerCase() === mssv);
-      }
+      const list = loadAllStudents();
+      studentInfo = list.find(s => s.studentId && String(s.studentId).toLowerCase() === mssv);
     } catch (e) {}
-
-    if (!studentInfo) {
-      try {
-        const sampleStudents = (typeof window.getSample30Students === 'function') 
-          ? window.getSample30Students() 
-          : (window.SAMPLE_30_STUDENTS || []);
-        studentInfo = sampleStudents.find(s => s.studentId && s.studentId.toLowerCase() === mssv);
-      } catch (e) {}
-    }
 
     if (!studentInfo) {
       const matchWithSelf = currentShifts.find(s => s.selfName) || prevShifts.find(s => s.selfName);
@@ -1746,6 +1829,11 @@
    * Tuyệt đối KHÔNG có dặn dò trang phục và KHÔNG hiển thị vai trò
    */
   function renderPersonalDutyCard(student, currentShifts = [], prevShifts = []) {
+    const curM = getActiveMonth();
+    const prevM = getPrevActiveMonth();
+    const curLabel = formatMonthLabel(curM.month, curM.year);
+    const prevLabel = formatMonthLabel(prevM.month, prevM.year);
+
     // Lấy danh sách đề xuất đổi ca của sinh viên này
     let mySwaps = [];
     try {
@@ -1861,27 +1949,27 @@
               </div>
             </div>
 
-            <!-- Tab Chuyển Đổi Tháng Tra Cứu (Hiện tại vs Tháng trước) (Task 4) -->
+            <!-- Tab Chuyển Đổi Tháng Tra Cứu (Tháng đang áp dụng vs Tháng liền trước) -->
             <div style="margin-top: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1.5px solid var(--border-color); padding-bottom: 0.75rem;">
               <div class="month-selector-tabs" id="lookup-month-tabs">
                 <button type="button" class="month-sel-btn active" id="btn-tab-lookup-current" onclick="window.studentToggleLookupMonth && window.studentToggleLookupMonth('current')">
-                  📅 Tháng 10/2026 (${currentShifts.length} ca)
+                  📅 ${escapeHtml(curLabel)} (${currentShifts.length} ca)
                 </button>
                 <button type="button" class="month-sel-btn" id="btn-tab-lookup-prev" onclick="window.studentToggleLookupMonth && window.studentToggleLookupMonth('prev')">
-                  ⏮️ Tháng 09/2026 (${prevShifts.length} ca)
+                  ⏮️ ${escapeHtml(prevLabel)} (${prevShifts.length} ca)
                 </button>
               </div>
               <div style="font-size: 0.84rem; color: var(--text-muted);" id="lookup-month-count-label">
-                Đang xem: <strong>Tháng 10/2026</strong> (${currentShifts.length} ca trực)
+                Đang xem: <strong>${escapeHtml(curLabel)}</strong> (${currentShifts.length} ca trực)
               </div>
             </div>
 
-            <!-- Danh Sách Ca Trực Tháng 10/2026 -->
+            <!-- Danh Sách Ca Trực Tháng Đang Áp Dụng -->
             <div id="lookup-shifts-current" class="personal-shifts-list" style="margin-top: 1rem;">
               ${currentShiftsHtml}
             </div>
 
-            <!-- Danh Sách Ca Trực Tháng 09/2026 (Ẩn mặc định) -->
+            <!-- Danh Sách Ca Trực Tháng Liền Trước (Ẩn mặc định) -->
             <div id="lookup-shifts-prev" class="personal-shifts-list" style="display: none; margin-top: 1rem;">
               ${prevShiftsHtml}
             </div>
@@ -1924,9 +2012,11 @@
     if (btnCur) btnCur.classList.toggle('active', isCurrent);
     if (btnPrev) btnPrev.classList.toggle('active', !isCurrent);
     if (countLbl) {
-      countLbl.innerHTML = isCurrent 
-        ? `Đang xem: <strong>Tháng 10/2026</strong> (${currentLookupShifts?.length || 0} ca trực)` 
-        : `Đang xem: <strong>Tháng 09/2026</strong> (Lịch trực lưu trữ)`;
+      const curM = getActiveMonth();
+      const prevM = getPrevActiveMonth();
+      countLbl.innerHTML = isCurrent
+        ? `Đang xem: <strong>${escapeHtml(formatMonthLabel(curM.month, curM.year))}</strong> (${currentLookupShifts?.length || 0} ca trực)`
+        : `Đang xem: <strong>${escapeHtml(formatMonthLabel(prevM.month, prevM.year))}</strong> (Lịch trực lưu trữ)`;
     }
   };
 
@@ -2304,9 +2394,10 @@
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    // Bắt buộc escapeHtml: message có thể chứa tên/MSSV do người dùng nhập.
     toast.innerHTML = `
       <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
-      <span>${message}</span>
+      <span>${escapeHtml(String(message))}</span>
     `;
 
     elements.toastContainer.appendChild(toast);
@@ -2323,7 +2414,6 @@
   function initThemeToggle() {
     const btnLight = document.getElementById('btn-theme-light');
     const btnDark = document.getElementById('btn-theme-dark');
-    const legacyBtn = document.getElementById('btn-theme-toggle');
 
     function applyTheme(theme) {
       if (theme === 'dark') {
@@ -2340,14 +2430,6 @@
     function updateThemeUI(isDark) {
       if (btnLight) btnLight.classList.toggle('active', !isDark);
       if (btnDark) btnDark.classList.toggle('active', isDark);
-
-      if (legacyBtn) {
-        const icon = legacyBtn.querySelector('.theme-icon');
-        const text = legacyBtn.querySelector('.theme-text');
-        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
-        if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
-        legacyBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
-      }
     }
 
     const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2358,12 +2440,6 @@
     }
     if (btnDark) {
       btnDark.addEventListener('click', () => applyTheme('dark'));
-    }
-    if (legacyBtn) {
-      legacyBtn.addEventListener('click', () => {
-        const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        applyTheme(isCurrentlyDark ? 'light' : 'dark');
-      });
     }
 
     window.addEventListener('storage', (e) => {
