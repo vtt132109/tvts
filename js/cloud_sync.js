@@ -202,13 +202,40 @@
       webBackups: readKey(STORAGE_KEYS.WEB_BACKUPS, []),
       allMonthSchedules: readKey(STORAGE_KEYS.ALL_MONTHS, {}),
       allMonths: readKey(STORAGE_KEYS.ALL_MONTHS, {}),
-      activeMonth: readKey(STORAGE_KEYS.ACTIVE_MONTH, null),
+      // Luôn xuất activeMonth dưới dạng object {month, year} cho nhất quán
+      // với applyPayload (chấp nhận được cả chuỗi cũ).
+      activeMonth: normalizeActiveMonth(readKey(STORAGE_KEYS.ACTIVE_MONTH, null)),
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
-      version: '1.0'
+      version: '1.1'
     };
 
     return payload;
+  }
+
+  /**
+   * Chuẩn hoá activeMonth về {month, year}.
+   * Nhận được: {month, year} | "2026-12" | "12/2026" | 12
+   */
+  function normalizeActiveMonth(input) {
+    if (input === undefined || input === null || input === '') return null;
+    if (typeof input === 'object') {
+      const m = parseInt(input.month, 10);
+      const y = parseInt(input.year, 10);
+      if (!m) return null;
+      return { month: m, year: y || 2026 };
+    }
+    if (typeof input === 'number') {
+      return { month: input, year: new Date().getFullYear() };
+    }
+    const s = String(input).trim();
+    const byDash = s.match(/^(\d{4})-(\d{1,2})$/);
+    if (byDash) return { month: parseInt(byDash[2], 10), year: parseInt(byDash[1], 10) };
+    const bySlash = s.match(/^(\d{1,2})\/(\d{4})$/);
+    if (bySlash) return { month: parseInt(bySlash[1], 10), year: parseInt(bySlash[2], 10) };
+    const n = parseInt(s, 10);
+    if (n) return { month: n, year: new Date().getFullYear() };
+    return null;
   }
 
   // Áp dụng Payload từ Cloud vào LocalStorage an toàn
@@ -283,8 +310,10 @@
         writeKey(STORAGE_KEYS.ALL_MONTHS, allMonthsData);
       }
       if (payload.activeMonth !== undefined && payload.activeMonth !== null) {
-        const activeMonthVal = typeof payload.activeMonth === 'object' ? JSON.stringify(payload.activeMonth) : String(payload.activeMonth);
-        if (safeSetItem(STORAGE_KEYS.ACTIVE_MONTH, activeMonthVal)) {
+        // Chuẩn hoá về object {month, year} — chấp nhận cả dạng chuỗi "2026-12"
+        // của phiên bản cũ, tránh mất vị trí tháng khi kéo từ Cloud cũ.
+        const normalized = normalizeActiveMonth(payload.activeMonth);
+        if (normalized && safeSetItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify(normalized))) {
           touchedKeys.push(STORAGE_KEYS.ACTIVE_MONTH);
         }
       }
@@ -343,6 +372,20 @@
       }
 
       const result = await response.json();
+
+      // Cùng bẫy với pull: Rules từ chối thì Firebase trả 200 + {"error": ...}.
+      // Không kiểm tra thì báo "đẩy thành công" trong khi dữ liệu chưa lên Cloud,
+      // và mất cả cờ "không còn thay đổi chưa đẩy" (localUpdatedAt = 0).
+      if (result && typeof result === 'object' && result.error) {
+        const detail = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
+        return {
+          success: false,
+          error: `Firebase từ chối ghi: ${detail}` +
+            ' — hãy kiểm tra Security Rules trong Firebase Console' +
+            ' (Database > Rules), hoặc tắt xác thực ẩn danh nếu đang bật.'
+        };
+      }
+
       cfg.lastSyncTime = Date.now();
       // Ghi nhận mốc đã đẩy lên Cloud, dùng để phát hiện xung đột ở lần kéo sau
       cfg.lastCloudUpdatedAt = payload.updatedAt || cfg.lastSyncTime;
@@ -388,7 +431,24 @@
       }
 
       const data = await response.json();
-      if (!data) {
+
+      // ⚠️ BẪY NGHIÊM TRỌNG CỦA FIREBASE REST:
+      // Khi Security Rules từ chối truy cập, Firebase KHÔNG trả HTTP 4xx/5xx mà
+      // trả HTTP 200 kèm body {"error": "Permission denied"}.
+      // Trước đây chỉ kiểm tra response.ok nên:
+      //   1) coi đây là thành công,
+      //   2) áp payload rỗng (vì data.error không phải payload) — GHI ĐÈ MẤT
+      //      toàn bộ dữ liệu cục bộ,
+      //   3) trả về { success: true } khiến người dùng tin là đã kéo xong.
+      // Nay kiểm tra body để bắt đúng trường hợp này.
+      if (data && typeof data === 'object' && data.error) {
+        const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        throw new Error(`Firebase từ chối truy cập: ${detail}` +
+          ' — hãy kiểm tra Security Rules trong Firebase Console' +
+          ' (Database > Rules), hoặc tắt xác thựnh ẩn danh nếu đang bật.');
+      }
+
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return {
           success: true,
           message: 'Đám mây hiện chưa có dữ liệu nào để kéo.',

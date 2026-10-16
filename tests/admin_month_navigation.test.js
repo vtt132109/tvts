@@ -179,15 +179,56 @@ console.log('================================================================\n'
 let passCount = 0;
 let totalCount = 0;
 
+// PHẢI await: nhiều test trong file này là async (await adminGoToNextMonth()).
+// Bản cũ gọi fn() không await nên try/catch thoát trước khi promise resolve —
+// mọi assert trong test async đều không thể làm test fail (false PASS).
+// Các test cũng phải chạy TUẦN TỰ: test 2.2->2.5 phụ thuộc trạng thái tháng
+// do test trước tạo ra, nếu chạy song song sẽ đảo thứ tự và hỏng.
+const testQueue = [];
+
+/** Đọc ACTIVE_MONTH từ mock storage, chấp nhận object JSON hoặc chuỗi cũ. */
+function readActiveMonth() {
+  const raw = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
+  if (!raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (p && typeof p === 'object') return { month: parseInt(p.month, 10), year: parseInt(p.year, 10) };
+    return { month: parseInt(p, 10), year: null };
+  } catch (e) {
+    const s = String(raw).trim();
+    const d = s.match(/^(\d{4})-(\d{1,2})$/);
+    if (d) return { month: parseInt(d[2], 10), year: parseInt(d[1], 10) };
+    const sl = s.match(/^(\d{1,2})\/(\d{4})$/);
+    if (sl) return { month: parseInt(sl[1], 10), year: parseInt(sl[2], 10) };
+    return { month: parseInt(s, 10), year: null };
+  }
+}
+
 function runTest(name, fn) {
   totalCount++;
-  try {
-    fn();
-    console.log(`  ✓ [PASS] ${name}`);
-    passCount++;
-  } catch (err) {
-    console.error(`  ✗ [FAIL] ${name}: ${err.message}`);
-    console.error(err);
+  testQueue.push({ name, fn });
+}
+
+async function runAllTests() {
+  for (const { name, fn } of testQueue) {
+    try {
+      await fn();
+      console.log(`  ✓ [PASS] ${name}`);
+      passCount++;
+    } catch (err) {
+      console.error(`  ✗ [FAIL] ${name}: ${err.message}`);
+      console.error(err);
+    }
+  }
+
+  console.log('\n================================================================');
+  console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passCount}/${totalCount} TESTS ĐẠT CHUẨN (${Math.round(passCount/totalCount*100)}%)`);
+  console.log('================================================================\n');
+
+  if (passCount === totalCount) {
+    process.exit(0);
+  } else {
+    process.exit(1);
   }
 }
 
@@ -241,9 +282,17 @@ runTest('2.2: Tự động sao lưu Tháng 10 khi chuyển sang Tháng 11', asyn
 
   // Đặt dữ liệu lịch Tháng 10
   const students = window.getSample30Students ? window.getSample30Students() : [];
-  mockLocalStorage.setItem('ts_scheduler_students_v1', JSON.stringify(students));
-  const sch = window.SchedulerEngine.solveMultiWeekSchedule(students, 4);
-  mockLocalStorage.setItem('ts_scheduler_month_schedule_v1', JSON.stringify(sch));
+  // Dùng ĐÚNG key như STORAGE_KEYS trong admin.js. Bản cũ ghi vào
+  // '..._v1' vốn không tồn tại nên admin không bao giờ đọc được dữ liệu này.
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify(students));
+  const sch = window.SchedulerEngine.solveMultiWeekSchedule(students, 4, 2026, 10);
+  mockLocalStorage.setItem('ts_scheduler_month_result', JSON.stringify(sch));
+
+  // switchAdminMonth() chỉ sao lưu khi state.monthSchedule đã được nạp,
+  // nên phải gọi loadData() (được export cho test) sau khi ghi storage.
+  if (typeof window.adminTestHelper && typeof window.adminTestHelper.loadData === 'function') {
+    window.adminTestHelper.loadData();
+  }
 
   const initialBackups = window.WebBackupManager.getWebBackups();
   const initialBackupCount = initialBackups.length;
@@ -258,20 +307,23 @@ runTest('2.2: Tự động sao lưu Tháng 10 khi chuyển sang Tháng 11', asyn
 
 runTest('2.3: Di chuyển tiếp sang Tháng 12/2026 bằng adminGoToNextMonth', async () => {
   await window.adminGoToNextMonth();
-  const activeMonthStr = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
-  assert.strictEqual(activeMonthStr, '2026-12', 'Active month trong localStorage phải là 2026-12');
+  const active = readActiveMonth();
+  assert(active && active.month === 12 && active.year === 2026,
+    `Active month phải là 12/2026, thực tế: ${JSON.stringify(active)}`);
 });
 
 runTest('2.4: Di chuyển tiếp sang Kỳ 13 (Tháng 01/2027) bằng adminGoToNextMonth', async () => {
   await window.adminGoToNextMonth();
-  const activeMonthStr = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
-  assert.strictEqual(activeMonthStr, '2027-01', 'Active month phải chuyển sang năm 2027 kỳ 13 (2027-01)');
+  const active = readActiveMonth();
+  assert(active && active.month === 1 && active.year === 2027,
+    `Active month phải chuyển sang 01/2027, thực tế: ${JSON.stringify(active)}`);
 });
 
 runTest('2.5: Di chuyển lùi lại Tháng 12/2026 bằng adminGoToPrevMonth', async () => {
   await window.adminGoToPrevMonth();
-  const activeMonthStr = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
-  assert.strictEqual(activeMonthStr, '2026-12', 'Active month phải quay lại 2026-12');
+  const active = readActiveMonth();
+  assert(active && active.month === 12 && active.year === 2026,
+    `Active month phải quay lại 12/2026, thực tế: ${JSON.stringify(active)}`);
 });
 
 // GROUP 3: Kiểm thử Đóng Gói Cloud Sync với ALL_MONTHS
@@ -286,7 +338,8 @@ runTest('3.1: buildPayload đóng gói chính xác ALL_MONTHS và ACTIVE_MONTH',
 
   const payload = window.CloudSyncManager.buildPayload();
   assert(payload.allMonths, 'Payload phải chứa allMonths');
-  assert.strictEqual(payload.activeMonth, '2026-11', 'Payload activeMonth phải là 2026-11');
+  assert(payload.activeMonth && String(payload.activeMonth.month) === '11',
+    `Payload activeMonth phải là tháng 11, thực tế: ${JSON.stringify(payload.activeMonth)}`);
   assert(payload.allMonths['2026-10'], 'Payload allMonths phải chứa 2026-10');
 });
 
@@ -303,18 +356,17 @@ runTest('3.2: applyPayload nạp thành công ALL_MONTHS từ Cloud xuống Loca
   };
 
   window.CloudSyncManager.applyPayload(remotePayload);
-  const activeMonth = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
+  const activeMonthRaw = mockLocalStorage.getItem('ts_scheduler_active_month_v1');
   const allMonthsRaw = mockLocalStorage.getItem('ts_scheduler_all_months_v1');
-  assert.strictEqual(activeMonth, '2026-12', 'LocalStorage phải nhận activeMonth 2026-12');
+  // Code lưu ACTIVE_MONTH dưới dạng JSON object {month, year} (xem admin.js
+  // switchAdminMonth). Test cũ kỳ vọng chuỗi thuần '2026-12' — sai với hành vi
+  // hiện tại và là lý do assert này luôn fail.
+  let activeMonth = null;
+  try { activeMonth = JSON.parse(activeMonthRaw); } catch (e) { activeMonth = activeMonthRaw; }
+  assert(activeMonth && String(activeMonth.month) === '12',
+    `LocalStorage phải nhận activeMonth = tháng 12, thực tế: ${activeMonthRaw}`);
   assert(allMonthsRaw && allMonthsRaw.includes('Lịch T12 từ cloud'), 'LocalStorage phải nhận allMonths từ cloud');
 });
 
-console.log('\n================================================================');
-console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passCount}/${totalCount} TESTS ĐẠT CHUẨN (${Math.round(passCount/totalCount*100)}%)`);
-console.log('================================================================\n');
-
-if (passCount === totalCount) {
-  process.exit(0);
-} else {
-  process.exit(1);
-}
+// Chạy toàn bộ hàng đợi test (tuần tự) rồi mới in tổng kết & thoát
+runAllTests();

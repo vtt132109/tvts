@@ -1053,7 +1053,13 @@ runTest('5.3: Xuất báo cáo CSV chuẩn Office UTF-8 có BOM tiếng Việt c
   assert.ok(csv.includes('Tháng 10/2026'), 'Phải chứa nhãn Tháng 10/2026');
   assert.ok(csv.includes('"2102001"'), 'Phải có MSSV của Đặng Tuấn Anh');
   assert.ok(csv.includes('"Đặng Tuấn Anh"'), 'Phải có tên Đặng Tuấn Anh');
-  assert.ok(csv.includes(',7'), 'Phải thể hiện số tổng công 7');
+  // Ô số giờ bọc nháy kép theo chuẩn RFC 4180 (escapeCsvCell), nên giá trị
+  // tổng công 7 xuất hiện dạng ,"7" thay vì ,7.
+  assert.ok(csv.includes('"7"') || csv.includes(',7'),
+    'Phải thể hiện số tổng công 7');
+  // Và không được còn ô số trần (dấu hiệu chưa escape)
+  assert.ok(!/,\d+\r?\n/.test(csv.split('\n').find(l => l.includes('2102001')) || ''),
+    'Các ô số phải được bọc nháy kép chuẩn RFC 4180');
 });
 
 runTest('5.4: Xuất báo cáo HTML định dạng chuẩn để nhúng vào modal xem chi tiết tháng', () => {

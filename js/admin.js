@@ -99,6 +99,31 @@
     events: []
   };
 
+  // Cờ chống bind trùng sự kiện & timer đếm ngược (xem unlockAdminDashboard)
+  let dashboardEventsBound = false;
+  let regLiveStatusTimer = null;
+
+  /**
+   * Escape một ô theo chuẩn RFC 4180 + chống CSV injection.
+   *
+   * CSV INJECTION: nếu ô bắt đầu bằng =, +, -, @, TAB hoặc CR, Excel/Google
+   * Sheets sẽ hiểu là CÔNG THỨC và thực thi khi người dùng mở file.
+   * Tên sinh viên do người dùng nhập ở Cổng Sinh Viên nên hoàn toàn có thể chứa
+   * payload như vậy (vd tên =HYPERLINK("http://x","bấm")). Tiền tố ' trung hòa.
+   *
+   * @param {*} value - Giá trị cần ghi ra CSV
+   * @returns {string} Ô đã escape, LUÔN bọc trong dấu nháy kép
+   */
+  function escapeCsvCell(value) {
+    let s = (value === null || value === undefined) ? '' : String(value);
+    // Vô hiệu hoá ký tự điều khiển gây lệch cột/dòng
+    s = s.replace(/[\r\n\t]+/g, ' ').trim();
+    // Chống công thức
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    // Nhân đôi dấu nháy kép theo RFC 4180
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -337,9 +362,10 @@
     loadAdminUsers();
     bindAuthEvents();
     bindUserMgmtEvents();
-    bindSwapMgmtEvents();
-    bindBackupCenterEvents();
-    bindCloudSyncEvents();
+    // LƯU Ý: bindSwapMgmtEvents / bindBackupCenterEvents / bindCloudSyncEvents
+    // cố ý KHÔNG gọi ở đây — chúng đã nằm trong unlockAdminDashboard() và
+    // chỉ chạy 1 lần. Gọi ở cả hai nơi sẽ khiến mỗi nút có 2 listener:
+    // 1 cú bấm -> 2 bản sao lưu, 2 confirm, 2 file tải xuống.
 
     // Kiểm tra phiên đăng nhập quản trị trong sessionStorage
     const isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
@@ -427,19 +453,29 @@
 
     loadData();
     loadRegConfig();
-    bindEvents();
-    bindRegConfigEvents();
-    bindStickyHeroEvents();
-    bindViewModeEvents();
-    bindImportEvents();
-    bindSwapMgmtEvents();
-    bindBackupCenterEvents();
+
+    // CHỈ bind event MỘT LẦN cho toàn vòng đời trang.
+    // Trước đây unlockAdminDashboard() chạy cả khi khởi tạo lẫn mỗi lần
+    // đăng nhập, khiến cùng một nút có nhiều listener: bấm 1 lần tạo 2 bản
+    // sao lưu, gọi 2 confirm(), tải 2 file, và tốn 2/6 ô lưu trữ.
+    if (!dashboardEventsBound) {
+      dashboardEventsBound = true;
+      bindEvents();
+      bindRegConfigEvents();
+      bindStickyHeroEvents();
+      bindViewModeEvents();
+      bindImportEvents();
+      bindSwapMgmtEvents();
+      bindBackupCenterEvents();
+      bindCloudSyncEvents();
+
+      // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây (1 timer duy nhất)
+      regLiveStatusTimer = setInterval(updateRegLiveStatus, 30000);
+    }
+
     renderAll();
     renderRegConfigUI();
     updateSwapCountBadges();
-
-    // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây
-    setInterval(updateRegLiveStatus, 30000);
   }
 
   function lockAdminDashboard() {
@@ -872,10 +908,10 @@
           if (parsed && parsed.month) state.currentMonth = parseInt(parsed.month, 10);
           if (parsed && parsed.year) state.currentYear = parseInt(parsed.year, 10);
         } else {
-          const mStr = localStorage.getItem('ts_scheduler_active_month');
-          const yStr = localStorage.getItem('ts_scheduler_active_year');
-          if (mStr) state.currentMonth = parseInt(mStr, 10);
-          if (yStr) state.currentYear = parseInt(yStr, 10);
+          // Dự phòng cho dữ liệu cũ đã lưu dạng chuỗi thay vì JSON.
+          // CHỈ ĐỌC, không còn ghi key này nữa.
+          const legacy = localStorage.getItem('ts_scheduler_active_month');
+          if (legacy) state.currentMonth = parseInt(legacy, 10);
         }
       } catch (e) {}
 
@@ -1103,10 +1139,14 @@
     state.currentMonth = targetMonth;
     state.currentYear = targetYear;
     try {
+      // Nguồn sự thật DUY NHẤT cho tháng đang áp dụng.
+      // Trước đây còn ghi thêm 2 key legacy (ts_scheduler_active_month/_year)
+      // chỉ để admin.js tự đọc lại — nhưng student.js KHÔNG đọc chúng, dẫn tới
+      // hai nguồn sự thật song song dễ lệch nhau. Đã gỡ hoàn toàn.
       localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: targetMonth, year: targetYear }));
-      localStorage.setItem('ts_scheduler_active_month', String(targetMonth));
-      localStorage.setItem('ts_scheduler_active_year', String(targetYear));
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Admin] Không lưu được tháng đang áp dụng:', e);
+    }
 
     // 3. Khôi phục lịch tháng mới nếu đã lưu trước đó, hoặc tự động phân bổ lịch cho tháng mới
     const targetKey = `${targetYear}-${pad2(targetMonth)}`;
@@ -2966,15 +3006,26 @@
     } catch (e) {}
 
     const req = list.find(r => r.id === swapId);
-    if (!req) return;
+    if (!req) {
+      showToast('Không tìm thấy đề xuất đổi ca này!', 'error');
+      return;
+    }
+
+    // CHỐT TRẠNG THÁI: trước đây thiếu mắt này nên bấm "Duyệt" 2 lần, hoặc
+    // duyệt lại một đề xuất đã bị từ chối, đều chạy tiếp và báo thành công.
+    if (req.status && req.status !== 'pending') {
+      showToast(`Đề xuất này đã được xử lý (${req.status === 'approved' ? 'đã duyệt' : 'đã từ chối'})!`, 'warning');
+      return;
+    }
 
     // Lấy target student object từ danh sách sinh viên
-    const targetStudent = state.students.find(s => s.studentId?.toLowerCase() === req.targetStudentId?.toLowerCase()) || {
-      id: 's_target_' + req.targetStudentId,
-      studentId: req.targetStudentId,
-      fullName: req.targetStudentName,
-      role: req.targetStudentRole || 'new'
-    };
+    const targetStudent = state.students.find(s => s.studentId?.toLowerCase() === req.targetStudentId?.toLowerCase());
+    if (!targetStudent) {
+      // Trước đây tự tạo object "ma" với id giả (s_target_<mssv>) — id này không
+      // khớp state.students nên bảng chấm công KHÔNG BAO GIỜ tính ca cho người này.
+      showToast(`Không tìm thấy CTV ${req.targetStudentName || req.targetStudentId} trong danh sách! Vui lòng kiểm tra lại đề xuất.`, 'error');
+      return;
+    }
 
     const senderStudent = state.students.find(s => s.studentId?.toLowerCase() === req.studentId?.toLowerCase()) || {
       id: 's_sender_' + req.studentId,
@@ -2985,40 +3036,129 @@
 
     // Tìm tuần trong state.monthSchedule
     const weekIdx = (req.weekNum || 1) - 1;
-    if (state.monthSchedule && state.monthSchedule.weeks && state.monthSchedule.weeks[weekIdx]) {
-      const table = state.monthSchedule.weeks[weekIdx].scheduleTable;
-      const slot = table[req.shiftId];
-
-      if (slot) {
-        if (slot.oldMember?.studentId?.toLowerCase() === req.studentId.toLowerCase()) {
-          slot.oldMember = targetStudent;
-        } else if (slot.newMember?.studentId?.toLowerCase() === req.studentId.toLowerCase()) {
-          slot.newMember = targetStudent;
-        }
-
-        // Cập nhật trạng thái slot
-        slot.status = (slot.oldMember && slot.newMember) ? 'full' : 'partial';
-      }
-
-      // Nếu là Tuần 1, đồng bộ sang scheduleResult
-      if (weekIdx === 0 && state.scheduleResult && state.scheduleResult.scheduleTable) {
-        state.scheduleResult.scheduleTable = table;
-        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
-      }
-
-      localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    const weekData = state.monthSchedule?.weeks?.[weekIdx];
+    if (!weekData || !weekData.scheduleTable) {
+      showToast('Không tìm thấy tuần tương ứng trong lịch để áp dụng đề xuất!', 'error');
+      return;
     }
+
+    const table = weekData.scheduleTable;
+    const slot = table[req.shiftId];
+    if (!slot) {
+      showToast('Không tìm thấy ca trực cần đổi trong lịch!', 'error');
+      return;
+    }
+
+    // KIỂM TRA NGƯỜI NHẬN THỰC SỰ RẢNH CA NÀY.
+    // Trước đây không kiểm tra gì -> có thể gán người không đăng ký rảnh.
+    const shiftMeta = (window.SchedulerEngine?.SHIFT_MAP || {})[req.shiftId];
+    const weekNumber = weekIdx + 1;
+    const declaredAvail = targetStudent.monthlyAvailableShifts
+      ? (targetStudent.monthlyAvailableShifts[weekNumber] || targetStudent.monthlyAvailableShifts[String(weekNumber)])
+      : targetStudent.availableShifts;
+    const isAvailable = Array.isArray(declaredAvail)
+      ? declaredAvail.includes(req.shiftId)
+      : true;
+    if (!isAvailable) {
+      showToast(`${targetStudent.fullName} KHÔNG đăng ký rảnh ${req.shiftId} ở tuần này! Vui lòng kiểm tra lại ca rảnh.`, 'error');
+      return;
+    }
+
+    // Tránh trùng 2 ca cùng 1 ngày với người nhận.
+    const targetDayKey = shiftMeta ? shiftMeta.dayKey : String(req.shiftId).split('_')[0];
+    const alreadyThatDay = Object.entries(table).some(([sid, other]) => {
+      if (sid === req.shiftId) return false;
+      const oKey = (window.SchedulerEngine?.SHIFT_MAP || {})[sid];
+      if (!oKey || oKey.dayKey !== targetDayKey) return false;
+      return other.oldMember?.id === targetStudent.id || other.newMember?.id === targetStudent.id;
+    });
+    if (alreadyThatDay) {
+      showToast(`${targetStudent.fullName} đã có ca khác trong cùng ngày ${targetDayKey}! Vui lòng kiểm tra lại.`, 'error');
+      return;
+    }
+
+    const senderMssv = String(req.studentId || '').toLowerCase();
+    let replaced = false;
+    if (slot.oldMember?.studentId?.toLowerCase() === senderMssv) {
+      slot.oldMember = targetStudent;
+      replaced = true;
+    } else if (slot.newMember?.studentId?.toLowerCase() === senderMssv) {
+      slot.newMember = targetStudent;
+      replaced = true;
+    }
+
+    if (!replaced) {
+      showToast('Ca trực này không còn thuộc về CTV gửi đề xuất — có thể lịch đã thay đổi. Đề xuất sẽ được giữ nguyên để Ban rà soát.', 'warning');
+      return;
+    }
+
+    slot.status = (slot.oldMember && slot.newMember) ? 'full' : 'partial';
+
+    // Tính lại toàn bộ thống kê của tuần (studentStats + summary).
+    // Trước đây bỏ qua bước này -> bảng SV, thanh công bằng và số ca đều lệch.
+    recomputeWeekStats(weekData);
+
+    state.currentSchedule = weekData;
+    state.twoWeekSchedule = state.monthSchedule;
+    localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    saveSchedule(true);
 
     req.status = 'approved';
     req.approvedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(list));
 
     // Đồng bộ sang cổng sinh viên
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('ts:data-changed', {
+      detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SWAP_REQUESTS, STORAGE_KEYS.SCHEDULE] }
+    }));
 
     renderSwapRequestsTable();
     renderAll();
     showToast(`Đã phê duyệt đề xuất của CTV ${req.studentName}! Lịch trực đã được tự động cập nhật.`, 'success');
+  }
+
+  /**
+   * Tính lại studentStats + summary cho một tuần sau khi thay đổi thủ công.
+   * @param {object} weekData - Đối tượng tuần trong monthSchedule
+   */
+  function recomputeWeekStats(weekData) {
+    if (!weekData || !weekData.scheduleTable) return;
+    const stats = {};
+    state.students.forEach(s => {
+      stats[s.id] = {
+        studentId: s.id,
+        fullName: s.fullName,
+        role: s.role,
+        assignedCount: 0,
+        registeredCount: (s.availableShifts || []).length
+      };
+    });
+
+    let full = 0, partial = 0, empty = 0;
+    const table = weekData.scheduleTable;
+    Object.values(table).forEach(slot => {
+      [slot.oldMember, slot.newMember].forEach(member => {
+        if (member && stats[member.id]) stats[member.id].assignedCount += 1;
+      });
+      const hasOld = !!slot.oldMember;
+      const hasNew = !!slot.newMember;
+      slot.status = (hasOld && hasNew) ? 'full' : ((hasOld || hasNew) ? 'partial' : 'empty');
+      if (slot.status === 'full') full++;
+      else if (slot.status === 'partial') partial++;
+      else empty++;
+    });
+
+    weekData.studentStats = stats;
+    weekData.summary = Object.assign({}, weekData.summary, {
+      totalShifts: Object.keys(table).length,
+      fullShifts: full,
+      partialShifts: partial,
+      emptyShifts: empty,
+      totalStudents: state.students.length,
+      oldStudentsCount: state.students.filter(s => s.role === 'old').length,
+      newStudentsCount: state.students.filter(s => s.role === 'new').length,
+      unassignedStudentsCount: Object.values(stats).filter(x => x.assignedCount === 0).length
+    });
   }
 
   function handleRejectSwap(swapId) {
@@ -3029,13 +3169,22 @@
     } catch (e) {}
 
     const req = list.find(r => r.id === swapId);
-    if (!req) return;
+    if (!req) {
+      showToast('Không tìm thấy đề xuất đổi ca này!', 'error');
+      return;
+    }
+    if (req.status && req.status !== 'pending') {
+      showToast(`Đề xuất này đã được xử lý (${req.status === 'approved' ? 'đã duyệt' : 'đã từ chối'})!`, 'warning');
+      return;
+    }
 
     req.status = 'rejected';
     req.rejectedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(list));
 
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('ts:data-changed', {
+      detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] }
+    }));
     renderSwapRequestsTable();
     showToast(`Đã từ chối đề xuất của CTV ${req.studentName}.`, 'info');
   }
@@ -3163,7 +3312,7 @@
     const backupPayload = {
       meta: {
         appName: 'Hệ Thống Phân Công Lịch Trực Ban TVTS HCM-UTE',
-        version: '2.5',
+        version: '2.6',
         exportedAt: new Date().toISOString(),
         exportedBy: state.currentUser ? state.currentUser.fullName : 'Admin'
       },
@@ -3172,7 +3321,20 @@
       scheduleResult: state.scheduleResult || null,
       regConfig: state.regConfig || null,
       adminUsers: state.adminUsers || [],
-      swapRequests: swapList
+      swapRequests: swapList,
+      // Trước đây 3 key này KHÔNG được xuất, dù handleConfirmRestore đọc
+      // chúng. Hậu quả: khôi phục "100%" mà mất sạch sự kiện (mất luôn
+      // phần eventWorkUnits trong bảng chấm công) và hiển thị lịch khôi
+      // phục dưới sai nhãn tháng.
+      events: state.events || [],
+      activeMonth: (function () {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACTIVE_MONTH) || 'null'); }
+        catch (e) { return { month: state.currentMonth, year: state.currentYear }; }
+      })(),
+      allMonths: (function () {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ALL_MONTHS) || '{}'); }
+        catch (e) { return {}; }
+      })()
     };
 
     const jsonString = JSON.stringify(backupPayload, null, 2);
@@ -3265,10 +3427,55 @@
         localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
       }
       if (pendingRestoreData.swapRequests) {
-        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(pendingRestoreData.swapRequests));
+        state.swapRequests = pendingRestoreData.swapRequests;
+        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(state.swapRequests));
+      }
+      // Sự kiện cũng phải được khôi phục: bảng chấm công cộng eventWorkUnits,
+      // và sự kiện còn sót lại tham chiếu sinh viên đã bị xoá sẽ tiếp tục
+      // đóng góp công cho những người không còn tồn tại.
+      if (Array.isArray(pendingRestoreData.events)) {
+        state.events = pendingRestoreData.events;
+        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(state.events));
       }
 
-      window.dispatchEvent(new Event('storage'));
+      // ⚠️ state.currentSchedule / twoWeekSchedule phải được tính lại.
+      // Trước đây chỉ ghi storage rồi renderAll() — mà renderAll() đọc
+      // state.currentSchedule (đang giữ lịch CŨ trong RAM), nên thông báo
+      // "khôi phục 100%" hiện ra trong khi bảng vẫn là dữ liệu trước khi
+      // khôi phục. Chỉ tải lại trang mới thấy dữ liệu mới.
+      state.twoWeekSchedule = state.monthSchedule;
+      state.currentSchedule = state.monthSchedule
+        ? (state.monthSchedule.weeks?.[state.currentWeek - 1]
+          || state.monthSchedule.weeks?.[0]
+          || state.monthSchedule)
+        : null;
+
+      // Khôi phục cả kỳ đang áp dụng và kho lịch các tháng khác
+      if (pendingRestoreData.activeMonth) {
+        try {
+          const am = typeof pendingRestoreData.activeMonth === 'string'
+            ? JSON.parse(pendingRestoreData.activeMonth)
+            : pendingRestoreData.activeMonth;
+          if (am && am.month) {
+            state.currentMonth = parseInt(am.month, 10);
+            if (am.year) state.currentYear = parseInt(am.year, 10);
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify(am));
+          }
+        } catch (e) { /* dữ liệu tháng không hợp lệ -> giữ nguyên kỳ hiện tại */ }
+      }
+      if (pendingRestoreData.allMonths && typeof pendingRestoreData.allMonths === 'object') {
+        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(pendingRestoreData.allMonths));
+      }
+
+      window.dispatchEvent(new CustomEvent('ts:data-changed', {
+        detail: {
+          keys: [
+            STORAGE_KEYS.STUDENTS, STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SCHEDULE,
+            STORAGE_KEYS.REG_CONFIG, STORAGE_KEYS.ADMIN_USERS, STORAGE_KEYS.SWAP_REQUESTS,
+            STORAGE_KEYS.EVENTS, STORAGE_KEYS.ACTIVE_MONTH, STORAGE_KEYS.ALL_MONTHS
+          ]
+        }
+      }));
 
       renderAll();
       renderRegConfigUI();
@@ -3306,6 +3513,8 @@
     state.monthSchedule = {
       createdAt: Date.now(),
       totalWeeks: 4,
+      month: state.currentMonth,
+      year: state.currentYear,
       weeks: cleanWeeks
     };
 
@@ -3318,8 +3527,20 @@
     localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
     localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.scheduleResult));
     localStorage.removeItem(STORAGE_KEYS.SWAP_REQUESTS);
+    state.swapRequests = [];
 
-    window.dispatchEvent(new Event('storage'));
+    // ⚠️ THIẾU SO VỚI CÁC ĐƯỜNG KHÁC: renderTimetable() đọc
+    // state.currentSchedule.scheduleTable và renderStudentTable() đọc
+    // state.currentSchedule.studentStats. Nếu chỉ xoá storage mà không
+    // cập nhật 2 biến này, bảng điều khiển VẪN HIỆN LỊCH CŨ trong khi
+    // dữ liệu trên đĩa đã bị xoá — và lần saveSchedule() kế tiếp sẽ ghi đè
+    // lịch tháng mới bằng lịch cũ.
+    state.twoWeekSchedule = state.monthSchedule;
+    state.currentSchedule = state.monthSchedule.weeks[0];
+
+    window.dispatchEvent(new CustomEvent('ts:data-changed', {
+      detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SCHEDULE, STORAGE_KEYS.SWAP_REQUESTS] }
+    }));
 
     renderAll();
     updateBackupStats();
@@ -3367,7 +3588,7 @@
     saveEvents(list) {
       try {
         localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(list));
-        window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.EVENTS] } }));
       } catch (err) {
         console.error('Lỗi khi lưu danh sách sự kiện:', err);
         showToast('Lỗi lưu trữ danh sách sự kiện!', 'error');
@@ -3649,7 +3870,16 @@
 
         items.forEach((item, idx) => {
           const roleLabel = item.role === 'old' ? 'Người Cũ' : 'Người Mới';
-          rows.push(`"${idx + 1}","${item.studentMssv}","${item.fullName}","${roleLabel}",${item.officeShiftsCount},${item.eventCount},${item.eventWorkUnits},${item.totalWorkUnits}`);
+          rows.push([
+          escapeCsvCell(idx + 1),
+          escapeCsvCell(item.studentMssv),
+          escapeCsvCell(item.fullName),
+          escapeCsvCell(roleLabel),
+          escapeCsvCell(item.officeShiftsCount),
+          escapeCsvCell(item.eventCount),
+          escapeCsvCell(item.eventWorkUnits),
+          escapeCsvCell(item.totalWorkUnits)
+        ].join(','));
         });
 
         return '\uFEFF' + rows.join('\r\n');
@@ -3746,7 +3976,7 @@
   function saveWebBackups(list) {
     try {
       localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
-      window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.WEB_BACKUPS] } }));
       if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
         window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] WebBackups push error:', err));
       }
@@ -4035,7 +4265,7 @@
         localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(state.events));
       }
 
-      window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.EVENTS] } }));
 
       renderAll();
       renderRegConfigUI();
@@ -4570,6 +4800,17 @@
   window.adminSaveEvent = (eventData) => handleSaveEvent(eventData);
   window.adminDeleteEvent = (id) => handleDeleteEvent(id);
   window.adminCloseEventModal = () => closeEventModal();
+
+  // API nội bộ cho bộ kiểm thử tự động (không dùng trong giao diện).
+  window.adminTestHelper = {
+    loadData,
+    saveStudents,
+    saveSchedule,
+    runFullSchedule,
+    switchAdminMonth,
+    getState: () => ({ ...state })
+  };
+
   window.EventManager = EventManager;
   window.PayrollCalculator = PayrollCalculator;
   window.WebBackupManager = {
@@ -5194,7 +5435,7 @@
       state.regConfig.publishSchedule = !state.regConfig.publishSchedule;
       saveRegConfig(true);
       renderRegConfigUI();
-      window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.REG_CONFIG] } }));
       const msg = state.regConfig.publishSchedule
         ? '📢 Đã CÔNG BỐ lịch trực cho sinh viên xem trên Cổng Sinh Viên!'
         : '🔒 Đã TẠM ẨN lịch trực trên Cổng Sinh Viên (chỉ hiển thị khi đóng cổng hoặc công bố)!';
@@ -5267,7 +5508,7 @@
 
       saveRegConfig(true);
       renderRegConfigUI();
-      window.dispatchEvent(new Event('storage'));
+window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.REG_CONFIG] } }));
     });
   }
 
@@ -5279,7 +5520,7 @@
 
     const schedule = state.currentSchedule.scheduleTable;
     let csvContent = '\uFEFF';
-    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới (Tập Sự),MSSV Người Mới,Trạng Thái Ca\n';
+    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới (Tập Sự),MSSV Người Mới,Trạng Thái Ca\r\n';
 
     SHIFTS.forEach((shift, index) => {
       const slot = schedule[shift.id];
@@ -5289,7 +5530,20 @@
       const newMssv = slot?.newMember?.studentId || '-';
       const statusText = slot?.status === 'full' ? 'Đủ 2 bạn' : (slot?.status === 'partial' ? 'Thiếu 1 bạn' : 'Trống ca');
 
-      csvContent += `"${index + 1}","${shift.dayName}","${shift.period}","${shift.time}","${oldName}","${oldMssv}","${newName}","${newMssv}","${statusText}"\n`;
+      // escapeCsvCell: chống CSV injection + escape đúng chuẩn RFC 4180.
+      // Trước đây dấu " trong tên làm hỏng cột, và tên bắt đầu "=" bị Excel
+      // hiểu thành công thức khi mở file.
+      csvContent += [
+        escapeCsvCell(index + 1),
+        escapeCsvCell(shift.dayName),
+        escapeCsvCell(shift.period),
+        escapeCsvCell(shift.time),
+        escapeCsvCell(oldName),
+        escapeCsvCell(oldMssv),
+        escapeCsvCell(newName),
+        escapeCsvCell(newMssv),
+        escapeCsvCell(statusText)
+      ].join(',') + '\r\n';
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -5315,8 +5569,16 @@
       elements.excelModal = document.getElementById('excel-export-modal');
     }
     if (!elements.excelModal) return;
-    if (elements.exportStartDate && !elements.exportStartDate.value) {
-      elements.exportStartDate.value = '2026-07-01';
+    if (elements.exportStartDate) {
+      // Ô nhập ngày phải mặc định theo kỳ đang xem, không phải một tháng
+      // cố định — trước đây luôn là 07/2026 nên xuất kỳ 13/2027 vẫn ra bảng
+      // tháng 7 và ghi sai vào bảng đăng ký chính thức.
+      const curM = state.currentMonth || 10;
+      const curY = state.currentYear || 2026;
+      const firstDay = new Date(curY, curM - 1, 1);
+      const pad2 = (n) => String(n).padStart(2, '0');
+      elements.exportStartDate.value =
+        `${firstDay.getFullYear()}-${pad2(firstDay.getMonth() + 1)}-01`;
     }
     renderUteSheetPreview();
     elements.excelModal.classList.add('active');
@@ -5349,7 +5611,10 @@
   }
 
   function generateUteExportData() {
-    const startDateVal = elements.exportStartDate?.value || '2026-07-01';
+    // Dự phòng theo kỳ đang xem (openExcelModal đã điền sẵn ô nhập).
+    const pad2d = (n) => String(n).padStart(2, '0');
+    const fallbackStart = `${state.currentYear || 2026}-${pad2d(state.currentMonth || 10)}-01`;
+    const startDateVal = elements.exportStartDate?.value || fallbackStart;
     const rangeMode = elements.exportRangeSelect?.value || '30days_month';
 
     // Parse ngày bắt đầu an toàn
@@ -5451,13 +5716,12 @@
         if (afternoonSlot?.newMember) aList.push(`${afternoonSlot.newMember.fullName} - ${afternoonSlot.newMember.studentId}`);
         afternoonText = aList.join('\n');
       } else {
-        // Thứ 7 hoặc Chủ Nhật (Cuối tuần)
-        if (state.students.length >= 2) {
-          const s1 = state.students[(addedCount * 2) % state.students.length];
-          const s2 = state.students[(addedCount * 2 + 1) % state.students.length];
-          morningText = `${s1.fullName} - ${s1.studentId}\n${s2.fullName} - ${s2.studentId}`;
-          afternoonText = `${s1.fullName} - ${s1.studentId}\n${s2.fullName} - ${s2.studentId}`;
-        }
+        // Thứ 7 / Chủ Nhật: KHÔNG có ca trực trong hệ thống (chỉ T2–T6).
+        // Trước đây chọn ngẫu nhiên 2 sinh viên và nhân đôi cho cả sáng lẫn
+        // chiều — tạo dữ liệu BỊA trên bảng đăng ký chính thức HCM-UTE.
+        // Nay ghi rõ "Không trực" để bảng phản ánh đúng thực tế.
+        morningText = 'Không trực cuối tuần';
+        afternoonText = 'Không trực cuối tuần';
       }
 
       rows.push({
@@ -5724,11 +5988,19 @@
     window.print();
   }
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = 'info', duration) {
+    // LỖI phải được đọc NGAY bởi trình đọc màn hình, không phải đợi đến
+    // khi trình đọc rảnh. Vùng toast là aria-live="polite" nên thông báo
+    // lỗi trước đây bị bỏ qua nếu người dùng đang nghe nội dung khác.
+    if (type === 'error' && window.ModalA11y && typeof window.ModalA11y.announceAlert === 'function') {
+      window.ModalA11y.announceAlert(String(message).replace(/<[^>]*>/g, ''));
+    }
+
     if (!elements.toastContainer) return;
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    if (type === 'error') toast.setAttribute('role', 'alert');
     // Bắt buộc escapeHtml: message có thể chứa tên/MSSV/thông báo lỗi Cloud
     // do người dùng nhập hoặc từ dịch vụ ngoài trả về.
     toast.innerHTML = `
@@ -5738,12 +6010,17 @@
 
     elements.toastContainer.appendChild(toast);
 
+    // Thời gian hiển thị: trước đây tham số thứ 3 của showToast bị BỎ QUA hoàn
+    // toàn và luôn cứng 3200ms. Vì vậy cảnh báo "bộ nhớ trình duyệt đã đầy" xin
+    // 9 giây lại biến mất sau 3.2 giây — người dùng không kịp đọc.
+    const lifetime = Number(duration) > 0 ? Number(duration) : 3200;
+
     setTimeout(() => {
       toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(100%)';
       setTimeout(() => toast.remove(), 300);
-    }, 3200);
+    }, lifetime);
   }
 
   /**

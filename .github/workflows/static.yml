@@ -1,5 +1,10 @@
 name: Deploy static content to Pages
 
+# ⚠️ QUAN TRỌNG: Chỉ deploy các file CẦN THIẾT cho web.
+# Trước đây dùng `path: '.'` khiến TOÀN BỘ repo (kể cả data/, tests/,
+# tasks/, scripts/, .antigravity/) được publish công khai — trong đó có file
+# chứa thông tin cá nhân (PII) và cấu trúc tài khoản. Cách này vừa chậm
+# vừa là rò rỉ thông tin.
 on:
   push:
     branches: ["main"]
@@ -10,9 +15,10 @@ permissions:
   pages: write
   id-token: write
 
+# Cho phép deploy chồng lên nhau nhưng huỷ bản đang chờ (tiết kiệm runner)
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -23,12 +29,67 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Chuẩn bị thư mục publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site/js _site/css
+
+          # Trang + tài nguyên tĩnh
+          cp index.html admin.html _site/
+          cp css/style.css _site/css/
+
+          # Chỉ 5 file JS thực sự được nạp bởi trang
+          for f in cloud_sync month_calendar scheduler sample30; do
+            cp "js/$f.js" _site/js/
+          done
+          cp js/admin.js   _site/js/
+          cp js/student.js _site/js/
+
+          # .nojekyll: tắt Jekyll để các file/thư mục bị bỏ qua (vd .antigravity)
+          # không bị GitHub Pages lọc bằng cách khác nhau giữa local và Pages
+          touch _site/.nojekyll
+
+          echo "--- Nội dung sẽ deploy ---"
+          find _site -type f | sort
+          echo "--- Tổng dung lượng ---"
+          du -sh _site
+
+      - name: Kiểm tra không rò rỉ dữ liệu nhạy cảm
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          # Không được có file chứa PII / tài khoản / tài liệu nội bộ
+          for bad in csv xlsx xls; do
+            if find _site -name "*.$bad" | grep -q .; then
+              echo "::error::Phát hiện file .$bad trong thư mục deploy (chứa PII)"
+              fail=1
+            fi
+          done
+          for dir in tests tasks scripts .antigravity data .git .github; do
+            if [ -e "_site/$dir" ]; then
+              echo "::error::Thư mục nội bộ '$dir' bị deploy công khai"
+              fail=1
+            fi
+          done
+          # Không được hardcode id tài khoản thật trong JS được publish
+          if grep -rnE "usr_[0-9]{10,}" _site/ ; then
+            echo "::error::Phát hiện id tài khoản dạng usr_<timestamp> trong bản deploy"
+            fail=1
+          fi
+          exit $fail
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -64,6 +64,17 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Thang z-index — dùng token thay vì số rời rạc.
+     Thứ tự từ dưới lên trên:
+       nội dung < header dính < thanh dính < toast < modal < modal lồng < skip-link */
+  --z-content: 10;
+  --z-sticky: 50;
+  --z-sticky-hero: 1000;
+  --z-toast: 2000;
+  --z-modal: 3000;
+  --z-modal-nested: 3100;
+  --z-skip-link: 9999;
+
   /* Color Scheme Native */
   color-scheme: light;
 }
@@ -160,7 +171,7 @@ textarea:focus-visible {
   position: absolute;
   top: -120px;
   left: 1.25rem;
-  z-index: 99999;
+  z-index: var(--z-skip-link);
   padding: 0.75rem 1.25rem;
   background: var(--primary);
   color: #ffffff !important;
@@ -231,7 +242,7 @@ body {
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: var(--z-sticky);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1332,7 +1343,7 @@ select.form-input,
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  z-index: 1200;
+  z-index: var(--z-modal);
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -1357,7 +1368,9 @@ select.form-input,
   display: flex;
   flex-direction: column;
   max-height: 92vh;
-  animation: slideUp 0.25s ease-out;
+  /* Dùng keyframes thực sự tồn tại. Trước đây gọi `slideUp` — không hề được
+     định nghĩa nên hiệu ứng vào hộp thoại chết âm thầm. */
+  animation: modalScaleUp 0.25s ease-out;
 }
 
 .modal-header {
@@ -1439,7 +1452,7 @@ select.form-input,
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  z-index: 999;
+  z-index: var(--z-toast);
 }
 
 .toast {
@@ -2139,7 +2152,10 @@ select.form-input,
    5. BẢNG TÍNH XUẤT EXCEL & SAO CHÉP GOOGLE SHEETS CHUẨN HCM-UTE
    ========================================================================== */
 .excel-modal-overlay {
-  z-index: 1050 !important;
+  /* PHẢI CAO HƠN .modal-overlay (--z-modal). Trước đây để 1050 < 1200 khiến
+     hộp thoại Excel mở từ trong modal khác bị chìm xuống SAU lớp che —
+     thấy nhưng không bấm được. */
+  z-index: var(--z-modal-nested) !important;
   background: rgba(15, 23, 42, 0.75) !important;
   backdrop-filter: blur(5px) !important;
 }
@@ -2819,12 +2835,17 @@ select.form-input,
   top: 0;
   left: 0;
   right: 0;
-  z-index: 1000;
+  z-index: var(--z-sticky-hero);
   background: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1.5px solid var(--border-color);
   padding: 0.65rem 2rem;
+  /* iPhone X trở lên có vạch trang chủ ở đáy màn hình. Trước đây không có
+     safe-area inset nên hàng nút thao tác chính bị vạch này che. */
+  padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+  padding-left: max(2rem, env(safe-area-inset-left, 0px));
+  padding-right: max(2rem, env(safe-area-inset-right, 0px));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3150,9 +3171,20 @@ select.form-input,
 .import-preview-table-wrapper {
   max-height: 280px;
   overflow-y: auto;
+  /* Bảng 7 cột: thiếu overflow-x thì tràn ngang trên màn hình hẹp (mobile),
+     kéo được cả trang thay vì chỉ bảng. */
+  overflow-x: auto;
   margin-top: 1.25rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
+}
+
+/* Bảng bọc trong modal: cho phép cuộn ngang thay vì bóp các cột thành
+   những số liệu không đọc được. */
+.modal-body > .user-mgmt-table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
 .import-preview-table {
@@ -3170,7 +3202,7 @@ select.form-input,
   font-weight: 700;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-content);
 }
 
 .import-preview-table td {
@@ -3446,7 +3478,8 @@ select.form-input,
   font-size: 0.72rem;
   font-weight: 800;
   margin-left: 0.35rem;
-  animation: pulse 2s infinite;
+  /* Trước đây gọi `pulse` — không có @keyframes nên chết âm thầm. */
+  animation: securityWarningPulse 2s infinite;
 }
 
 .swap-type-toggle {
@@ -3964,7 +3997,7 @@ select.form-input,
   border-bottom: 2px solid var(--border-color);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-content);
 }
 
 .payroll-table td {
@@ -4780,7 +4813,7 @@ button.btn,
   .month-week-tabs-container {
     position: sticky;
     top: 0;
-    z-index: 30;
+    z-index: var(--z-sticky);
     background: var(--bg-card);
     padding: 0.5rem 0;
     box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
@@ -4852,7 +4885,7 @@ button.btn,
   position: sticky;
   left: 0;
   background: var(--bg-card);
-  z-index: 10;
+  z-index: var(--z-content);
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.04);
 }
 
@@ -5018,7 +5051,7 @@ input[type="checkbox"]:checked {
 .bulk-actions-bar {
   position: sticky;
   top: 10px;
-  z-index: 50;
+  z-index: var(--z-sticky);
   background: var(--bg-card);
   border: 2px solid var(--primary, #4f46e5);
   border-radius: var(--radius-md, 12px);

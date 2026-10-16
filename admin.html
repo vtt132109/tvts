@@ -163,7 +163,7 @@
         </div>
 
         <!-- Hộp báo lỗi đăng nhập -->
-        <div id="auth-error-box" class="auth-error-box">
+        <div id="auth-error-box" class="auth-error-box" role="alert" aria-live="assertive">
           <span>⚠️</span>
           <span id="auth-error-msg">Tài khoản hoặc mật khẩu không chính xác!</span>
         </div>
@@ -187,7 +187,7 @@
         <form id="form-auth-pin" style="display: none;">
           <div class="form-group">
             <label class="form-label" for="auth-input-pin">Nhập Mã PIN 4-6 Số <span class="required">*</span></label>
-            <input type="password" id="auth-input-pin" class="form-input" placeholder="••••" maxlength="10" autocomplete="off" style="letter-spacing: 0.3em; font-size: 1.3rem; text-align: center;" aria-label="Mã PIN nhanh 4-6 số">
+            <input type="password" id="auth-input-pin" class="form-input" placeholder="••••" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" required autocomplete="off" style="letter-spacing: 0.3em; font-size: 1.3rem; text-align: center;" aria-label="Mã PIN nhanh 4-6 số">
             <div class="form-hint" style="text-align: center;">Mã PIN bí mật do Trưởng ban tuyển sinh cấp.</div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 1rem;">
@@ -795,11 +795,11 @@
   <!-- ====================================================================
        MODAL 1: TINH CHỈNH / ĐỔI NGƯỜI TRỰC THỦ CÔNG TRONG CA
        ==================================================================== -->
-  <div class="modal-overlay" id="reassign-modal">
+  <div class="modal-overlay" id="reassign-modal" role="dialog" aria-modal="true" aria-labelledby="reassign-modal-title" tabindex="-1">
     <div class="modal-box">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">🔄 Điều Chỉnh Phân Công Ca Trực</h3>
+          <h3 class="modal-title" id="reassign-modal-title">🔄 Điều Chỉnh Phân Công Ca Trực</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted);" id="modal-slot-title">Ca trực</p>
         </div>
         <button class="modal-close-btn" id="btn-close-modal" aria-label="Đóng hộp thoại">&times;</button>
@@ -832,7 +832,7 @@
   <!-- ====================================================================
        MODAL 2: THÊM / SỬA SINH VIÊN (DÀNH CHO ADMIN)
        ==================================================================== -->
-  <div class="modal-overlay" id="student-form-modal">
+  <div class="modal-overlay" id="student-form-modal" role="dialog" aria-modal="true" aria-labelledby="student-modal-title" tabindex="-1">
     <div class="modal-box" style="max-width: 650px;">
       <div class="modal-header">
         <div>
@@ -856,14 +856,14 @@
               <label class="form-label" for="admin-input-studentid">
                 Mã Số Sinh Viên (MSSV) <span class="required">*</span>
               </label>
-              <input type="text" id="admin-input-studentid" class="form-input" placeholder="Ví dụ: 2202111" required aria-label="Mã Số Sinh Viên (MSSV)">
+              <input type="text" id="admin-input-studentid" class="form-input" inputmode="numeric" pattern="[0-9]*" maxlength="12" placeholder="Ví dụ: 2202111" required aria-label="Mã Số Sinh Viên (MSSV)">
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label class="form-label" for="admin-input-phone">Số Điện Thoại</label>
-              <input type="tel" id="admin-input-phone" class="form-input" placeholder="0912345678" aria-label="Số Điện Thoại">
+              <input type="tel" id="admin-input-phone" class="form-input" inputmode="numeric" pattern="[0-9]{9,11}" maxlength="11" placeholder="0912345678" aria-label="Số Điện Thoại">
             </div>
             <div class="form-group">
               <div class="form-label" id="label-admin-student-role" style="font-weight: 700;">Phân Loại <span class="required">*</span></div>
@@ -937,11 +937,11 @@
   <!-- ====================================================================
        MODAL 3: QUẢN LÝ QUYỀN TRUY CẬP & CẤP QUYỀN CÁN BỘ
        ==================================================================== -->
-  <div class="modal-overlay" id="user-mgmt-modal">
+  <div class="modal-overlay" id="user-mgmt-modal" role="dialog" aria-modal="true" aria-labelledby="user-mgmt-modal-title" tabindex="-1">
     <div class="modal-box" style="max-width: 680px;">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">🔑 Quản Lý Quyền Truy Cập & Cán Bộ</h3>
+          <h3 class="modal-title" id="user-mgmt-modal-title">🔑 Quản Lý Quyền Truy Cập & Cán Bộ</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted);">Cấp quyền cho cán bộ tuyển sinh & quản lý mật khẩu bảo vệ</p>
         </div>
         <button class="modal-close-btn" id="btn-close-user-mgmt-modal" aria-label="Đóng hộp thoại">&times;</button>
@@ -1004,7 +1004,7 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="add-user-pin">Mã PIN Nhanh (Tùy chọn)</label>
-              <input type="text" id="add-user-pin" class="form-input" placeholder="4 số (VD: 6789)" maxlength="6" aria-label="Mã PIN Nhanh Cho Cán Bộ">
+              <input type="text" id="add-user-pin" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="4 số (VD: 6789)" maxlength="6" aria-label="Mã PIN Nhanh Cho Cán Bộ">
             </div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
@@ -1028,7 +1028,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="pin-new">Cập Nhật Mã PIN Nhanh (Tùy chọn)</label>
-            <input type="text" id="pin-new" class="form-input" placeholder="4 số (VD: 9999)" maxlength="6" aria-label="Cập Nhật Mã PIN Nhanh">
+            <input type="text" id="pin-new" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="4 số (VD: 9999)" maxlength="6" aria-label="Cập Nhật Mã PIN Nhanh">
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
             <span>💾 Lưu Mật Khẩu Mới</span>
@@ -1042,13 +1042,13 @@
   <!-- ====================================================================
        MODAL 4: BẢNG TÍNH XUẤT EXCEL & SAO CHÉP GOOGLE SHEETS CHUẨN HCM-UTE
        ==================================================================== -->
-  <div class="modal-overlay excel-modal-overlay" id="excel-export-modal" style="z-index: 1050;">
+  <div class="modal-overlay excel-modal-overlay" id="excel-export-modal" role="dialog" aria-modal="true" aria-labelledby="excel-export-modal-title" tabindex="-1" style="z-index: 1050;">
     <div class="modal-box excel-modal-dialog">
       <div class="modal-header" style="background: linear-gradient(135deg, #065f46, #047857); color: #ffffff;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
           <span style="font-size: 1.5rem;">📊</span>
           <div>
-            <h3 style="color: #ffffff; font-size: 1.15rem; margin-bottom: 0.15rem;">Bảng Tính Xuất Excel & Sao Chép Google Sheets</h3>
+            <h3 id="excel-export-modal-title" style="color: #ffffff; font-size: 1.15rem; margin-bottom: 0.15rem;">Bảng Tính Xuất Excel & Sao Chép Google Sheets</h3>
             <p style="color: #d1fae5; font-size: 0.8rem; margin: 0;">Chuẩn mẫu tuyển sinh HCM-UTE 2026 • 1-Click sao chép dán trực tiếp (Ctrl+V) vào Google Sheets</p>
           </div>
         </div>
@@ -1130,10 +1130,10 @@
   <!-- ====================================================================
        MODAL NHẬP DANH SÁCH SINH VIÊN TỪ EXCEL / CSV (TASK 18)
        ==================================================================== -->
-  <div class="modal-backdrop" id="import-excel-modal">
+  <div class="modal-backdrop" id="import-excel-modal" role="dialog" aria-modal="true" aria-labelledby="import-excel-modal-title" tabindex="-1">
     <div class="modal-content" style="max-width: 780px;">
       <div class="modal-header">
-        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+        <h3 class="modal-title" id="import-excel-modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>📥 Nhập Danh Sách Sinh Viên Từ File Excel / CSV</span>
         </h3>
         <button type="button" class="modal-close-btn" id="btn-close-import-modal" aria-label="Đóng hộp thoại">&times;</button>
@@ -1222,10 +1222,10 @@
   <!-- ====================================================================
        MODAL QUẢN LÝ & PHÊ DUYỆT ĐỔI CA (TASK 26)
        ==================================================================== -->
-  <div class="modal-overlay modal-backdrop" id="modal-manage-swaps" style="display: none;">
+  <div class="modal-overlay modal-backdrop" id="modal-manage-swaps" role="dialog" aria-modal="true" aria-labelledby="modal-manage-swaps-title" tabindex="-1" style="display: none;">
     <div class="modal-content" style="max-width: 900px;">
       <div class="modal-header">
-        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+        <h3 class="modal-title" id="modal-manage-swaps-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>🔄 Quản Lý & Phê Duyệt Đề Xuất Đổi Ca / Nhờ Trực Hộ</span>
         </h3>
         <button type="button" class="modal-close-btn" id="btn-close-swap-mgmt-modal" aria-label="Đóng hộp thoại">&times;</button>
@@ -1244,7 +1244,7 @@
           </button>
         </div>
 
-        <div class="table-container" style="max-height: 380px; overflow-y: auto;">
+        <div class="table-container" style="max-height: 380px; overflow-y: auto; overflow-x: auto;">
           <table class="data-table" id="table-manage-swaps">
             <thead>
               <tr>
@@ -1273,10 +1273,10 @@
   <!-- ====================================================================
        MODAL TRUNG TÂM SAO LƯU & PHỤC HỒI DỮ LIỆU (TASK 27)
        ==================================================================== -->
-  <div class="modal-overlay modal-backdrop" id="modal-backup-center" style="display: none;">
+  <div class="modal-overlay modal-backdrop" id="modal-backup-center" role="dialog" aria-modal="true" aria-labelledby="modal-backup-center-title" tabindex="-1" style="display: none;">
     <div class="modal-content" style="max-width: 820px;">
       <div class="modal-header">
-        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+        <h3 class="modal-title" id="modal-backup-center-title" style="display: flex; align-items: center; gap: 0.5rem;">
           <span>💾 Trung Tâm Sao Lưu & Khôi Phục Dữ Liệu Tuyển Sinh</span>
         </h3>
         <button type="button" class="modal-close-btn" id="btn-close-backup-modal" aria-label="Đóng hộp thoại">&times;</button>
@@ -1462,7 +1462,7 @@
        MODAL 6: BẢNG CHẤM CÔNG CTV THEO THÁNG (PAYROLL-01)
        Tổng hợp ca trực văn phòng 4 tuần + các sự kiện ngoại kiểm đi tour
        ==================================================================== -->
-  <div class="modal-overlay modal-backdrop" id="modal-month-payroll" style="display: none; z-index: 1060;">
+  <div class="modal-overlay modal-backdrop" id="modal-month-payroll" role="dialog" aria-modal="true" aria-labelledby="month-payroll-title" tabindex="-1" style="display: none; z-index: 1060;">
     <div class="modal-content payroll-modal-dialog" style="max-width: 1100px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column;">
       
       <!-- Modal Header -->
@@ -1611,7 +1611,7 @@
   <!-- ====================================================================
        MODAL 8: CHI TIẾT CÔNG TRỰC CỦA 1 CTV TRONG THÁNG
        ==================================================================== -->
-  <div class="modal-overlay modal-backdrop" id="modal-payroll-student-detail" style="display: none; z-index: 1080;">
+  <div class="modal-overlay modal-backdrop" id="modal-payroll-student-detail" role="dialog" aria-modal="true" aria-labelledby="payroll-detail-student-name" tabindex="-1" style="display: none; z-index: 1080;">
     <div class="modal-content" style="max-width: 580px; width: 90vw;">
       <div class="modal-header" style="background: var(--bg-card-hover); border-bottom: 1px solid var(--border-color);">
         <div>
@@ -1658,11 +1658,11 @@
   <!-- ====================================================================
        MODAL TRUNG TÂM ĐỒNG BỘ ĐÁM MÂY (FIREBASE CLOUD SYNC CENTER)
        ==================================================================== -->
-  <div class="modal-overlay modal-backdrop" id="modal-cloud-sync" style="display: none; z-index: 1070;">
+  <div class="modal-overlay modal-backdrop" id="modal-cloud-sync" role="dialog" aria-modal="true" aria-labelledby="modal-cloud-sync-title" tabindex="-1" style="display: none; z-index: 1070;">
     <div class="modal-content" style="max-width: 780px; width: 92vw; max-height: 90vh; overflow-y: auto;">
       <div class="modal-header">
         <div>
-          <h2 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <h2 class="modal-title" id="modal-cloud-sync-title" style="display: flex; align-items: center; gap: 0.5rem;">
             <span>☁️</span> <span>Trung Tâm Đồng Bộ Đám Mây (Firebase Cloud Sync)</span>
           </h2>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
@@ -1771,7 +1771,8 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/cloud_sync.js?v=20261016_1755"></script>
+  <script src="js/a11y_modal.js?v=20261016_1755"></script>
+<script src="js/cloud_sync.js?v=20261016_1755"></script>
   <script src="js/month_calendar.js?v=20261016_1755"></script>
   <script src="js/scheduler.js?v=20261016_1755"></script>
   <script src="js/sample30.js?v=20261016_1755"></script>
