@@ -192,7 +192,14 @@
           </button>
         </form>
 
-        <div style="text-align: center; margin-top: 1.25rem;">
+        <div style="text-align: center; margin-top: 1rem; border-top: 1px dashed var(--border-color, #e2e8f0); padding-top: 0.75rem;">
+          <button type="button" id="btn-auth-quick-cloud-pull" style="background: none; border: none; color: #0284c7; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;" onclick="window.adminTriggerAuthCloudPull && window.adminTriggerAuthCloudPull()" title="Kéo danh sách tài khoản & mã PIN mới nhất từ Đám mây về máy này">
+            <span>☁️</span> <span>Kéo Mã PIN / Tài Khoản Mới Nhất Từ Cloud</span>
+          </button>
+          <div id="auth-cloud-sync-status" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; display: none;"></div>
+        </div>
+
+        <div style="text-align: center; margin-top: 1rem;">
           <a href="index.html" style="font-size: 0.82rem; color: #64748b; text-decoration: none; font-weight: 600;">
             ← Quay về Cổng Sinh Viên
           </a>
@@ -254,6 +261,11 @@
           <!-- Nút Trung Tâm Sao Lưu & Dữ Liệu (Task 27) -->
           <button type="button" class="btn btn-secondary btn-sm" id="btn-open-backup-center" onclick="window.adminOpenBackupModal && window.adminOpenBackupModal()" title="Sao lưu và Phục hồi cơ sở dữ liệu (.json)" style="font-weight: 700;">
             <span>💾 Sao Lưu & Dữ Liệu</span>
+          </button>
+
+          <!-- Nút Trung Tâm Đồng Bộ Đám Mây (Cloud Sync) -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-cloud-sync" onclick="window.adminOpenCloudSyncModal && window.adminOpenCloudSyncModal()" title="Đồng bộ đám mây đa thiết bị (Firebase Cloud Sync)" style="font-weight: 700; border-color: #38bdf8;">
+            <span id="badge-cloud-header-icon">☁️</span> <span>Đồng Bộ Cloud</span>
           </button>
 
           <!-- Thông tin người dùng đăng nhập & Nút Đăng xuất -->
@@ -1535,10 +1547,124 @@
     </div>
   </div>
 
+  <!-- ====================================================================
+       MODAL TRUNG TÂM ĐỒNG BỘ ĐÁM MÂY (FIREBASE CLOUD SYNC CENTER)
+       ==================================================================== -->
+  <div class="modal-overlay modal-backdrop" id="modal-cloud-sync" style="display: none; z-index: 1070;">
+    <div class="modal-content" style="max-width: 780px; width: 92vw; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>☁️</span> <span>Trung Tâm Đồng Bộ Đám Mây (Firebase Cloud Sync)</span>
+          </h2>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Đồng bộ tài khoản, mã PIN, danh sách CTV và lịch trực tức thì giữa mọi máy tính, điện thoại và Tab Ẩn danh.
+          </p>
+        </div>
+        <button type="button" class="modal-close" onclick="window.adminCloseCloudSyncModal && window.adminCloseCloudSyncModal()" aria-label="Đóng">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem;">
+        <!-- Trạng thái kết nối hiện tại -->
+        <div id="cloud-sync-status-card" style="background: var(--bg-surface-2, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div id="cloud-status-indicator" style="width: 14px; height: 14px; border-radius: 50%; background: #94a3b8;"></div>
+            <div>
+              <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);" id="cloud-status-title">Chế độ Cục bộ (Local-Only)</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);" id="cloud-status-desc">Dữ liệu hiện chỉ lưu trên trình duyệt máy này.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-modal-pull" style="font-size: 0.82rem;">
+              <span>⬇️ Kéo Dữ Liệu Về</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-cloud-modal-push" style="font-size: 0.82rem;">
+              <span>⬆️ Đẩy Lên Cloud</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Form cấu hình Firebase -->
+        <div style="border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 1rem;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>⚙️ Cấu Hình Firebase Realtime Database:</span>
+          </h3>
+
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
+              <input type="checkbox" id="cloud-input-enabled" style="width: 16px; height: 16px; accent-color: var(--primary);">
+              <span>Kích hoạt tính năng Đồng bộ Đám mây (Cloud Sync)</span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label class="form-label" for="cloud-input-url" style="font-weight: 600; font-size: 0.85rem;">
+              Đường dẫn Firebase Database URL <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="url" id="cloud-input-url" class="form-input" placeholder="Ví dụ: https://du-an-tuyen-sinh-default-rtdb.firebaseio.com" style="font-size: 0.88rem; font-family: monospace;">
+            <div class="form-hint" style="font-size: 0.75rem;">URL từ mục Realtime Database trong Google Firebase Console (có đuôi .firebaseio.com).</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="form-group">
+              <label class="form-label" for="cloud-input-path" style="font-weight: 600; font-size: 0.85rem;">
+                Nhánh Dữ Liệu (Sync Path)
+              </label>
+              <input type="text" id="cloud-input-path" class="form-input" value="tvts_production_data" placeholder="tvts_production_data" style="font-size: 0.88rem; font-family: monospace;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cloud-input-key" style="font-weight: 600; font-size: 0.85rem;">
+                Khóa Xác Thực / Database Secret (tùy chọn)
+              </label>
+              <input type="password" id="cloud-input-key" class="form-input" placeholder="Để trống nếu đặt Rules là public test mode" style="font-size: 0.88rem;">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-main);">
+              <input type="checkbox" id="cloud-input-autosync" checked style="width: 15px; height: 15px; accent-color: var(--primary);">
+              <span>Tự động đồng bộ lên Đám mây khi có thay đổi trên máy này (Auto-Sync)</span>
+            </label>
+          </div>
+
+          <!-- Nút hành động form -->
+          <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; margin-bottom: 1.25rem;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-test-conn">
+              <span>🔍 Kiểm Tra Kết Nối</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-cloud-save-cfg" style="font-weight: 700;">
+              <span>💾 Lưu Cấu Hình</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hướng dẫn 3 bước cực dễ cho Tris -->
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: #166534; line-height: 1.6;">
+          <div style="font-weight: 700; margin-bottom: 0.4rem; font-size: 0.88rem;">📖 Hướng dẫn nhanh tạo Firebase Database (100% miễn phí):</div>
+          <ol style="margin-left: 1.25rem; margin-bottom: 0;">
+            <li>Truy cập <strong><a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color: #15803d; text-decoration: underline;">console.firebase.google.com</a></strong> và đăng nhập bằng tài khoản Google.</li>
+            <li>Bấm <strong>"Thêm dự án" (Add project)</strong> ➔ Đặt tên tùy ý (vd: <code>tuyen-sinh-2026</code>) ➔ Bấm Tiếp tục.</li>
+            <li>Ở menu bên trái, chọn <strong>"Realtime Database"</strong> ➔ Bấm <strong>"Tạo cơ sở dữ liệu" (Create Database)</strong> ➔ Chọn vị trí <code>Singapore (asia-southeast1)</code> ➔ Chọn <strong>"Bắt đầu ở chế độ thử nghiệm" (Start in test mode)</strong> ➔ Bấm Bật.</li>
+            <li>Sao chép đường dẫn URL hiển thị ở đầu bảng (dạng <code>https://tuyen-sinh-2026-default-rtdb.asia-southeast1.firebasedatabase.app</code>) dán vào ô bên trên và bấm <strong>"Lưu Cấu Hình"</strong> là xong! Mọi máy tính và tab ẩn danh sẽ tự động đồng bộ ngay lập tức!</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.78rem; color: var(--text-muted);" id="cloud-last-sync-time">Chưa có lịch sử đồng bộ</span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminCloseCloudSyncModal && window.adminCloseCloudSyncModal()">
+          Đóng Hộp Thoại
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
+  <script src="js/cloud_sync.js"></script>
+  <script src="js/month_calendar.js"></script>
   <script src="js/scheduler.js"></script>
   <script src="js/sample30.js"></script>
   <script src="js/admin.js"></script>

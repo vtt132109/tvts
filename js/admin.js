@@ -315,6 +315,7 @@
     bindUserMgmtEvents();
     bindSwapMgmtEvents();
     bindBackupCenterEvents();
+    bindCloudSyncEvents();
 
     // Kiểm tra phiên đăng nhập quản trị trong sessionStorage
     const isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
@@ -412,6 +413,9 @@
 
   function saveAdminUsers() {
     localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+      window.CloudSyncManager.triggerAutoPush();
+    }
   }
 
   function bindAuthEvents() {
@@ -733,6 +737,9 @@
 
   function saveStudents() {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+      window.CloudSyncManager.triggerAutoPush();
+    }
   }
 
   function saveSchedule() {
@@ -747,6 +754,9 @@
     } else {
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+    }
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+      window.CloudSyncManager.triggerAutoPush();
     }
   }
 
@@ -5300,6 +5310,214 @@
       setTimeout(() => toast.remove(), 300);
     }, 3200);
   }
+
+  /**
+   * ==========================================================================
+   * LIÊN KẾT GIAO DIỆN ĐỒNG BỘ ĐÁM MÂY (FIREBASE CLOUD SYNC UI BINDINGS)
+   * ==========================================================================
+   */
+  function bindCloudSyncEvents() {
+    function updateCloudUIStatus() {
+      const cfg = window.CloudSyncManager ? window.CloudSyncManager.getConfig() : null;
+      const isEnabled = Boolean(cfg && cfg.enabled && cfg.databaseUrl);
+      const icon = document.getElementById('badge-cloud-header-icon');
+      if (icon) {
+        icon.textContent = isEnabled ? '🟢' : '☁️';
+      }
+
+      const indicator = document.getElementById('cloud-status-indicator');
+      const title = document.getElementById('cloud-status-title');
+      const desc = document.getElementById('cloud-status-desc');
+      const lastSyncEl = document.getElementById('cloud-last-sync-time');
+
+      if (indicator) indicator.style.background = isEnabled ? '#22c55e' : '#94a3b8';
+      if (title) title.textContent = isEnabled ? '🟢 Đám Mây: Đang Kết Nối & Tự Động Đồng Bộ' : 'Chế độ Cục bộ (Local-Only)';
+      if (desc) {
+        desc.textContent = isEnabled 
+          ? `Đã liên kết với Firebase: ${cfg.databaseUrl}` 
+          : 'Dữ liệu hiện chỉ lưu trên trình duyệt máy này. Kích hoạt Cloud để dùng chung mọi máy tính.';
+      }
+      if (lastSyncEl && cfg && cfg.lastSyncTime) {
+        const d = new Date(cfg.lastSyncTime);
+        lastSyncEl.textContent = `Lần đồng bộ gần nhất: ${d.toLocaleTimeString()} ngày ${d.toLocaleDateString()}`;
+      }
+    }
+
+    window.addEventListener('ts:cloud-status', updateCloudUIStatus);
+    window.addEventListener('ts:cloud-synced', () => {
+      loadAdminUsers();
+      if (state.isAuthenticated) {
+        loadData();
+        renderAll();
+        renderUserMgmtTable();
+        updateBackupStats();
+      }
+    });
+
+    updateCloudUIStatus();
+
+    // Mở Modal Cấu hình Cloud Sync
+    window.adminOpenCloudSyncModal = function() {
+      const modal = document.getElementById('modal-cloud-sync');
+      if (!modal) return;
+      const cfg = window.CloudSyncManager ? window.CloudSyncManager.getConfig() : {};
+      const enabledInput = document.getElementById('cloud-input-enabled');
+      const urlInput = document.getElementById('cloud-input-url');
+      const pathInput = document.getElementById('cloud-input-path');
+      const keyInput = document.getElementById('cloud-input-key');
+      const autosyncInput = document.getElementById('cloud-input-autosync');
+
+      if (enabledInput) enabledInput.checked = Boolean(cfg.enabled);
+      if (urlInput) urlInput.value = cfg.databaseUrl || '';
+      if (pathInput) pathInput.value = cfg.syncPath || 'tvts_production_data';
+      if (keyInput) keyInput.value = cfg.apiKey || '';
+      if (autosyncInput) autosyncInput.checked = cfg.autoSync !== false;
+
+      updateCloudUIStatus();
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    };
+
+    window.adminCloseCloudSyncModal = function() {
+      const modal = document.getElementById('modal-cloud-sync');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+      }
+    };
+
+    // Đóng khi click backdrop
+    const modal = document.getElementById('modal-cloud-sync');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) window.adminCloseCloudSyncModal();
+      });
+    }
+
+    // Nút Lưu Cấu Hình
+    document.getElementById('btn-cloud-save-cfg')?.addEventListener('click', () => {
+      const enabled = document.getElementById('cloud-input-enabled')?.checked;
+      const databaseUrl = document.getElementById('cloud-input-url')?.value.trim();
+      const syncPath = document.getElementById('cloud-input-path')?.value.trim() || 'tvts_production_data';
+      const apiKey = document.getElementById('cloud-input-key')?.value.trim();
+      const autoSync = document.getElementById('cloud-input-autosync')?.checked;
+
+      if (enabled && !databaseUrl) {
+        showToast('Vui lòng nhập đường dẫn Firebase Database URL!', 'error');
+        return;
+      }
+
+      if (window.CloudSyncManager) {
+        window.CloudSyncManager.saveConfig({
+          enabled,
+          databaseUrl,
+          syncPath,
+          apiKey,
+          autoSync
+        });
+        showToast('Đã lưu cấu hình Đồng bộ Đám mây thành công!', 'success');
+        updateCloudUIStatus();
+      }
+    });
+
+    // Nút Kiểm Tra Kết Nối
+    document.getElementById('btn-cloud-test-conn')?.addEventListener('click', async () => {
+      const databaseUrl = document.getElementById('cloud-input-url')?.value.trim();
+      const syncPath = document.getElementById('cloud-input-path')?.value.trim() || 'tvts_production_data';
+      const apiKey = document.getElementById('cloud-input-key')?.value.trim();
+
+      if (!databaseUrl) {
+        showToast('Vui lòng nhập URL Firebase để kiểm tra kết nối!', 'error');
+        return;
+      }
+
+      showToast('Đang kiểm tra kết nối tới Firebase...', 'info');
+      if (window.CloudSyncManager) {
+        const res = await window.CloudSyncManager.testConnection({ databaseUrl, syncPath, apiKey });
+        if (res.success) {
+          showToast(res.message, 'success');
+        } else {
+          showToast(res.message, 'error');
+        }
+      }
+    });
+
+    // Nút Đẩy dữ liệu lên Cloud
+    document.getElementById('btn-cloud-modal-push')?.addEventListener('click', async () => {
+      if (!window.CloudSyncManager) return;
+      showToast('Đang đẩy dữ liệu lên Firebase Đám mây...', 'info');
+      const res = await window.CloudSyncManager.pushToCloud();
+      if (res.success) {
+        showToast('Đẩy toàn bộ dữ liệu lên Đám mây thành công!', 'success');
+        updateCloudUIStatus();
+      } else {
+        showToast('Lỗi đẩy dữ liệu: ' + res.error, 'error');
+      }
+    });
+
+    // Nút Kéo dữ liệu từ Cloud về máy này
+    document.getElementById('btn-cloud-modal-pull')?.addEventListener('click', async () => {
+      if (!window.CloudSyncManager) return;
+      showToast('Đang kéo dữ liệu từ Firebase Đám mây về...', 'info');
+      const res = await window.CloudSyncManager.pullFromCloud();
+      if (res.success) {
+        loadAdminUsers();
+        loadData();
+        renderAll();
+        renderUserMgmtTable();
+        updateBackupStats();
+        showToast('Đã kéo và nạp dữ liệu mới nhất từ Đám mây thành công!', 'success');
+        updateCloudUIStatus();
+      } else {
+        showToast('Lỗi kéo dữ liệu: ' + res.error, 'error');
+      }
+    });
+
+    // Xử lý Quick Cloud Pull ở màn hình đăng nhập (Tab Ẩn Danh)
+    window.adminTriggerAuthCloudPull = async function() {
+      const statusBox = document.getElementById('auth-cloud-sync-status');
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = '⏳ Đang kết nối Đám mây kéo mã PIN & tài khoản...';
+        statusBox.style.color = '#0284c7';
+      }
+
+      if (!window.CloudSyncManager) {
+        if (statusBox) statusBox.textContent = '⚠️ Module Cloud Sync chưa sẵn sàng.';
+        return;
+      }
+
+      const cfg = window.CloudSyncManager.getConfig();
+      if (!cfg.databaseUrl) {
+        if (statusBox) {
+          statusBox.textContent = 'ℹ️ Chưa cấu hình Firebase URL. Vui lòng đăng nhập bằng PIN 9999 để cấu hình.';
+          statusBox.style.color = '#f59e0b';
+        }
+        showToast('Chưa cấu hình Firebase URL. Đăng nhập bằng PIN 9999 để cấu hình.', 'info');
+        return;
+      }
+
+      const res = await window.CloudSyncManager.pullFromCloud();
+      if (res.success) {
+        loadAdminUsers();
+        if (statusBox) {
+          statusBox.textContent = '✅ Đã đồng bộ mã PIN mới nhất! Bạn có thể nhập mã PIN ngay.';
+          statusBox.style.color = '#16a34a';
+        }
+        showToast('Đã đồng bộ mã PIN mới nhất từ Cloud!', 'success');
+      } else {
+        if (statusBox) {
+          statusBox.textContent = '✕ Lỗi đồng bộ: ' + res.error;
+          statusBox.style.color = '#ef4444';
+        }
+      }
+    };
+  }
+
+  window.adminReloadAdminUsers = function() {
+    loadAdminUsers();
+    renderUserMgmtTable();
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAdminPortal);
