@@ -55,4 +55,5 @@
 - `14:04`: `@qa-agent` hoàn thành toàn bộ test suite `tests/monthly_registration.test.js` (30/30 tests PASS 100%), tích hợp vào `tests/run_all_tests.js`, nâng tổng số test cases toàn hệ thống lên 102/102 PASS (100%).
 - `14:08`: `@backend-agent` và `@frontend-agent` hoàn tất đồng bộ module `js/month_calendar.js`, bộ Tabs 4 tuần, hiển thị ngày dương lịch cụ thể (05/10 - 09/10), thanh công cụ chọn nhanh và sao chép tuần ra cả tháng.
 - `14:10`: Kiểm tra toàn diện CI Harness đạt 102/102 PASS (100%), thực hiện quy trình `/merge-clean` sáp nhập an toàn vào nhánh `main`.
+- `17:08`: Gỡ bỏ hoàn toàn hộp thông tin đăng nhập mặc định (`.auth-demo-accounts`) trên màn hình đăng nhập quản trị `admin.html` theo yêu cầu của Tris, kiểm tra F12 Console 0 runtime error, CI Harness đạt 102/102 PASS (100%).
 
