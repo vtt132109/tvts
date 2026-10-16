@@ -201,6 +201,43 @@
               <div class="form-hint" id="mssv-input-hint" style="margin-top: 0.45rem; font-size: 0.84rem;">
                 💡 Nhập Mã Số Sinh Viên (MSSV) của bạn để mở khóa bảng chọn ca rảnh.
               </div>
+              <input type="hidden" id="input-fullname" name="fullName">
+              <input type="hidden" id="input-phone" name="phone">
+            </div>
+
+            <!-- Thông báo khi nhập sai MSSV (không có trong danh sách CTV) -->
+            <div id="student-invalid-mssv-notice" style="display: none; max-width: 600px; margin: 0 auto 1.25rem; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: var(--radius-md); padding: 0.9rem 1.25rem; color: #991b1b; text-align: left; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem; line-height: 1;">⚠️</span>
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem;">Mã số sinh viên không tồn tại trong danh sách!</div>
+                  <div style="font-size: 0.84rem; color: #b91c1c; margin-top: 0.2rem;">MSSV vừa nhập không thuộc danh sách CTV Ban Tư Vấn Tuyển Sinh HCM-UTE. Vui lòng kiểm tra lại chính xác MSSV của bạn hoặc liên hệ Ban Điều Hành.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Thẻ Định Danh Sinh Viên & Tóm Tắt Ca Trực Tháng (Giữ Họ và tên, MSSV, Ca trực của tháng) -->
+            <div id="student-identity-card" style="display: none; max-width: 680px; margin: 0 auto 1.25rem; background: var(--bg-card); border: 1.5px solid var(--primary, #3b82f6); border-radius: var(--radius-md); padding: 1rem 1.25rem; box-shadow: var(--shadow-sm); text-align: left;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.85rem;">
+                <div style="display: flex; align-items: center; gap: 0.85rem;">
+                  <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(59, 130, 246, 0.12); color: var(--primary, #3b82f6); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; font-weight: 700; flex-shrink: 0;">
+                    👤
+                  </div>
+                  <div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main);" id="card-student-name">--</div>
+                    <div style="font-size: 0.84rem; color: var(--text-muted); margin-top: 0.15rem;">
+                      <span>MSSV: <strong id="card-student-mssv" style="color: var(--text-main);">--</strong></span>
+                      <span id="card-student-major" style="margin-left: 0.6rem; color: var(--text-muted);"></span>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;">Ca trực Tháng 10/2026</div>
+                  <div id="card-student-shifts-summary" style="font-size: 0.95rem; font-weight: 700; color: var(--primary, #3b82f6); margin-top: 0.2rem;">
+                    0 ca đã chọn (T1: 0 • T2: 0 • T3: 0 • T4: 0)
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Cảnh báo nếu Cổng Đăng Ký đang Đóng bởi Admin -->
