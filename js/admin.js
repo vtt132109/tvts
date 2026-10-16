@@ -437,12 +437,24 @@
     });
 
     // Xử lý đăng nhập Form 1: Username & Password
-    elements.formAuthCredentials?.addEventListener('submit', (e) => {
+    elements.formAuthCredentials?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = elements.inputAuthUsername ? elements.inputAuthUsername.value.trim().toLowerCase() : '';
       const password = elements.inputAuthPassword ? elements.inputAuthPassword.value : '';
 
-      const matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+      let matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+      
+      // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
+      if (!matched && window.CloudSyncManager && typeof window.CloudSyncManager.pullFromCloud === 'function') {
+        try {
+          const res = await window.CloudSyncManager.pullFromCloud();
+          if (res.success) {
+            loadAdminUsers();
+            matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+          }
+        } catch (err) {}
+      }
+
       if (matched) {
         authenticateSuccess(matched);
       } else {
@@ -451,10 +463,22 @@
     });
 
     // Xử lý đăng nhập Form 2: Mã PIN nhanh
-    elements.formAuthPin?.addEventListener('submit', (e) => {
+    elements.formAuthPin?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const pin = elements.inputAuthPin ? elements.inputAuthPin.value.trim() : '';
-      const matched = state.adminUsers.find(u => u.pin && u.pin === pin);
+      let matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pin);
+
+      // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
+      if (!matched && window.CloudSyncManager && typeof window.CloudSyncManager.pullFromCloud === 'function') {
+        try {
+          const res = await window.CloudSyncManager.pullFromCloud();
+          if (res.success) {
+            loadAdminUsers();
+            matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pin);
+          }
+        } catch (err) {}
+      }
+
       if (matched) {
         authenticateSuccess(matched);
       } else {
