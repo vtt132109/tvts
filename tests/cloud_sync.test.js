@@ -183,9 +183,11 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
 
   let storageEventFired = false;
   let customEventDetail = null;
+  let dataChangedDetail = null;
 
   env.window.addEventListener('storage', () => { storageEventFired = true; });
   env.window.addEventListener('ts:cloud-synced', (e) => { customEventDetail = e.detail; });
+  env.window.addEventListener('ts:data-changed', (e) => { dataChangedDetail = e.detail; });
 
   const incomingCloudData = {
     adminUsers: [
@@ -209,7 +211,16 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
   const storedStudents = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
   assert(storedStudents.length === 1 && storedStudents[0].studentId === '2102099', '3.4: Danh sách sinh viên được cập nhật đồng bộ');
 
-  assert(storageEventFired === true, '3.5: Phát sự kiện "storage" để UI re-render tự động');
+  // Yêu cầu mới: sự kiện phải mang danh sách key để các view chỉ render lại đúng phần cần thiết.
+  // Sự kiện 'storage' thuần do JS tự phát KHÔNG có .key nên các nhánh e.key === ... không bao giờ chạy.
+  assert(dataChangedDetail !== null && Array.isArray(dataChangedDetail.keys), '3.5: Phát sự kiện "ts:data-changed" kèm danh sách key thay đổi');
+  assert(
+    dataChangedDetail.keys.includes('ts_scheduler_students')
+    && dataChangedDetail.keys.includes('ts_scheduler_month_result')
+    && dataChangedDetail.keys.includes('ts_scheduler_admin_users'),
+    '3.5b: Danh sách key thay đổi chứa đúng STUDENTS / MONTH_SCHEDULE / ADMIN_USERS'
+  );
+  assert(storageEventFired === false, '3.5c: KHÔNG phát sự kiện "storage" thuần (vô dụng vì thiếu .key)');
   assert(customEventDetail !== null, '3.6: Phát sự kiện "ts:cloud-synced" kèm payload');
 })();
 

@@ -7,6 +7,8 @@
  * 2. Xác thực cán bộ, mã PIN & Bảo mật XSS escapeHtml (Auth & Security)
  * 3. Đóng/mở cổng, cờ publishSchedule & Tra cứu MSSV (Portal Visibility & Lookup)
  * 4. Quản lý sao lưu web 6 tháng & Auto-Pruning (Web Backup Manager)
+ * 5. Hồi quy: khóa lại các bug đã phát hiện & sửa
+ *    (tháng động, XSS toast, cloud sync event, payload, bảo mật)
  */
 
 const { spawnSync } = require('child_process');
@@ -22,7 +24,8 @@ const suites = [
   { name: 'Đồng Bộ Đám Mây Đa Thiết Bị & Khắc Phục Tab Ẩn Danh (Cloud Sync Engine)', script: 'cloud_sync.test.js' },
   { name: 'Xác Thực MSSV Nghiêm Ngặt & Bảo Toàn Danh Sách 30 CTV (Strict MSSV Validation)', script: 'student_strict_validation.test.js' },
   { name: 'Lưu Trữ Đám Mây & Chống Ghi Đè Dữ Liệu Khi Tải Lại Trang (Cloud Persistence & Anti-Overwrite)', script: 'cloud_persistence.test.js' },
-  { name: 'Điều Hướng Tháng, Hiển Thị Ngày & Tự Động Sao Lưu (Admin Month Navigation & Auto-Backup)', script: 'admin_month_navigation.test.js' }
+  { name: 'Điều Hướng Tháng, Hiển Thị Ngày & Tự Động Sao Lưu (Admin Month Navigation & Auto-Backup)', script: 'admin_month_navigation.test.js' },
+  { name: 'Hồi Quy: Chống Tái Phát Các Bug Đã Sửa (Regression Guard)', script: 'regression_guard.test.js' }
 ];
 
 console.log('╔══════════════════════════════════════════════════════════════════╗');

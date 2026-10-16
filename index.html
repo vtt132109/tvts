@@ -176,7 +176,7 @@
         <!-- Header Khối Tập Trung -->
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
-            <h2 class="card-title">📝 Đăng Ký Ca Rảnh Trọn Tháng (Tháng 10/2026)</h2>
+            <h2 class="card-title" id="reg-month-title">📝 Đăng Ký Ca Rảnh Trọn Tháng</h2>
             <p class="card-desc">Nhập MSSV của bạn để chọn ca rảnh Thứ 2 - Thứ 6 phù hợp thời khóa biểu học tập</p>
           </div>
           <div class="selected-counter" id="selected-shift-count">
@@ -235,7 +235,7 @@
                   </div>
                 </div>
                 <div style="text-align: right;">
-                  <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;">Ca trực Tháng 10/2026</div>
+                  <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;" id="reg-matrix-month-label">Ca trực</div>
                   <div id="card-student-shifts-summary" style="font-size: 0.95rem; font-weight: 700; color: var(--primary, #3b82f6); margin-top: 0.2rem;">
                     0 ca đã chọn (T1: 0 • T2: 0 • T3: 0 • T4: 0)
                   </div>
@@ -295,6 +295,9 @@
                 <div class="matrix-quick-btns">
                   <button type="button" class="btn-chip btn-chip-copy" id="btn-quick-copy-all" title="Sao chép ca đã chọn của tuần hiện tại cho các tuần còn lại trong tháng">
                     <span>⚡ Áp dụng tuần này cho các tuần còn lại</span>
+                  </button>
+                  <button type="button" class="btn-chip" id="btn-quick-all" title="Chọn toàn bộ 10 ca (Sáng & Chiều) của tuần đang xem">
+                    <span>✅ Chọn cả tuần</span>
                   </button>
                   <button type="button" class="btn-chip" id="btn-quick-morning" title="Đăng ký tất cả ca Sáng (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
                     <span>☀️ Tất cả ca Sáng cả tháng</span>
@@ -504,10 +507,10 @@
       </div>
       <div class="card-body" style="padding: 1rem;">
         
-        <!-- Bộ Chuyển Đổi Tháng: Tháng 10/2026 (Hiện tại) vs Tháng 09/2026 (Tháng trước) -->
+        <!-- Bộ Chuyển Đổi Tháng: tháng đang áp dụng vs tháng liền trước (nhãn cập nhật động bởi JS) -->
         <div class="month-selector-tabs" id="student-month-selector" style="display: inline-flex; background: var(--border-color); padding: 3px; border-radius: var(--radius-sm); margin-bottom: 1rem;">
-          <button type="button" class="month-sel-btn active" data-month="current" id="btn-month-current">📅 Tháng 10/2026 (Hiện tại)</button>
-          <button type="button" class="month-sel-btn" data-month="prev" id="btn-month-prev">⏮️ Tháng 09/2026 (Tháng trước)</button>
+          <button type="button" class="month-sel-btn active" data-month="current" id="btn-month-current">📅 Tháng hiện tại</button>
+          <button type="button" class="month-sel-btn" data-month="prev" id="btn-month-prev">⏮️ Tháng trước</button>
         </div>
 
         <div class="timetable-wrapper">

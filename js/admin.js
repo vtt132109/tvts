@@ -27,7 +27,10 @@
     ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
-  // Danh sách tài khoản cán bộ mặc định có quyền quản trị
+  // Danh sách tài khoản cán bộ mặc định.
+  // ⚠️ BẢO MẬT: Thông tin này nằm trong mã nguồn công khai. Sau lần đăng nhập
+  // đầu tiên, hệ thống BẮT BUỘC hiển thị cảnh báo yêu cầu đổi mật khẩu & PIN.
+  // Tài khoản thật KHÔNG được commit vào kho công khai.
   const DEFAULT_ADMIN_USERS = [
     {
       id: 'usr_admin',
@@ -36,6 +39,7 @@
       pin: '9999',
       fullName: 'Trưởng Ban Tuyển Sinh',
       role: 'Trưởng ban điều hành',
+      mustChangePassword: true,
       createdAt: Date.now() - 500000
     },
     {
@@ -45,18 +49,13 @@
       pin: '8888',
       fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
       role: 'Điều phối viên tuyển sinh',
+      mustChangePassword: true,
       createdAt: Date.now() - 300000
-    },
-    {
-      id: 'usr_1792146825856',
-      username: 'thien',
-      password: 'Thien3056',
-      pin: '3056',
-      fullName: 'Phạm Minh Thiện',
-      role: 'Trưởng ban điều hành',
-      createdAt: Date.now() - 100000
     }
   ];
+
+  // Mật khẩu mặc định còn tồn tại trong mã nguồn -> hiển thị cảnh báo bắt buộc đổi
+  const WEAK_DEFAULT_PASSWORDS = ['123', '1234', '12345', '123456', '0000', 'admin', 'password'];
 
   // Dữ liệu mẫu ban đầu (12 SV) và 30 SV
   const SAMPLE_12_STUDENTS = [
@@ -152,7 +151,6 @@
       badgeAdminStudentCount: document.getElementById('badge-admin-student-count'),
 
       btnAutoSchedule: document.getElementById('btn-admin-auto-schedule'),
-      btnLoadSample30: document.getElementById('btn-load-sample-30'),
       btnLoadUtePreset: document.getElementById('btn-load-ute-preset'),
       btnExportCsv: document.getElementById('btn-export-csv'),
       btnPrintSchedule: document.getElementById('btn-print-schedule'),
@@ -208,7 +206,6 @@
       filterButtons: document.querySelectorAll('.filter-btn'),
       inputSearch: document.getElementById('input-search-student'),
       btnOpenAddStudent: document.getElementById('btn-open-add-student'),
-      btnLoadSample: document.getElementById('btn-load-sample'),
       btnResetData: document.getElementById('btn-reset-data'),
 
       reassignModal: document.getElementById('reassign-modal'),
@@ -244,8 +241,6 @@
       btnCloseExcelModal: document.getElementById('btn-close-excel-modal'),
       exportStartDate: document.getElementById('export-start-date'),
       exportRangeSelect: document.getElementById('export-range-select'),
-      exportOptRepPage: document.getElementById('export-opt-reppage'),
-      exportOptRedCells: document.getElementById('export-opt-redcells'),
       btnModalCopyClipboard: document.getElementById('btn-modal-copy-clipboard'),
       btnModalDownloadXls: document.getElementById('btn-modal-download-xls'),
       btnModalDownloadCsv: document.getElementById('btn-modal-download-csv'),
@@ -292,7 +287,6 @@
       // Theme toggle elements
       btnThemeLight: document.getElementById('btn-theme-light'),
       btnThemeDark: document.getElementById('btn-theme-dark'),
-      btnThemeToggle: document.getElementById('btn-theme-toggle'),
 
       // Shift Swap Management Elements (Task 26)
       btnOpenSwapMgmt: document.getElementById('btn-open-swap-mgmt'),
@@ -384,6 +378,44 @@
           state.events = EventManager.getEvents();
         }
       }
+    });
+
+    // Cloud Sync kéo dữ liệu về: phải có handler riêng vì sự kiện 'storage'
+    // do JS tự phát không mang .key, nên các nhánh e.key === ... ở trên không chạy được.
+    window.addEventListener('ts:data-changed', (e) => {
+      if (!state.isAuthenticated) return;
+      const keys = (e.detail && Array.isArray(e.detail.keys)) ? e.detail.keys : [];
+      const touched = (k) => !keys.length || keys.includes(k);
+
+      if (touched(STORAGE_KEYS.STUDENTS) || touched(STORAGE_KEYS.MONTH_SCHEDULE)
+        || touched(STORAGE_KEYS.ALL_MONTHS) || touched(STORAGE_KEYS.ACTIVE_MONTH)
+        || touched(STORAGE_KEYS.SCHEDULE) || touched(STORAGE_KEYS.TWO_WEEK_SCHEDULE)) {
+        loadData();
+        renderAll();
+        if (typeof window.renderEventsTable === 'function') window.renderEventsTable();
+      }
+      if (touched(STORAGE_KEYS.REG_CONFIG)) {
+        loadRegConfig();
+        renderRegConfigUI();
+      }
+      if (touched(STORAGE_KEYS.ADMIN_USERS)) {
+        loadAdminUsers();
+        renderUserMgmtTable();
+      }
+      if (touched(STORAGE_KEYS.SWAP_REQUESTS)) {
+        updateSwapCountBadges();
+        renderSwapRequestsTable();
+      }
+      if (touched(STORAGE_KEYS.EVENTS) && typeof EventManager !== 'undefined') {
+        state.events = EventManager.getEvents();
+        if (typeof window.renderEventsTable === 'function') window.renderEventsTable();
+      }
+    });
+
+    // Cảnh báo đầy dung lượng lưu trữ
+    window.addEventListener('ts:storage-full', (e) => {
+      const msg = (e.detail && e.detail.message) || 'Bộ nhớ trình duyệt đã đầy!';
+      showToast('⚠️ ' + msg, 'error', 8000);
     });
   }
 
@@ -584,6 +616,35 @@
     hideAuthError();
     unlockAdminDashboard();
     showToast(`Xin chào ${user.fullName}! Đăng nhập quản trị thành công.`, 'success');
+
+    // Bảo mật: mật khẩu mặc định nằm trong mã nguồn công khai -> buộc đổi ngay.
+    warnIfWeakCredentials(user);
+  }
+
+  /**
+   * Hiển thị cảnh báo bảo mật khi tài khoản vẫn dùng mật khẩu/PIN mặc định.
+   * Mật khẩu chỉ tồn tại ở phía trình duyệt nên đây là biện pháp giảm nhẹ rủi ro,
+   * không thay thế việc dùng Firebase Rules / backend xác thực thật sự.
+   */
+  function warnIfWeakCredentials(user) {
+    if (!user) return;
+    const weakPwd = WEAK_DEFAULT_PASSWORDS.includes(String(user.password || ''));
+    const weakPin = ['1234', '12345', '123456', '0000', '1111', '9999', '8888']
+      .includes(String(user.pin || ''));
+
+    if (weakPwd || weakPin) {
+      setTimeout(() => {
+        showToast(
+          '⚠️ CẢNH BÁO BẢO MẬT: Bạn đang dùng mật khẩu/PIN mặc định có trong mã nguồn công khai. '
+          + 'Vui lòng đổi NGAY qua nút "🔑 Cấp Quyền & Đổi MK".',
+          'error', 9000
+        );
+        if (elements.btnOpenUserMgmt) {
+          elements.btnOpenUserMgmt.classList.add('pulse-security-warning');
+          setTimeout(() => elements.btnOpenUserMgmt.classList.remove('pulse-security-warning'), 12000);
+        }
+      }, 800);
+    }
   }
 
   function showAuthError(msg) {
@@ -1219,8 +1280,6 @@
     // Thay đổi cấu hình ngày / phạm vi -> render lại preview bảng tính
     elements.exportStartDate?.addEventListener('change', renderUteSheetPreview);
     elements.exportRangeSelect?.addEventListener('change', renderUteSheetPreview);
-    elements.exportOptRepPage?.addEventListener('change', renderUteSheetPreview);
-    elements.exportOptRedCells?.addEventListener('change', renderUteSheetPreview);
 
     // Các nút thao tác trong modal Excel
     elements.btnModalCopyClipboard?.addEventListener('click', () => copyUteSheetToClipboard(false));
@@ -1343,19 +1402,6 @@
       showToast(`Đã xóa ${selectedIds.length} sinh viên khỏi danh sách!`, 'success');
     });
 
-    elements.btnLoadSample30?.addEventListener('click', () => {
-      const sampleList = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS || [];
-      if (sampleList.length === 0) {
-        showToast('Không tìm thấy dữ liệu mẫu 30 sinh viên!', 'error');
-        return;
-      }
-      state.students = JSON.parse(JSON.stringify(sampleList));
-      saveStudents();
-      runFullSchedule();
-      renderAll();
-      showToast(`Đã nạp thành công ${state.students.length} sinh viên mẫu và tự động phân bổ lịch!`, 'success');
-    });
-
     elements.btnLoadUtePreset?.addEventListener('click', loadUtePresetStudents);
 
     // Hỗ trợ phím tắt Escape để đóng nhanh các modal quản trị (Task 3)
@@ -1403,6 +1449,11 @@
     elements.tabContents.forEach(content => {
       content.classList.toggle('active', content.id === tabId);
     });
+
+    // Tab Sự Kiện: nạp dữ liệu mỗi khi mở để luôn thấy bản mới nhất
+    if (tabId === 'tab-event-mgmt' && typeof window.renderEventsTable === 'function') {
+      window.renderEventsTable();
+    }
   }
 
   function triggerAutoSchedule(animate = true) {
@@ -2028,7 +2079,6 @@
   function initThemeToggle() {
     const btnLight = elements.btnThemeLight || document.getElementById('btn-theme-light');
     const btnDark = elements.btnThemeDark || document.getElementById('btn-theme-dark');
-    const legacyBtn = elements.btnThemeToggle || document.getElementById('btn-theme-toggle');
 
     function applyTheme(theme) {
       if (theme === 'dark') {
@@ -2045,14 +2095,6 @@
     function updateThemeUI(isDark) {
       if (btnLight) btnLight.classList.toggle('active', !isDark);
       if (btnDark) btnDark.classList.toggle('active', isDark);
-
-      if (legacyBtn) {
-        const icon = legacyBtn.querySelector('.theme-icon');
-        const text = legacyBtn.querySelector('.theme-text');
-        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
-        if (text) text.textContent = isDark ? 'Sáng' : 'Tối';
-        legacyBtn.title = isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)';
-      }
     }
 
     const currentDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2063,12 +2105,6 @@
     }
     if (btnDark) {
       btnDark.addEventListener('click', () => applyTheme('dark'));
-    }
-    if (legacyBtn) {
-      legacyBtn.addEventListener('click', () => {
-        const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        applyTheme(isCurrentlyDark ? 'light' : 'dark');
-      });
     }
 
     window.addEventListener('storage', (e) => {
@@ -2755,7 +2791,7 @@
         updatedCount++;
       } else {
         state.students.push({
-          id: 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
           fullName: c.fullName,
           studentId: c.studentId,
           phone: c.phone || '',
@@ -3355,7 +3391,7 @@
       const monthKey = eventData.monthKey || dateStr.substring(0, 7);
 
       const newEvent = {
-        id: eventData.id || ('evt_' + createdAt + '_' + Math.random().toString(36).substr(2, 6)),
+        id: eventData.id || ('evt_' + createdAt + '_' + Math.random().toString(36).slice(2, 8)),
         title: eventData.title.trim(),
         date: dateStr,
         monthKey: monthKey,
@@ -3804,7 +3840,7 @@
     const sizeBytes = typeof Blob !== 'undefined' ? new Blob([payloadJson]).size : payloadJson.length;
 
     const backupItem = {
-      id: `wbk_${createdAt}_${Math.random().toString(36).substr(2, 6)}`,
+      id: `wbk_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
       name: defaultName,
       monthKey: monthKey,
       monthLabel: monthLabel,
@@ -3845,7 +3881,7 @@
       : `Bản Chấm Công & Sao Lưu Tháng ${monthNum}/${yearNum}`;
 
     const backupItem = createWebBackup(finalName);
-    showToast(`Đã tạo bản sao lưu "${escapeHtml(backupItem.name)}" thành công!`, 'success');
+    showToast(`Đã tạo bản sao lưu "${backupItem.name}" thành công!`, 'success');
     return backupItem;
   }
 
@@ -4008,7 +4044,7 @@
       renderWebBackupsTable();
       closeBackupCenterModal();
 
-      showToast(`Đã khôi phục toàn bộ hệ thống từ "${escapeHtml(target.name)}" thành công 100%!`, 'success');
+      showToast(`Đã khôi phục toàn bộ hệ thống từ "${target.name}" thành công 100%!`, 'success');
     } catch (err) {
       console.error('Lỗi khôi phục web backup:', err);
       showToast('Đã có lỗi xảy ra trong quá trình ghi dữ liệu khôi phục!', 'error');
@@ -4049,7 +4085,7 @@
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(`Đã tải xuống file sao lưu "${escapeHtml(target.name)}" (.json)!`, 'success');
+    showToast(`Đã tải xuống file sao lưu "${target.name}" (.json)!`, 'success');
   }
 
   function handleDeleteWebBackup(backupId) {
@@ -4065,7 +4101,7 @@
     saveWebBackups(updated);
     renderWebBackupsTable();
     updateBackupStats();
-    showToast(`Đã xóa bản sao lưu "${escapeHtml(target.name)}" khỏi web!`, 'info');
+    showToast(`Đã xóa bản sao lưu "${target.name}" khỏi web!`, 'info');
   }
 
   /**
@@ -4501,7 +4537,7 @@
     }
 
     closeEventModal();
-    showToast(`Đã lưu sự kiện "${escapeHtml(savedItem.title)}" thành công!`, 'success');
+    showToast(`Đã lưu sự kiện "${savedItem.title}" thành công!`, 'success');
     return savedItem;
   }
 
@@ -4530,8 +4566,6 @@
   window.adminDownloadSingleWebBackup = (id) => handleDownloadSingleWebBackup(id);
   window.adminDeleteWebBackup = (id) => handleDeleteWebBackup(id);
   window.adminStartNewMonth = () => handleStartNewMonth();
-  window.adminViewMonthPayroll = (backupId) => handleViewMonthPayroll(backupId);
-  window.adminCloseMonthPayroll = () => closeMonthlyPayrollModal();
   window.adminOpenAddEventModal = (eventData) => handleOpenAddEventModal(eventData);
   window.adminSaveEvent = (eventData) => handleSaveEvent(eventData);
   window.adminDeleteEvent = (id) => handleDeleteEvent(id);
@@ -4561,175 +4595,6 @@
     const name = `Bản sao lưu ${monthLabel} (${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')})`;
     createWebBackup(name);
     showToast(`Đã tạo bản sao lưu nhanh cho ${monthLabel} trên web thành công!`, 'success');
-  };
-
-  // Quản lý Sự Kiện & Ngoại Kiểm
-  window.adminOpenAddEventModal = function() {
-    const modal = document.getElementById('modal-add-event');
-    if (!modal) return;
-
-    // Reset form
-    const form = document.getElementById('form-add-event');
-    if (form) form.reset();
-
-    const dateInput = document.getElementById('event-input-date');
-    if (dateInput) {
-      dateInput.value = new Date().toISOString().split('T')[0];
-    }
-
-    // Render danh sách CTV dạng checkbox
-    const listContainer = document.getElementById('event-student-checkbox-list');
-    if (listContainer) {
-      let studentList = state.students || [];
-      if (!studentList || studentList.length === 0) {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-          if (raw) studentList = JSON.parse(raw) || [];
-        } catch (e) {}
-      }
-
-      if (studentList.length === 0) {
-        listContainer.innerHTML = `
-          <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-            Chưa có sinh viên nào đăng ký trong hệ thống.
-          </div>
-        `;
-      } else {
-        listContainer.innerHTML = studentList.map(st => {
-          const isOld = st.role === 'old';
-          const roleBadge = isOld 
-            ? '<span class="badge badge-role-old" style="font-size: 0.72rem;">🎓 Chính Thức</span>'
-            : '<span class="badge badge-role-new" style="font-size: 0.72rem;">🌱 Tập Sự</span>';
-
-          return `
-            <label class="event-student-item" for="cb-evt-st-${escapeHtml(st.id)}" data-role="${escapeHtml(st.role || 'new')}">
-              <div class="event-student-left">
-                <input type="checkbox" id="cb-evt-st-${escapeHtml(st.id)}" class="event-student-cb" value="${escapeHtml(st.id)}" onchange="window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount()">
-                <div>
-                  <div class="event-student-name">${escapeHtml(st.fullName)}</div>
-                  <div class="event-student-mssv">MSSV: ${escapeHtml(st.studentId || '-')}</div>
-                </div>
-              </div>
-              <div>${roleBadge}</div>
-            </label>
-          `;
-        }).join('');
-      }
-    }
-
-    const searchInput = document.getElementById('event-student-search');
-    if (searchInput) {
-      searchInput.value = '';
-      searchInput.oninput = function(e) {
-        const query = (e.target.value || '').trim().toLowerCase();
-        const items = document.querySelectorAll('#event-student-checkbox-list .event-student-item');
-        items.forEach(it => {
-          const text = it.textContent.toLowerCase();
-          it.style.display = text.includes(query) ? 'flex' : 'none';
-        });
-      };
-    }
-
-    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
-
-    modal.style.display = 'flex';
-    modal.classList.add('active');
-  };
-
-  window.adminCloseAddEventModal = function() {
-    const modal = document.getElementById('modal-add-event');
-    if (modal) {
-      modal.style.display = 'none';
-      modal.classList.remove('active');
-    }
-  };
-
-  window.adminEventSelectAllStudents = function(selectAll = true) {
-    const cbs = document.querySelectorAll('#event-student-checkbox-list .event-student-cb');
-    cbs.forEach(cb => {
-      const parentLabel = cb.closest('.event-student-item');
-      if (!parentLabel || parentLabel.style.display !== 'none') {
-        cb.checked = selectAll;
-        if (selectAll) parentLabel?.classList.add('selected');
-        else parentLabel?.classList.remove('selected');
-      }
-    });
-    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
-  };
-
-  window.adminEventSelectRoleStudents = function(role) {
-    const cbs = document.querySelectorAll('#event-student-checkbox-list .event-student-cb');
-    cbs.forEach(cb => {
-      const parentLabel = cb.closest('.event-student-item');
-      if (parentLabel && parentLabel.getAttribute('data-role') === role) {
-        cb.checked = true;
-        parentLabel.classList.add('selected');
-      } else {
-        cb.checked = false;
-        parentLabel?.classList.remove('selected');
-      }
-    });
-    window.adminUpdateEventSelectedCount && window.adminUpdateEventSelectedCount();
-  };
-
-  window.adminUpdateEventSelectedCount = function() {
-    const badge = document.getElementById('event-selected-count-badge');
-    const checked = document.querySelectorAll('#event-student-checkbox-list .event-student-cb:checked');
-    const session = document.getElementById('event-select-session')?.value || 'fullday';
-    const multiplier = session === 'fullday' ? 2 : 1;
-    const totalUnits = checked.length * multiplier;
-
-    if (badge) {
-      badge.textContent = `Đã chọn: ${checked.length} CTV (${totalUnits} công)`;
-    }
-
-    document.querySelectorAll('#event-student-checkbox-list .event-student-item').forEach(it => {
-      const cb = it.querySelector('.event-student-cb');
-      if (cb && cb.checked) it.classList.add('selected');
-      else it.classList.remove('selected');
-    });
-  };
-
-  window.adminHandleSubmitEvent = function(e) {
-    if (e && e.preventDefault) e.preventDefault();
-
-    const title = document.getElementById('event-input-title')?.value?.trim();
-    const date = document.getElementById('event-input-date')?.value?.trim();
-    const timeOfDay = document.getElementById('event-select-session')?.value || 'fullday';
-    const location = document.getElementById('event-input-location')?.value?.trim() || '';
-    const note = document.getElementById('event-input-note')?.value?.trim() || '';
-
-    if (!title) {
-      showToast('Vui lòng nhập tên sự kiện!', 'error');
-      return false;
-    }
-    if (!date) {
-      showToast('Vui lòng chọn ngày diễn ra!', 'error');
-      return false;
-    }
-
-    const checked = document.querySelectorAll('#event-student-checkbox-list .event-student-cb:checked');
-    const assignedStudentIds = Array.from(checked).map(cb => cb.value);
-
-    try {
-      EventManager.addEvent({
-        title,
-        date,
-        timeOfDay,
-        location,
-        note,
-        assignedStudentIds
-      });
-
-      showToast(`Đã thêm sự kiện "${escapeHtml(title)}" (${assignedStudentIds.length} CTV tham gia) thành công!`, 'success');
-      window.adminCloseAddEventModal();
-      window.renderEventsTable && window.renderEventsTable();
-      updateBackupStats();
-    } catch (err) {
-      console.error('Lỗi thêm sự kiện:', err);
-      showToast('Không thể lưu sự kiện: ' + err.message, 'error');
-    }
-    return false;
   };
 
   window.renderEventsTable = function() {
@@ -4803,8 +4668,11 @@
               ${escapeHtml(assignedNames + moreCount)}
             </div>
           </td>
-          <td style="text-align: center;">
-            <button type="button" class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteEvent('${escapeHtml(ev.id)}')" title="Xóa sự kiện này" style="font-size: 0.76rem; padding: 0.25rem 0.5rem;">
+          <td style="text-align: center; white-space: nowrap;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminEditEvent && window.adminEditEvent('${escapeHtml(ev.id)}')" title="Sửa thông tin sự kiện này" style="font-size: 0.76rem; padding: 0.25rem 0.5rem;">
+              ✏️
+            </button>
+            <button type="button" class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteEvent && window.adminDeleteEvent('${escapeHtml(ev.id)}')" title="Xóa sự kiện này" style="font-size: 0.76rem; padding: 0.25rem 0.5rem;">
               🗑️
             </button>
           </td>
@@ -4813,12 +4681,14 @@
     }).join('');
   };
 
-  window.adminDeleteEvent = function(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa sự kiện này không?')) return;
-    EventManager.deleteEvent(id);
-    showToast('Đã xóa sự kiện thành công!', 'info');
-    window.renderEventsTable && window.renderEventsTable();
-    updateBackupStats();
+
+  window.adminEditEvent = function(id) {
+    const ev = EventManager.getEvents().find(e => e.id === id);
+    if (!ev) {
+      showToast('Không tìm thấy sự kiện cần sửa!', 'error');
+      return;
+    }
+    handleOpenAddEventModal(ev);
   };
 
   // Quản lý Modal Bảng Chấm Công Tháng
@@ -4840,7 +4710,11 @@
     let students = state.students || [];
     let monthSchedule = state.monthSchedule;
     let events = EventManager.getEvents();
-    let monthLabel = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+    // Nhãn tháng phải theo kỳ đang áp dụng, KHÔNG dùng new Date()
+    // (sai khi Ban Điều Hành đang xem kỳ 11/12/2026 trong năm 2027).
+    const curM = state.currentMonth || 10;
+    const curY = state.currentYear || 2026;
+    let monthLabel = `Tháng ${String(curM).padStart(2, '0')}/${curY}`;
 
     if (backupId) {
       const backups = getWebBackups();
@@ -5855,9 +5729,11 @@
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    // Bắt buộc escapeHtml: message có thể chứa tên/MSSV/thông báo lỗi Cloud
+    // do người dùng nhập hoặc từ dịch vụ ngoài trả về.
     toast.innerHTML = `
       <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
-      <span>${message}</span>
+      <span>${escapeHtml(String(message))}</span>
     `;
 
     elements.toastContainer.appendChild(toast);

@@ -264,14 +264,22 @@
   }
 
   /**
-   * Chuẩn hóa danh sách sinh viên đầu vào, bảo đảm tính toàn vẹn dữ liệu
+   * Chuẩn hóa danh sách sinh viên đầu vào, bảo đảm tính toàn vẹn dữ liệu.
+   * Ghi nhận các trường hợp dữ liệu bất thường vào `normalizeWarnings`
+   * để người dùng biết thay vì âm thầm sửa dữ liệu.
+   * @param {Array<object>} students
+   * @param {string[]} normalizeWarnings - Mảng thu thập cảnh báo (nếu có)
    */
-  function normalizeStudents(students) {
+  function normalizeStudents(students, normalizeWarnings) {
     if (!Array.isArray(students)) return [];
     const seenIds = new Set();
-    return students.filter(Boolean).map((s, idx) => {
+    const warn = (msg) => { if (Array.isArray(normalizeWarnings)) normalizeWarnings.push(msg); };
+    const badRoles = [];
+
+    const normalized = students.filter(Boolean).map((s, idx) => {
       let id = s.id || s.studentId || `stu_${idx + 1}`;
       if (seenIds.has(id)) {
+        warn(`Mã định danh bị trùng "${id}" — đã tự động đổi thành "${id}_${idx + 1}".`);
         id = `${id}_${idx + 1}`;
       }
       seenIds.add(id);
@@ -293,13 +301,24 @@
         avail = [];
       }
 
-      return {
-        ...s,
-        id,
-        role: s.role === 'new' ? 'new' : 'old',
-        availableShifts: avail
-      };
+      // Vai trò chỉ chấp nhận đúng 'old' | 'new'. Giá trị lạ (kể cả mặc định 'old')
+      // trước đây bị âm thầm đổi thành Chính Thức — giờ ghi nhận cảnh báo.
+      let role = s.role;
+      if (role !== 'old' && role !== 'new') {
+        if (role !== undefined && role !== null && role !== '') {
+          badRoles.push(`"${s.fullName || id}": ${JSON.stringify(role)}`);
+        }
+        role = 'old';
+      }
+
+      return { ...s, id, role, availableShifts: avail };
     });
+
+    if (badRoles.length > 0) {
+      warn(`Phân loại vai trò không hợp lệ, đã mặc định là "Chính Thức" cho: ${badRoles.join(', ')}.`);
+    }
+
+    return normalized;
   }
 
   /**
@@ -307,11 +326,12 @@
    * Tuân thủ quy chuẩn: mỗi ca đúng 1 Người Cũ (7h30-11h30 / 13h00-16h30) + 1 Người Mới
    */
   function solveWeeklySchedule(allStudents, priorityStudentIds = [], historicalCounts = {}) {
-    const safeStudents = normalizeStudents(allStudents);
+    const normalizeWarnings = [];
+    const safeStudents = normalizeStudents(allStudents, normalizeWarnings);
     const oldMembers = safeStudents.filter(s => s.role === 'old');
     const newMembers = safeStudents.filter(s => s.role === 'new');
 
-    const warnings = [];
+    const warnings = [...normalizeWarnings];
 
     // Kiểm tra trường hợp biên
     if (safeStudents.length === 0) {
@@ -362,7 +382,11 @@
     safeStudents.forEach(s => {
       const count = (s.role === 'old' ? oldResult.counts[s.id] : newResult.counts[s.id]) || 0;
       studentStats[s.id] = {
-        student: s,
+        // Chỉ lưu mã định danh, không nhân bản lại toàn bộ hồ sơ sinh viên
+        // (hồ sơ đầy đủ đã nằm sẵn trong mảng students đầu vào).
+        studentId: s.id,
+        fullName: s.fullName,
+        role: s.role,
         assignedCount: count,
         registeredCount: (s.availableShifts || []).length
       };
@@ -631,6 +655,24 @@
   };
 
   /**
+   * Gắn bí danh week1..week4 (non-enumerable) để tương thích mã cũ
+   * mà không làm phình payload khi JSON.stringify.
+   * @param {object} target - Kết quả sẽ trả về
+   * @param {Array<object>} weeks - Mảng 4 tuần
+   */
+  function attachWeekAliases(target, weeks) {
+    for (let w = 1; w <= 4; w++) {
+      Object.defineProperty(target, `week${w}`, {
+        value: weeks[w - 1] || null,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      });
+    }
+    return target;
+  }
+
+  /**
    * XẾP LỊCH ĐA TUẦN / TRỌN VẸN 1 THÁNG (solveMultiWeekSchedule / runMonthSchedule)
    * Tối ưu hóa phân bổ công bằng tuyệt đối (Fairness & Anti-Starvation):
    * - Mỗi ca đúng 1 Người Cũ + 1 Người Mới
@@ -641,7 +683,8 @@
    */
   function solveMultiWeekSchedule(allStudents, totalWeeks = 4, year = 2026, month = 10) {
     const numWeeks = Math.max(1, parseInt(totalWeeks, 10) || 4);
-    const safeStudents = normalizeStudents(allStudents);
+    const normalizeWarnings = [];
+    const safeStudents = normalizeStudents(allStudents, normalizeWarnings);
     const calendarWeeks = MonthCalendarHelper.getMonthWeeks(year, month);
 
     // Trường hợp biên: Danh sách sinh viên rỗng
@@ -653,7 +696,7 @@
         emptyWeek.calendarInfo = calendarWeeks[w - 1] || null;
         emptyWeeks.push(emptyWeek);
       }
-      return {
+      const emptyResult = {
         success: true,
         timestamp: Date.now(),
         totalWeeks: numWeeks,
@@ -661,10 +704,6 @@
         month: parseInt(month, 10) || 10,
         calendarWeeks,
         weeks: emptyWeeks,
-        week1: emptyWeeks[0] || null,
-        week2: emptyWeeks[1] || null,
-        week3: emptyWeeks[2] || null,
-        week4: emptyWeeks[3] || null,
         combinedStats: {},
         totalStudents: 0,
         uniqueAssignedCount: 0,
@@ -672,6 +711,8 @@
         unassignedMonthMembers: [],
         warnings: ['Danh sách sinh viên rỗng. Không có ca trực nào được phân bổ trong chu kỳ.']
       };
+      attachWeekAliases(emptyResult, emptyWeeks);
+      return emptyResult;
     }
 
     const historicalCounts = {};
@@ -726,7 +767,11 @@
       const total = countsPerWeek.reduce((sum, val) => sum + val, 0);
 
       combinedStats[s.id] = {
-        student: s,
+        // Không nhân bản hồ sơ sinh viên (đã có trong students đầu vào),
+        // giữ payload đồng bộ gọn nhẹ hơn ~50%.
+        studentId: s.id,
+        fullName: s.fullName,
+        role: s.role,
         week1Count: countsPerWeek[0] || 0,
         week2Count: countsPerWeek[1] || 0,
         week3Count: countsPerWeek[2] || 0,
@@ -741,7 +786,7 @@
     const uniqueAssignedCount = Object.values(combinedStats).filter(st => st.totalCount > 0).length;
     const unassignedMonthMembers = safeStudents.filter(s => (combinedStats[s.id]?.totalCount || 0) === 0);
 
-    const monthWarnings = [];
+    const monthWarnings = [...normalizeWarnings];
     if (safeStudents.length < 2) {
       monthWarnings.push('Tổng số sinh viên < 2 người, không thể hoàn thiện đủ các ca trực chuẩn (1 Cũ + 1 Mới).');
     }
@@ -757,7 +802,7 @@
       monthWarnings.push(`Có ${unassignedMonthMembers.length} sinh viên chưa được phân bổ ca nào trong cả chu kỳ ${numWeeks} tuần do đăng ký quá ít ca hoặc trùng ca cao điểm.`);
     }
 
-    return {
+    const result = {
       success: true,
       timestamp: Date.now(),
       totalWeeks: numWeeks,
@@ -765,10 +810,6 @@
       month: parseInt(month, 10) || 10,
       calendarWeeks,
       weeks,
-      week1: weeks[0] || null,
-      week2: weeks[1] || null,
-      week3: weeks[2] || null,
-      week4: weeks[3] || null,
       combinedStats,
       totalStudents: safeStudents.length,
       uniqueAssignedCount,
@@ -776,6 +817,13 @@
       unassignedMonthMembers,
       warnings: monthWarnings
     };
+
+    // Bí danh week1..week4 giữ tương thích với mã cũ (result.week1...).
+    // Đánh dấu non-enumerable để JSON.stringify KHÔNG serialize trùng lặp
+    // cùng dữ liệu với weeks[] — giảm ~50% dung lượng lưu trữ & payload Cloud.
+    attachWeekAliases(result, weeks);
+
+    return result;
   }
 
   // Bí danh tương thích ngược

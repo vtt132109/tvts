@@ -5152,20 +5152,32 @@ input[type="checkbox"]:checked {
 }
 
 /* 6. Sticky Bottom Action Bar for Mobile Registration */
-@media (max-width: 768px) {
-  .student-bottom-action-bar {
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 40;
-    background: var(--bg-card);
-    border-top: 1px solid var(--border-color);
-    padding: 0.75rem 1rem;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
-    display: flex;
-    gap: 0.65rem;
-    align-items: center;
+/* ==========================================================================
+   CẢNH BÁO BẢO MẬT: nhấp nháy nút đổi mật khẩu khi tài khoản còn dùng
+   mật khẩu/PIN mặc định có trong mã nguồn công khai.
+   ========================================================================== */
+@keyframes securityWarningPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+    border-color: #fca5a5;
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    border-color: #ef4444;
+  }
+}
+
+.pulse-security-warning {
+  animation: securityWarningPulse 1.4s ease-in-out infinite;
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-security-warning {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
+    border-color: #ef4444 !important;
   }
 }
 

@@ -7,6 +7,7 @@
     "fullName": "Trưởng Ban Tuyển Sinh",
     "role": "Trưởng ban điều hành",
     "permissions": ["all", "schedule_manage", "student_manage", "user_manage", "backup_restore"],
+    "mustChangePassword": true,
     "createdAt": 1740000000000
   },
   {
@@ -17,16 +18,7 @@
     "fullName": "Cán Bộ Điều Phối Tuyển Sinh",
     "role": "Điều phối viên tuyển sinh",
     "permissions": ["schedule_manage", "student_manage", "swap_manage"],
+    "mustChangePassword": true,
     "createdAt": 1740000200000
-  },
-  {
-    "id": "usr_1792146825856",
-    "username": "thien",
-    "password": "Thien3056",
-    "pin": "3056",
-    "fullName": "Phạm Minh Thiện",
-    "role": "Trưởng ban điều hành",
-    "permissions": ["all", "schedule_manage", "student_manage", "user_manage", "backup_restore"],
-    "createdAt": 1792146825856
   }
 ]
