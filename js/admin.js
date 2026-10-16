@@ -754,11 +754,23 @@
   function loadData() {
     try {
       const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-      if (rawStudents !== null) {
-        state.students = JSON.parse(rawStudents) || [];
+      let parsedStudents = [];
+      try {
+        if (rawStudents) parsedStudents = JSON.parse(rawStudents) || [];
+      } catch (e) {
+        parsedStudents = [];
+      }
+
+      const hasOfficial = Array.isArray(parsedStudents) && parsedStudents.length > 0 && parsedStudents.some(s => s.studentId === '25161393' || s.studentId === '22133044');
+      if (!hasOfficial) {
+        if (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0) {
+          state.students = JSON.parse(JSON.stringify(window.SAMPLE_HCM_UTE_STUDENTS));
+          saveStudents();
+        } else {
+          state.students = parsedStudents;
+        }
       } else {
-        state.students = [];
-        saveStudents();
+        state.students = parsedStudents;
       }
 
       const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);

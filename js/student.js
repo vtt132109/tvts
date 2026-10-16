@@ -283,23 +283,56 @@
   }
 
   /**
-   * Cập nhật trạng thái Khóa / Mở Khóa Ma Trận khi nhập MSSV (Task 1)
+   * Đảm bảo danh sách 30 CTV HCM-UTE luôn được nạp sẵn vào LocalStorage
+   * và tự động đồng bộ lên Đám Mây (Cloud Sync) cho mọi máy tính.
    */
-  function updateMatrixGateState() {
-    const rawInput = elements.inputStudentId ? elements.inputStudentId.value.trim() : '';
-    const isUnlocked = rawInput.length >= 2;
-
-    if (elements.matrixGateNotice) {
-      elements.matrixGateNotice.style.display = isUnlocked ? 'none' : 'flex';
+  function ensureOfficialStudentsLoaded() {
+    let students = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+      if (raw) students = JSON.parse(raw);
+    } catch (e) {
+      students = [];
     }
 
-    if (elements.studentMatrixArea) {
-      if (isUnlocked) {
-        elements.studentMatrixArea.classList.remove('matrix-locked-state');
-      } else {
-        elements.studentMatrixArea.classList.add('matrix-locked-state');
+    const hasOfficial = Array.isArray(students) && students.length > 0 && students.some(s => s.studentId === '25161393' || s.studentId === '22133044');
+
+    if (!hasOfficial) {
+      const sample = (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0)
+        ? window.SAMPLE_HCM_UTE_STUDENTS
+        : ((window.SampleDataManager && typeof window.SampleDataManager.getSample30Students === 'function')
+          ? window.SampleDataManager.getSample30Students()
+          : []);
+
+      if (sample && sample.length > 0) {
+        students = JSON.parse(JSON.stringify(sample));
+        try {
+          localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+          if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+            window.CloudSyncManager.triggerAutoPush();
+          }
+        } catch (err) {}
       }
     }
+    return students;
+  }
+
+  function updateIdentityCardShiftsSummary() {
+    const cardShifts = document.getElementById('card-student-shifts-summary');
+    if (!cardShifts) return;
+    const c1 = (monthlyAvailableShifts[1] || []).length;
+    const c2 = (monthlyAvailableShifts[2] || []).length;
+    const c3 = (monthlyAvailableShifts[3] || []).length;
+    const c4 = (monthlyAvailableShifts[4] || []).length;
+    const total = c1 + c2 + c3 + c4;
+    cardShifts.textContent = `${total} ca đã chọn (T1: ${c1} • T2: ${c2} • T3: ${c3} • T4: ${c4})`;
+  }
+
+  /**
+   * Cập nhật trạng thái Khóa / Mở Khóa Ma Trận khi nhập MSSV
+   */
+  function updateMatrixGateState() {
+    handleMssvAutoDetect();
   }
 
   /**
@@ -349,6 +382,7 @@
 
   function initStudentPortal() {
     cacheDOMElements();
+    ensureOfficialStudentsLoaded();
     initThemeToggle();
     evaluateRegistrationWindow();
     bindEvents();
@@ -781,43 +815,104 @@
    * Tự động nhận diện MSSV: kiểm tra xem đã từng đăng ký ca rảnh trước đó chưa
    */
   function handleMssvAutoDetect() {
-    updateMatrixGateState();
     const rawInput = elements.inputStudentId ? elements.inputStudentId.value.trim() : '';
+
+    const identityCard = document.getElementById('student-identity-card');
+    const invalidNotice = document.getElementById('student-invalid-mssv-notice');
+    const cardName = document.getElementById('card-student-name');
+    const cardMssv = document.getElementById('card-student-mssv');
+    const cardMajor = document.getElementById('card-student-major');
+
+    // Khi ô nhập trống hoặc chỉ có 1-2 ký tự: Khóa ma trận và hiển thị hướng dẫn
     if (!rawInput || rawInput.length < 2) {
       clearDetectedStudentState(true);
+      if (identityCard) identityCard.style.display = 'none';
+      if (invalidNotice) invalidNotice.style.display = 'none';
+      if (elements.matrixGateNotice) {
+        elements.matrixGateNotice.style.display = 'flex';
+        elements.matrixGateNotice.innerHTML = '<span>🔒 Vui lòng nhập Mã Số Sinh Viên (MSSV) của bạn ở trên để bắt đầu chọn ca rảnh.</span>';
+      }
+      if (elements.studentMatrixArea) {
+        elements.studentMatrixArea.classList.add('matrix-locked-state');
+      }
+      if (elements.inputStudentId) {
+        elements.inputStudentId.style.borderColor = '';
+        elements.inputStudentId.style.boxShadow = '';
+      }
       return;
     }
 
-    let students = [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-      if (raw) students = JSON.parse(raw);
-    } catch (err) {
-      students = [];
-    }
-
+    // Luôn lấy từ danh sách 30 CTV HCM-UTE đã nạp sẵn
+    const students = ensureOfficialStudentsLoaded();
     const matched = students.find(s => s.studentId && s.studentId.toLowerCase() === rawInput.toLowerCase());
 
-    // Chỉ coi là đã có đăng ký ca rảnh nếu thực sự CÓ ÍT NHẤT 1 CA RẢNH ĐÃ CHỌN
-    const hasRegisteredShifts = matched && (
-      (Array.isArray(matched.availableShifts) && matched.availableShifts.length > 0) ||
-      (matched.monthlyAvailableShifts && typeof matched.monthlyAvailableShifts === 'object' &&
-        Object.values(matched.monthlyAvailableShifts).some(arr => Array.isArray(arr) && arr.length > 0))
-    );
+    if (matched) {
+      // 1. NHẬP ĐÚNG MSSV TRONG DANH SÁCH 30 CTV
+      detectedStudent = matched;
 
-    if (matched && hasRegisteredShifts) {
-      detectedStudent = matched;
+      // Ẩn cảnh báo lỗi, ẩn matrix-gate-notice, mở khóa bảng ca rảnh
+      if (invalidNotice) invalidNotice.style.display = 'none';
+      if (elements.matrixGateNotice) elements.matrixGateNotice.style.display = 'none';
+      if (elements.studentMatrixArea) elements.studentMatrixArea.classList.remove('matrix-locked-state');
+
+      // Viền xanh input nhận diện thành công
+      if (elements.inputStudentId) {
+        elements.inputStudentId.style.borderColor = '#10b981';
+        elements.inputStudentId.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.15)';
+      }
+
+      // Nạp dữ liệu ca rảnh của sinh viên
       populateStudentData(matched);
+
+      // Hiển thị Thẻ Định Danh Sinh Viên (Họ và tên, MSSV, Ca trực của tháng)
+      if (identityCard) {
+        identityCard.style.display = 'block';
+        if (cardName) cardName.textContent = matched.fullName || ('Sinh viên ' + matched.studentId);
+        if (cardMssv) cardMssv.textContent = matched.studentId;
+        if (cardMajor) {
+          const detail = [matched.faculty, matched.major].filter(Boolean).join(' - ');
+          cardMajor.textContent = detail ? `• ${detail}` : '';
+        }
+      }
+      updateIdentityCardShiftsSummary();
       updateSubmitButtonState();
-    } else if (matched) {
-      // Có hồ sơ trong hệ thống nhưng CHƯA TỪNG ĐĂNG KÝ CA RẢNH NÀO
-      detectedStudent = matched;
+    } else {
+      // 2. NHẬP SAI MSSV (Không có trong danh sách 30 CTV đã nạp sẵn)
+      detectedStudent = null;
+      if (identityCard) identityCard.style.display = 'none';
+
+      // Khóa bảng chọn ca rảnh
+      if (elements.studentMatrixArea) {
+        elements.studentMatrixArea.classList.add('matrix-locked-state');
+      }
+
+      // Khi sinh viên đã gõ từ 6 ký tự trở lên -> Báo lỗi rõ ràng
+      if (rawInput.length >= 6) {
+        if (invalidNotice) invalidNotice.style.display = 'block';
+        if (elements.matrixGateNotice) {
+          elements.matrixGateNotice.style.display = 'flex';
+          elements.matrixGateNotice.innerHTML = '<span>⚠️ <strong>Mã số sinh viên không tồn tại:</strong> Vui lòng kiểm tra lại MSSV trong danh sách Ban Tư Vấn Tuyển Sinh HCM-UTE!</span>';
+        }
+        if (elements.inputStudentId) {
+          elements.inputStudentId.style.borderColor = '#ef4444';
+          elements.inputStudentId.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+        }
+      } else {
+        if (invalidNotice) invalidNotice.style.display = 'none';
+        if (elements.matrixGateNotice) {
+          elements.matrixGateNotice.style.display = 'flex';
+          elements.matrixGateNotice.innerHTML = '<span>🔒 Đang nhập MSSV... Bảng chọn ca sẽ mở khóa khi nhập đúng MSSV của bạn.</span>';
+        }
+        if (elements.inputStudentId) {
+          elements.inputStudentId.style.borderColor = '';
+          elements.inputStudentId.style.boxShadow = '';
+        }
+      }
+
       monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
       syncCheckboxesWithActiveWeek();
       updateSelectedCount();
       updateSubmitButtonState();
-    } else {
-      clearDetectedStudentState(false);
     }
   }
 
@@ -873,6 +968,11 @@
 
   function clearDetectedStudentState(resetInputs = false) {
     detectedStudent = null;
+    const identityCard = document.getElementById('student-identity-card');
+    const invalidNotice = document.getElementById('student-invalid-mssv-notice');
+    if (identityCard) identityCard.style.display = 'none';
+    if (invalidNotice) invalidNotice.style.display = 'none';
+
     if (elements.mssvAlertBox) {
       elements.mssvAlertBox.style.display = 'none';
       elements.mssvAlertBox.innerHTML = '';
@@ -883,6 +983,7 @@
     if (elements.inputStudentId) {
       elements.inputStudentId.style.borderColor = '';
       elements.inputStudentId.style.backgroundColor = '';
+      elements.inputStudentId.style.boxShadow = '';
     }
     elements.matrixCheckboxes?.forEach(cb => {
       const parent = cb.closest('.slot-toggle');
@@ -1208,6 +1309,8 @@
         elements.selectedCountDisplay.classList.add('counter-pop');
       } catch (e) {}
     }
+
+    updateIdentityCardShiftsSummary();
   }
 
   function getSelectedShiftsFromDOM() {
@@ -1231,6 +1334,7 @@
   /**
    * Xử lý lưu đăng ký sinh viên trọn tháng (Section 9 API Contract)
    * Cho phép đăng ký với 0 ca rảnh (nghỉ tháng này / tuần thi) (Task 3)
+   * Tuyệt đối KHÔNG tự ý tạo mới sinh viên khi MSSV không có trong danh sách CTV!
    */
   function processStudentRegistration() {
     if (!isRegOpen) {
@@ -1245,6 +1349,25 @@
       elements.inputStudentId?.focus();
       return;
     }
+
+    // Luôn lấy từ danh sách 30 CTV HCM-UTE chuẩn đã nạp sẵn
+    let students = ensureOfficialStudentsLoaded();
+
+    const existingIndex = students.findIndex(s => s.studentId && s.studentId.toLowerCase() === studentId.toLowerCase());
+
+    // CHẶN BẬC CAO: Nếu MSSV không có trong danh sách CTV nạp sẵn -> BÁO LỖI VÀ DỪNG LẬP TỨC!
+    if (existingIndex === -1) {
+      const invalidNotice = document.getElementById('student-invalid-mssv-notice');
+      if (invalidNotice) invalidNotice.style.display = 'block';
+      showToast('⚠️ Mã số sinh viên không tồn tại trong danh sách Ban Tư Vấn Tuyển Sinh! Không thể thêm mới sinh viên.', 'error');
+      if (elements.inputStudentId) {
+        elements.inputStudentId.focus();
+        elements.inputStudentId.style.borderColor = '#ef4444';
+      }
+      return; // DỪNG LẬP TỨC - TUYỆT ĐỐI KHÔNG TẠO MỚI HAY TĂNG SỐ LƯỢNG SINH VIÊN!
+    }
+
+    const existingStudent = students[existingIndex];
 
     const c1 = (monthlyAvailableShifts[1] || []).length;
     const c2 = (monthlyAvailableShifts[2] || []).length;
@@ -1261,79 +1384,33 @@
     ]);
     const availableShifts = Array.from(unionShiftsSet);
 
-    let students = [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-      if (raw) students = JSON.parse(raw);
-    } catch (err) {
-      console.error(err);
-      students = [];
-    }
-
-    const existingIndex = students.findIndex(s => s.studentId && s.studentId.toLowerCase() === studentId.toLowerCase());
-    const existingStudent = existingIndex !== -1 ? students[existingIndex] : null;
-
-    const fullName = existingStudent?.fullName || (elements.inputFullName ? elements.inputFullName.value.trim() : '') || ('Sinh viên ' + studentId);
-    const phone = existingStudent?.phone || (elements.inputPhone ? elements.inputPhone.value.trim() : '') || '';
-    const studentRole = existingStudent?.role || 'new';
-
-    const studentRecordData = {
-      fullName,
-      studentId,
-      phone,
-      role: studentRole,
-      registrationMonth: '2026-10',
+    // Cập nhật bản ghi sinh viên trong danh sách có sẵn
+    students[existingIndex] = {
+      ...existingStudent,
       monthlyAvailableShifts: {
         1: [...(monthlyAvailableShifts[1] || [])],
         2: [...(monthlyAvailableShifts[2] || [])],
         3: [...(monthlyAvailableShifts[3] || [])],
         4: [...(monthlyAvailableShifts[4] || [])]
       },
-      availableShifts: availableShifts
+      availableShifts: availableShifts,
+      updatedAt: Date.now()
     };
 
-    if (existingIndex !== -1) {
-      students[existingIndex] = {
-        ...students[existingIndex],
-        ...studentRecordData,
-        updatedAt: Date.now()
-      };
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-      if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-        window.CloudSyncManager.triggerAutoPush();
-      }
-
-      if (totalMonthShifts === 0) {
-        showSuccessBanner(`Đã cập nhật: Bạn đã đăng ký <strong>0 ca rảnh (nghỉ tháng này)</strong> cho MSSV: <strong>${escapeHtml(studentId)}</strong>.`);
-        showToast('🎉 Đã ghi nhận đăng ký của bạn: 0 ca rảnh (nghỉ tháng này)!', 'success');
-      } else {
-        showSuccessBanner(`Cập nhật thành công! Đã lưu lại <strong>${totalMonthShifts} lượt ca rảnh trong tháng</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) của MSSV: <strong>${escapeHtml(studentId)}</strong>.`);
-        showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
-      }
-
-      handleMssvAutoDetect();
-    } else {
-      const newStudent = {
-        id: 's_' + Date.now(),
-        ...studentRecordData,
-        createdAt: Date.now()
-      };
-      students.push(newStudent);
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-      if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-        window.CloudSyncManager.triggerAutoPush();
-      }
-
-      if (totalMonthShifts === 0) {
-        showSuccessBanner(`Đăng ký thành công! Ghi nhận <strong>0 ca rảnh (nghỉ tháng này)</strong> cho MSSV: <strong>${escapeHtml(studentId)}</strong>.`);
-        showToast('🎉 Đã ghi nhận đăng ký của bạn: 0 ca rảnh (nghỉ tháng này)!', 'success');
-      } else {
-        showSuccessBanner(`Đăng ký thành công! MSSV <strong>${escapeHtml(studentId)}</strong> đã đăng ký <strong>${totalMonthShifts} ca rảnh trong tháng 10/2026</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}).`);
-        showToast('Đăng ký lịch trực trọn tháng thành công!', 'success');
-      }
-
-      handleMssvAutoDetect();
+    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+      window.CloudSyncManager.triggerAutoPush();
     }
+
+    if (totalMonthShifts === 0) {
+      showSuccessBanner(`Đã cập nhật: Bạn đã đăng ký <strong>0 ca rảnh (nghỉ tháng này)</strong> cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
+      showToast('🎉 Đã ghi nhận đăng ký của bạn: 0 ca rảnh (nghỉ tháng này)!', 'success');
+    } else {
+      showSuccessBanner(`Cập nhật thành công! Đã lưu <strong>${totalMonthShifts} ca rảnh trong tháng 10/2026</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
+      showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
+    }
+
+    handleMssvAutoDetect();
 
     const isSchedulePublished = regConfig?.publishSchedule === true;
     if (elements.inputLookupMssv && (!isRegOpen || isSchedulePublished)) {
