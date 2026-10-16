@@ -4492,3 +4492,394 @@ body {
   }
 }
 
+/* ==========================================================================
+   UI/UX PRO MAX: DESIGN SYSTEM, BENTO GRID, MOBILE TOUCH & MICRO-ANIMATIONS
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. BENTO BOX GRID & DATA-DENSE DASHBOARD VISUALS
+   -------------------------------------------------------------------------- */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.75rem;
+}
+
+.stat-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 16px);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease;
+  overflow: hidden;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg, 0 10px 20px -3px rgba(0, 0, 0, 0.08));
+  border-color: var(--primary, #4f46e5);
+}
+
+.stat-card:hover::after {
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+}
+
+/* Role-Specific Bento Card Highlights */
+.stat-card-old,
+.stat-card:nth-child(2) {
+  border-left: 4px solid #6366f1;
+}
+
+.stat-card-new,
+.stat-card:nth-child(3) {
+  border-left: 4px solid #10b981;
+}
+
+/* Shift Matrix Cell Aesthetics (Morning vs Afternoon) */
+.schedule-shift-morning,
+.slot-morning {
+  background: #fffdfa;
+  border-color: #fef3c7;
+}
+
+.schedule-shift-afternoon,
+.slot-afternoon {
+  background: #f8fbff;
+  border-color: #e0f2fe;
+}
+
+[data-theme="dark"] .schedule-shift-morning,
+[data-theme="dark"] .slot-morning {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .schedule-shift-afternoon,
+[data-theme="dark"] .slot-afternoon {
+  background: rgba(14, 165, 233, 0.06);
+  border-color: rgba(14, 165, 233, 0.2);
+}
+
+/* Enhanced Role Badges with Icons */
+.badge-role-old {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--role-old-subtle, #ede9fe);
+  color: var(--role-old-text, #3730a3);
+  border: 1px solid var(--role-old-border, #818cf8);
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.82rem;
+  letter-spacing: -0.01em;
+}
+
+.badge-role-old::before {
+  content: '🎓';
+  font-size: 0.85em;
+}
+
+.badge-role-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--role-new-subtle, #d1fae5);
+  color: var(--role-new-text, #065f46);
+  border: 1px solid var(--role-new-border, #34d399);
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.82rem;
+  letter-spacing: -0.01em;
+}
+
+.badge-role-new::before {
+  content: '🌱';
+  font-size: 0.85em;
+}
+
+/* Bento Payroll Summary Cards (#modal-month-payroll) */
+.payroll-stats-bento {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.payroll-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 12px);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.payroll-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.payroll-stat-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.2;
+  margin-top: 0.25rem;
+}
+
+/* --------------------------------------------------------------------------
+   2. MOBILE ERGONOMICS & ACCESSIBILITY (TOUCH TARGETS >= 44PX)
+   -------------------------------------------------------------------------- */
+/* Touch-friendly buttons and controls */
+.btn,
+button.btn,
+.month-week-tab,
+.btn-quick-fill,
+.action-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1.15rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Checkbox ca rảnh touch targets */
+.slot-checkbox-label,
+.matrix-cell label,
+.admin-slot-cb-label {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.slot-checkbox-label:hover,
+.matrix-cell label:hover {
+  background: rgba(79, 70, 229, 0.08);
+}
+
+.slot-checkbox-label input[type="checkbox"],
+.matrix-cell input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--primary, #4f46e5);
+  cursor: pointer;
+}
+
+/* Sticky Week Navigation on Mobile */
+@media (max-width: 768px) {
+  .month-week-tabs-container {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--bg-card);
+    padding: 0.5rem 0;
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+  }
+
+  .month-week-tabs {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .month-week-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .month-week-tab {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    min-width: 120px;
+    min-height: 46px;
+    border-radius: var(--radius-md, 12px);
+    font-size: 0.85rem;
+  }
+
+  /* Quick Actions Grid on Mobile (2x2) */
+  .matrix-quick-toolbar,
+  .matrix-quick-btns {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.6rem !important;
+    width: 100% !important;
+  }
+
+  .matrix-quick-toolbar .btn-quick-fill,
+  .matrix-quick-btns .btn-chip {
+    width: 100% !important;
+    min-height: 46px !important;
+    padding: 0.6rem 0.5rem !important;
+    font-size: 0.82rem !important;
+    text-align: center;
+  }
+
+  /* MSSV Lookup Input on Mobile (Prevent iOS auto-zoom) */
+  #input-lookup-mssv,
+  .input-student-search,
+  #admin-student-id,
+  #auth-input-pin {
+    font-size: 16px !important;
+    min-height: 48px !important;
+  }
+
+  /* Horizontal table wrapper with scroll hint */
+  .table-responsive-wrapper {
+    position: relative;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-md, 12px);
+  }
+}
+
+/* Sticky first column in wide schedule tables */
+.table-sticky-col th:first-child,
+.table-sticky-col td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  z-index: 10;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.04);
+}
+
+/* --------------------------------------------------------------------------
+   3. MICRO-ANIMATIONS & HAPTIC-LIKE TRANSITIONS
+   -------------------------------------------------------------------------- */
+
+/* A. Shake Animation on Wrong PIN / Password */
+@keyframes shakeError {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  15%, 45%, 75% {
+    transform: translateX(-9px);
+  }
+  30%, 60%, 90% {
+    transform: translateX(9px);
+  }
+}
+
+.shake-error {
+  animation: shakeError 0.52s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
+  border-color: var(--danger, #ef4444) !important;
+}
+
+/* B. Modal Smooth Scale & Fade-In (Bento Entrance) */
+@keyframes bentoModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-box,
+.modal-content {
+  animation: bentoModalIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: center center;
+}
+
+/* C. Counter Pulse / Pop on Shift Check */
+@keyframes counterPop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+    color: var(--primary, #4f46e5);
+    text-shadow: 0 0 12px rgba(79, 70, 229, 0.4);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.counter-pop {
+  animation: counterPop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* D. Tactile Button Press (Micro-Scale Feedback) */
+.btn:active,
+button:active,
+.month-week-tab:active,
+.btn-quick-fill:active {
+  transform: scale(0.96) !important;
+  transition: transform 0.08s ease !important;
+}
+
+/* E. Checkbox Checked Pop */
+@keyframes slotCheckBounce {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+input[type="checkbox"]:checked {
+  animation: slotCheckBounce 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* F. Accessibility: Respect User Motion Preferences (WCAG AAA) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .shake-error,
+  .counter-pop,
+  .modal-box,
+  .modal-content {
+    animation: none !important;
+  }
+}
+
+

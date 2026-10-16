@@ -1030,6 +1030,11 @@
         <span class="counter-total">${total} ca đã chọn / tháng</span>
         <span class="counter-breakdown">T1: ${c1} • T2: ${c2} • T3: ${c3} • T4: ${c4}</span>
       `;
+      try {
+        elements.selectedCountDisplay.classList.remove('counter-pop');
+        void elements.selectedCountDisplay.offsetWidth;
+        elements.selectedCountDisplay.classList.add('counter-pop');
+      } catch (e) {}
     }
   }
 
