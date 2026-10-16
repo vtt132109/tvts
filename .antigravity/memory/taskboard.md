@@ -58,4 +58,5 @@
 - `17:08`: Gỡ bỏ hoàn toàn hộp thông tin đăng nhập mặc định (`.auth-demo-accounts`) trên màn hình đăng nhập quản trị `admin.html` theo yêu cầu của Tris, kiểm tra F12 Console 0 runtime error, CI Harness đạt 102/102 PASS (100%).
 - `17:25`: Khởi tạo kiến trúc Đồng Bộ Đám Mây Firebase (`js/cloud_sync.js`), tích hợp modal quản trị và cơ chế auto-pull ở màn hình đăng nhập, giải quyết triệt để vấn đề Tab Ẩn danh.
 - `17:28`: Toàn bộ 7 test suites đạt 140/140 PASS (100%), F12 Console 0 runtime error, hoàn tất `/merge-clean` sáp nhập vào `main`.
+- `17:37`: Tích hợp trực tiếp URL Cơ sở dữ liệu Firebase của Tris (`https://vtt123-76e07-default-rtdb.firebaseio.com`) làm mặc định; bổ sung cơ chế Auto-Pull tức thì khi nhập PIN/Mật khẩu; kiểm thử trực quan đăng nhập thành công 100% với tài khoản cán bộ Phạm Minh Thiện (PIN 3056); CI Harness đạt 141/141 tests PASS (100%).
 

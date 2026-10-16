@@ -119,7 +119,8 @@ console.log('▶ [GROUP 1] Khởi Tạo & Định Dạng URL Firebase REST API:'
   assert(typeof csm === 'object' && csm !== null, '1.1: CloudSyncManager được xuất khẩu hợp lệ ra window');
   
   const cfg = csm.getConfig();
-  assert(cfg.enabled === false, '1.2: Cấu hình mặc định ở trạng thái an toàn (enabled: false)');
+  assert(cfg.enabled === true, '1.2: Cấu hình mặc định tự động kích hoạt Cloud Sync (enabled: true)');
+  assert(cfg.databaseUrl.includes('vtt123-76e07-default-rtdb.firebaseio.com'), '1.2b: Tự động tích hợp sẵn Firebase Database URL của Ban Tuyển Sinh');
   assert(cfg.syncPath === 'tvts_production_data', '1.3: Đường dẫn root mặc định là "tvts_production_data"');
   assert(typeof cfg.deviceId === 'string' && cfg.deviceId.startsWith('dev_'), '1.4: Tự động khởi tạo Device ID duy nhất');
 
