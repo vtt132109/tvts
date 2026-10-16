@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f8fafc">
   <title>Cổng Sinh Viên - Đăng Ký Ca Rảnh & Xem Lịch Trực Ban Tuyển Sinh</title>
   <meta name="description" content="Trang dành cho sinh viên và cộng tác viên đăng ký ca rảnh và tra cứu lịch trực văn phòng tư vấn tuyển sinh.">
   
@@ -79,6 +80,8 @@
   </script>
 </head>
 <body>
+  <!-- Skip Link for Keyboard Navigation (Accessibility) -->
+  <a href="#main-content" class="skip-link">Chuyển đến nội dung chính</a>
 
   <!-- Top App Header -->
   <header class="app-header">
@@ -120,7 +123,7 @@
   </header>
 
   <!-- Main Container -->
-  <main class="main-container">
+  <main class="main-container" id="main-content">
 
     <!-- Banner Trạng Thái Cổng Đăng Ký (Được quản lý bởi Admin) -->
     <div id="student-reg-status-banner" class="reg-status-banner open">
@@ -194,7 +197,7 @@
               <div style="position: relative;">
                 <input type="text" id="input-studentid" class="form-input" 
                        inputmode="numeric" pattern="[0-9]*" 
-                       placeholder="Nhập Mã Số Sinh Viên (MSSV) của bạn để chọn ca..." 
+                       placeholder="Nhập Mã Số Sinh Viên (MSSV) của bạn để chọn ca…" 
                        autocomplete="off" required aria-label="Mã Số Sinh Viên (MSSV)"
                        style="font-size: 1.15rem; padding: 0.9rem 1.25rem; text-align: center; font-weight: 700; letter-spacing: 0.5px; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 48px;">
               </div>
@@ -528,7 +531,7 @@
             Gửi yêu cầu hoán đổi ca hoặc nhờ CTV khác trực thay lên Ban Điều Hành
           </p>
         </div>
-        <button type="button" class="btn-close" id="btn-close-swap-modal">&times;</button>
+        <button type="button" class="btn-close" id="btn-close-swap-modal" aria-label="Đóng hộp thoại đổi ca">&times;</button>
       </div>
       <div class="modal-body">
         
@@ -539,7 +542,7 @@
             <span id="swap-sender-role-badge" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full); font-weight: 700;"></span>
           </label>
           <div style="display: flex; gap: 0.5rem;">
-            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)..." style="flex: 1; font-weight: 600;" required autocomplete="off" aria-label="Mã Số Sinh Viên của bạn">
+            <input type="text" id="input-swap-sender-mssv" class="form-input" placeholder="Ví dụ: 2102001 (Nhập MSSV rồi bấm Tải Ca)…" style="flex: 1; font-weight: 600;" required autocomplete="off" aria-label="Mã Số Sinh Viên của bạn">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-swap-load-shifts" style="white-space: nowrap; font-weight: 700; border-color: var(--primary); color: var(--primary);">
               <span>🔍 Tải Ca Trực</span>
             </button>
@@ -586,7 +589,7 @@
           <!-- Lý do -->
           <div class="form-group">
             <label class="form-label" for="input-swap-reason" style="font-weight: 700;">5. Lý do đổi ca / nhờ trực <span class="required">*</span></label>
-            <textarea id="input-swap-reason" class="form-input" rows="2" placeholder="Ví dụ: Trùng lịch thi thực hành, gia đình có việc bận đột xuất..." required aria-label="Lý do đổi ca hoặc nhờ trực"></textarea>
+            <textarea id="input-swap-reason" class="form-input" rows="2" placeholder="Ví dụ: Trùng lịch thi thực hành, gia đình có việc bận đột xuất…" required aria-label="Lý do đổi ca hoặc nhờ trực"></textarea>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
@@ -627,8 +630,8 @@
     </div>
   </footer>
 
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
+  <!-- Toast Notification Container (Accessibility compliant) -->
+  <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
   <script src="js/cloud_sync.js?v=20261016_1755"></script>

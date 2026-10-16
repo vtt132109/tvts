@@ -907,7 +907,7 @@
         if (invalidNotice) invalidNotice.style.display = 'none';
         if (elements.matrixGateNotice) {
           elements.matrixGateNotice.style.display = 'flex';
-          elements.matrixGateNotice.innerHTML = '<span>🔒 Đang nhập MSSV... Bảng chọn ca sẽ mở khóa khi nhập đúng MSSV của bạn.</span>';
+          elements.matrixGateNotice.innerHTML = '<span>🔒 Đang nhập MSSV… Bảng chọn ca sẽ mở khóa khi nhập đúng MSSV của bạn.</span>';
         }
         if (elements.inputStudentId) {
           elements.inputStudentId.style.borderColor = '';
@@ -1569,7 +1569,7 @@
       if (!mem) {
         return `
           <div class="duty-member-card empty-member">
-            <span>Đang xếp...</span>
+            <span>Đang xếp…</span>
           </div>
         `;
       }
