@@ -44,6 +44,15 @@
       fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
       role: 'Điều phối viên tuyển sinh',
       createdAt: Date.now() - 300000
+    },
+    {
+      id: 'usr_1792146825856',
+      username: 'thien',
+      password: 'Thien3056',
+      pin: '3056',
+      fullName: 'Phạm Minh Thiện',
+      role: 'Trưởng ban điều hành',
+      createdAt: Date.now() - 100000
     }
   ];
 
@@ -402,6 +411,13 @@
       const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
       if (raw) {
         state.adminUsers = JSON.parse(raw);
+        // Tự động bổ sung các tài khoản cốt lõi nếu chưa có trong LocalStorage cũ
+        DEFAULT_ADMIN_USERS.forEach(defUser => {
+          if (!state.adminUsers.some(u => u.username.toLowerCase() === defUser.username.toLowerCase())) {
+            state.adminUsers.push(defUser);
+          }
+        });
+        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
       } else {
         state.adminUsers = [...DEFAULT_ADMIN_USERS];
         saveAdminUsers();
