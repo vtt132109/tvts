@@ -185,6 +185,14 @@
       btnPublishScheduleText: document.getElementById('btn-publish-schedule-text'),
 
       studentTableBody: document.getElementById('admin-student-table-body'),
+      tableStudents: document.getElementById('table-students'),
+      cbStudentSelectAll: document.getElementById('cb-student-select-all'),
+      bulkStudentActions: document.getElementById('bulk-student-actions'),
+      bulkSelectedCount: document.getElementById('bulk-selected-count'),
+      btnBulkRoleOld: document.getElementById('btn-bulk-role-old'),
+      btnBulkRoleNew: document.getElementById('btn-bulk-role-new'),
+      btnBulkClearShifts: document.getElementById('btn-bulk-clear-shifts'),
+      btnBulkDeleteStudents: document.getElementById('btn-bulk-delete-students'),
       filterButtons: document.querySelectorAll('.filter-btn'),
       inputSearch: document.getElementById('input-search-student'),
       btnOpenAddStudent: document.getElementById('btn-open-add-student'),
@@ -211,6 +219,7 @@
       adminSlotCbs: document.querySelectorAll('.admin-slot-cb'),
       btnAdminQuickAll: document.getElementById('btn-admin-quick-all'),
       btnAdminQuickClear: document.getElementById('btn-admin-quick-clear'),
+      btnAdminModalClearShifts: document.getElementById('btn-admin-modal-clear-shifts'),
 
       // Hero Action Buttons
       btnClearSchedule: document.getElementById('btn-clear-schedule'),
@@ -991,6 +1000,99 @@
     elements.btnAdminQuickClear?.addEventListener('click', () => {
       elements.adminSlotCbs.forEach(cb => cb.checked = false);
     });
+    elements.btnAdminModalClearShifts?.addEventListener('click', () => {
+      elements.adminSlotCbs.forEach(cb => cb.checked = false);
+      showToast('Đã xóa tất cả ca chọn trong bảng (đưa về 0 ca). Bấm "Lưu Thông Tin" để hoàn tất.', 'info');
+    });
+
+    // Bulk Multi-Select Actions (Task 2)
+    elements.cbStudentSelectAll?.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('.cb-student-row').forEach(cb => {
+        cb.checked = isChecked;
+      });
+      updateBulkStudentActions();
+    });
+
+    elements.studentTableBody?.addEventListener('change', (e) => {
+      if (e.target && e.target.classList.contains('cb-student-row')) {
+        updateBulkStudentActions();
+      }
+    });
+
+    elements.btnBulkRoleOld?.addEventListener('click', () => {
+      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
+      if (selectedIds.length === 0) {
+        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
+        return;
+      }
+      state.students.forEach(s => {
+        if (selectedIds.includes(s.id)) {
+          s.role = 'old';
+          s.updatedAt = Date.now();
+        }
+      });
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Chính Thức!`, 'success');
+    });
+
+    elements.btnBulkRoleNew?.addEventListener('click', () => {
+      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
+      if (selectedIds.length === 0) {
+        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
+        return;
+      }
+      state.students.forEach(s => {
+        if (selectedIds.includes(s.id)) {
+          s.role = 'new';
+          s.updatedAt = Date.now();
+        }
+      });
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Tập Sự!`, 'success');
+    });
+
+    elements.btnBulkClearShifts?.addEventListener('click', () => {
+      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
+      if (selectedIds.length === 0) {
+        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
+        return;
+      }
+      if (!confirm(`Bạn có chắc muốn xóa sạch toàn bộ ca rảnh của ${selectedIds.length} sinh viên đã chọn về 0 ca không?`)) {
+        return;
+      }
+      state.students.forEach(s => {
+        if (selectedIds.includes(s.id)) {
+          s.availableShifts = [];
+          s.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+          s.updatedAt = Date.now();
+        }
+      });
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã xóa sạch ca rảnh của ${selectedIds.length} sinh viên!`, 'success');
+    });
+
+    elements.btnBulkDeleteStudents?.addEventListener('click', () => {
+      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
+      if (selectedIds.length === 0) {
+        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
+        return;
+      }
+      if (!confirm(`Bạn có chắc muốn xóa ${selectedIds.length} sinh viên đã chọn khỏi danh sách không? Thao tác này không thể hoàn tác!`)) {
+        return;
+      }
+      state.students = state.students.filter(s => !selectedIds.includes(s.id));
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã xóa ${selectedIds.length} sinh viên khỏi danh sách!`, 'success');
+    });
 
     elements.btnLoadSample30?.addEventListener('click', () => {
       const sampleList = window.SAMPLE_30_STUDENTS || SAMPLE_12_STUDENTS || [];
@@ -1117,6 +1219,29 @@
     }
   }
 
+  function updateBulkStudentActions() {
+    const rowCheckboxes = document.querySelectorAll('.cb-student-row');
+    const checkedBoxes = document.querySelectorAll('.cb-student-row:checked');
+    const count = checkedBoxes.length;
+    const bulkBar = elements.bulkStudentActions || document.getElementById('bulk-student-actions');
+    const countEl = elements.bulkSelectedCount || document.getElementById('bulk-selected-count');
+    const selectAllCb = elements.cbStudentSelectAll || document.getElementById('cb-student-select-all');
+
+    if (countEl) countEl.textContent = count;
+    if (bulkBar) {
+      bulkBar.style.display = count > 0 ? 'flex' : 'none';
+    }
+    if (selectAllCb) {
+      if (rowCheckboxes.length === 0) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+      } else {
+        selectAllCb.checked = count === rowCheckboxes.length;
+        selectAllCb.indeterminate = count > 0 && count < rowCheckboxes.length;
+      }
+    }
+  }
+
   function renderStudentTable() {
     if (!elements.studentTableBody) return;
 
@@ -1136,7 +1261,7 @@
     if (filtered.length === 0) {
       elements.studentTableBody.innerHTML = `
         <tr>
-          <td colspan="7">
+          <td colspan="8">
             <div class="empty-state">
               <div class="empty-state-icon">📋</div>
               <h3>Không tìm thấy sinh viên nào</h3>
@@ -1145,6 +1270,7 @@
           </td>
         </tr>
       `;
+      updateBulkStudentActions();
       return;
     }
 
@@ -1154,8 +1280,8 @@
     elements.studentTableBody.innerHTML = filtered.map((s, index) => {
       const isOld = s.role === 'old';
       const roleBadge = isOld 
-        ? `<span class="badge badge-old">🎓 Người cũ</span>` 
-        : `<span class="badge badge-new">🌱 Người mới</span>`;
+        ? `<span class="badge badge-role-old">🎓 Chính Thức</span>` 
+        : `<span class="badge badge-role-new">🌱 Tập Sự</span>`;
       
       const currentAssigned = assignedCounts[s.id]?.assignedCount || 0;
       const totalTwoWeeks = combinedStats[s.id]?.totalCount || currentAssigned;
@@ -1167,6 +1293,7 @@
 
       return `
         <tr>
+          <td style="text-align: center;"><input type="checkbox" class="cb-student-row" data-id="${escapeHtml(s.id)}"></td>
           <td style="font-weight: 600; color: #94a3b8;">#${index + 1}</td>
           <td>
             <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(s.fullName)}</div>
@@ -1185,14 +1312,17 @@
             ${state.twoWeekSchedule ? `<div style="font-size: 0.72rem; color: var(--text-muted);">(Tổng 2 tuần: ${totalTwoWeeks} ca)</div>` : ''}
           </td>
           <td>
-            <div style="display: flex; gap: 0.4rem;">
+            <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
               <button class="btn btn-secondary btn-sm" onclick="window.adminEditStudent('${escapeHtml(s.id)}')" title="Sửa thông tin & ca rảnh">✏️ Sửa</button>
+              <button class="btn btn-warning-outline btn-sm" onclick="window.adminClearStudentShifts('${escapeHtml(s.id)}')" title="Xóa toàn bộ ca rảnh của bạn này (về 0 ca)">🧹 Xóa ca</button>
               <button class="btn btn-danger-outline btn-sm" onclick="window.adminDeleteStudent('${escapeHtml(s.id)}')" title="Xóa">🗑️</button>
             </div>
           </td>
         </tr>
       `;
     }).join('');
+
+    updateBulkStudentActions();
   }
 
   function renderTimetable() {
@@ -1298,32 +1428,32 @@
     }
 
     const oldCard = oldMem ? `
-      <div class="duty-member-card role-old" title="Người cũ - Có kinh nghiệm">
+      <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
         <div class="member-info">
-          <span class="member-role-tag">🎓 Người Cũ</span>
+          <span class="member-role-tag">🎓 Chính Thức</span>
           <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
         </div>
         <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" title="Đổi bạn khác">🔄</button>
       </div>
     ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán người cũ">
-        <span>+ Chưa có Người Cũ</span>
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán Chính Thức">
+        <span>+ Chưa có Chính Thức</span>
       </div>
     `;
 
     const newCard = newMem ? `
-      <div class="duty-member-card role-new" title="Người mới - Tập sự">
+      <div class="duty-member-card role-new" title="Tập Sự">
         <div class="member-info">
-          <span class="member-role-tag">🌱 Người Mới</span>
+          <span class="member-role-tag">🌱 Tập Sự</span>
           <span class="member-name">${escapeHtml(newMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
         </div>
         <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" title="Đổi bạn khác">🔄</button>
       </div>
     ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán người mới">
-        <span>+ Chưa có Người Mới</span>
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán Tập Sự">
+        <span>+ Chưa có Tập Sự</span>
       </div>
     `;
 
@@ -1380,7 +1510,7 @@
   window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
     state.reassignModalData = { shiftId, role, weekNumber };
     const shiftInfo = SHIFT_MAP[shiftId];
-    const roleTitle = role === 'old' ? 'Người Cũ' : 'Người Mới';
+    const roleTitle = role === 'old' ? 'Chính Thức' : 'Tập Sự';
     const targetSchedule = weekNumber && state.monthSchedule?.weeks?.[weekNumber - 1]
       ? state.monthSchedule.weeks[weekNumber - 1]
       : state.currentSchedule;
@@ -1392,7 +1522,7 @@
 
     if (elements.modalRoleBadge) {
       elements.modalRoleBadge.textContent = roleTitle;
-      elements.modalRoleBadge.className = `badge ${role === 'old' ? 'badge-old' : 'badge-new'}`;
+      elements.modalRoleBadge.className = `badge ${role === 'old' ? 'badge-role-old' : 'badge-role-new'}`;
     }
 
     const eligibleStudents = state.students.filter(s => s.role === role);
@@ -1543,21 +1673,22 @@
       return;
     }
 
-    if (availableShifts.length === 0) {
-      showToast('Vui lòng chọn ít nhất 1 ca rảnh!', 'error');
-      return;
-    }
-
     if (editId) {
       const idx = state.students.findIndex(s => s.id === editId);
       if (idx !== -1) {
+        const studentToUpdate = state.students[idx];
+        const monthlyShifts = (availableShifts.length === 0)
+          ? { 1: [], 2: [], 3: [], 4: [] }
+          : (studentToUpdate.monthlyAvailableShifts || { 1: [...availableShifts], 2: [...availableShifts], 3: [...availableShifts], 4: [...availableShifts] });
+
         state.students[idx] = {
-          ...state.students[idx],
+          ...studentToUpdate,
           fullName,
           studentId,
           phone,
           role,
           availableShifts,
+          monthlyAvailableShifts: monthlyShifts,
           updatedAt: Date.now()
         };
         showToast(`Đã cập nhật sinh viên ${fullName}!`, 'success');
@@ -1577,6 +1708,7 @@
         phone,
         role,
         availableShifts,
+        monthlyAvailableShifts: { 1: [...availableShifts], 2: [...availableShifts], 3: [...availableShifts], 4: [...availableShifts] },
         createdAt: Date.now()
       };
       state.students.unshift(newStudent);
@@ -1588,6 +1720,21 @@
     renderAll();
     closeStudentModal();
   }
+
+  window.adminClearStudentShifts = function(studentId) {
+    const student = state.students.find(s => s.id === studentId);
+    if (!student) return;
+
+    if (confirm(`Bạn có chắc muốn xóa sạch toàn bộ ca rảnh của bạn "${student.fullName}" (MSSV: ${student.studentId}) về 0 ca không?`)) {
+      student.availableShifts = [];
+      student.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+      student.updatedAt = Date.now();
+      saveStudents();
+      runFullSchedule();
+      renderAll();
+      showToast(`Đã xóa sạch toàn bộ ca rảnh của bạn ${student.fullName} (về 0 ca)!`, 'success');
+    }
+  };
 
   window.adminDeleteStudent = function(studentId) {
     const student = state.students.find(s => s.id === studentId);
@@ -1977,32 +2124,32 @@
     }
 
     const oldCard = oldMem ? `
-      <div class="duty-member-card role-old" title="Người cũ - Có kinh nghiệm">
+      <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
         <div class="member-info">
-          <span class="member-role-tag">🎓 Người Cũ</span>
+          <span class="member-role-tag">🎓 Chính Thức</span>
           <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
         </div>
         <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
       </div>
     ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán người cũ ở Tuần ${weekNum}">
-        <span>+ Chưa có Người Cũ</span>
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Chính Thức ở Tuần ${weekNum}">
+        <span>+ Chưa có Chính Thức</span>
       </div>
     `;
 
     const newCard = newMem ? `
-      <div class="duty-member-card role-new" title="Người mới - Tập sự">
+      <div class="duty-member-card role-new" title="Tập Sự">
         <div class="member-info">
-          <span class="member-role-tag">🌱 Người Mới</span>
+          <span class="member-role-tag">🌱 Tập Sự</span>
           <span class="member-name">${escapeHtml(newMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
         </div>
         <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
       </div>
     ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán người mới ở Tuần ${weekNum}">
-        <span>+ Chưa có Người Mới</span>
+      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Tập Sự ở Tuần ${weekNum}">
+        <span>+ Chưa có Tập Sự</span>
       </div>
     `;
 
@@ -2220,8 +2367,8 @@
         ? `<span class="badge" style="background:#fef3c7; color:#92400e;">🔄 Ghi đè</span>`
         : `<span class="badge" style="background:#d1fae5; color:#065f46;">🌱 Thêm mới</span>`;
       const roleBadge = c.role === 'old'
-        ? `<span class="badge badge-old" style="font-size:0.7rem;">🎓 Người cũ</span>`
-        : `<span class="badge badge-new" style="font-size:0.7rem;">🌱 Người mới</span>`;
+        ? `<span class="badge badge-role-old" style="font-size:0.7rem;">🎓 Chính Thức</span>`
+        : `<span class="badge badge-role-new" style="font-size:0.7rem;">🌱 Tập Sự</span>`;
 
       return `
         <tr>
@@ -3667,8 +3814,8 @@
             </div>
             <div style="display: flex; gap: 0.4rem;">
               <button type="button" class="btn btn-secondary btn-sm payroll-role-filter active" data-role="all" style="font-weight: 700;">Tất cả (${totalStudents})</button>
-              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="old" style="font-weight: 700;">🎓 Người cũ</button>
-              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="new" style="font-weight: 700;">🌱 Người mới</button>
+              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="old" style="font-weight: 700;">🎓 Chính Thức</button>
+              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="new" style="font-weight: 700;">🌱 Tập Sự</button>
             </div>
           </div>
 
@@ -3768,8 +3915,8 @@
 
     return list.map((item, idx) => {
       const roleBadge = item.role === 'old'
-        ? `<span class="badge" style="background: #faf5ff; color: #7e22ce; border: 1px solid #d8b4fe; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 9999px;">🎓 Người cũ</span>`
-        : `<span class="badge" style="background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 9999px;">🌱 Người mới</span>`;
+        ? `<span class="badge badge-role-old" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🎓 Chính Thức</span>`
+        : `<span class="badge badge-role-new" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🌱 Tập Sự</span>`;
 
       const officeDetails = item.officeShiftDetails && item.officeShiftDetails.length > 0
         ? item.officeShiftDetails.join(', ')
@@ -4088,8 +4235,8 @@
         listContainer.innerHTML = studentList.map(st => {
           const isOld = st.role === 'old';
           const roleBadge = isOld 
-            ? '<span class="badge" style="background: #ede9fe; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem;">🎓 Người cũ</span>'
-            : '<span class="badge" style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; font-size: 0.72rem;">🌱 Người mới</span>';
+            ? '<span class="badge badge-role-old" style="font-size: 0.72rem;">🎓 Chính Thức</span>'
+            : '<span class="badge badge-role-new" style="font-size: 0.72rem;">🌱 Tập Sự</span>';
 
           return `
             <label class="event-student-item" for="cb-evt-st-${escapeHtml(st.id)}" data-role="${escapeHtml(st.role || 'new')}">
@@ -4458,8 +4605,8 @@
     tbody.innerHTML = filtered.map((item, idx) => {
       const isOld = item.role === 'old';
       const roleBadge = isOld 
-        ? '<span class="badge" style="background: #ede9fe; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full);">🎓 Người cũ</span>'
-        : '<span class="badge" style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full);">🌱 Người mới</span>';
+        ? '<span class="badge badge-role-old" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🎓 Chính Thức</span>'
+        : '<span class="badge badge-role-new" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🌱 Tập Sự</span>';
 
       return `
         <tr>
@@ -4596,7 +4743,7 @@
     const eventListEl = document.getElementById('payroll-detail-event-list');
 
     if (nameEl) nameEl.textContent = `👤 Chi Tiết Công Trực: ${item.fullName}`;
-    if (metaEl) metaEl.textContent = `MSSV: ${item.studentMssv || '-'} • ${item.role === 'old' ? '🎓 Người cũ' : '🌱 Người mới'}`;
+    if (metaEl) metaEl.textContent = `MSSV: ${item.studentMssv || '-'} • ${item.role === 'old' ? '🎓 Chính Thức' : '🌱 Tập Sự'}`;
     if (officeCountEl) officeCountEl.textContent = `${item.officeShiftsCount || 0} ca`;
     if (eventCountEl) eventCountEl.textContent = `${item.eventCount || 0} sự kiện (${item.eventWorkUnits || 0} công)`;
 
