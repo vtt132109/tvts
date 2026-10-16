@@ -4417,7 +4417,7 @@
               🏢 ${item.officeShiftsCount || 0} ca
             </span>
           </td>
-          <td style="text-align: center;">
+          <td style="text-align: center; display: none;">
             <span class="badge-event-shifts">
               🎟️ ${item.eventCount || 0} buổi (${item.eventWorkUnits || 0} công)
             </span>
@@ -4428,7 +4428,7 @@
             </span>
           </td>
           <td style="text-align: center;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminOpenPayrollStudentDetail('${escapeHtml(item.studentId)}')" title="Xem chi tiết các ca trực và sự kiện của bạn này" style="font-size: 0.78rem; padding: 0.25rem 0.55rem; font-weight: 700;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.adminOpenPayrollStudentDetail('${escapeHtml(item.studentId)}')" title="Xem chi tiết các ca trực của bạn này" style="font-size: 0.78rem; padding: 0.25rem 0.55rem; font-weight: 700;">
               👁️ Chi tiết
             </button>
           </td>
