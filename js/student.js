@@ -778,7 +778,7 @@
   }
 
   /**
-   * Tự động nhận diện MSSV: kiểm tra xem đã đăng ký trước đó chưa
+   * Tự động nhận diện MSSV: kiểm tra xem đã từng đăng ký ca rảnh trước đó chưa
    */
   function handleMssvAutoDetect() {
     updateMatrixGateState();
@@ -798,10 +798,23 @@
 
     const matched = students.find(s => s.studentId && s.studentId.toLowerCase() === rawInput.toLowerCase());
 
-    if (matched) {
+    // Chỉ coi là đã có đăng ký ca rảnh nếu thực sự CÓ ÍT NHẤT 1 CA RẢNH ĐÃ CHỌN
+    const hasRegisteredShifts = matched && (
+      (Array.isArray(matched.availableShifts) && matched.availableShifts.length > 0) ||
+      (matched.monthlyAvailableShifts && typeof matched.monthlyAvailableShifts === 'object' &&
+        Object.values(matched.monthlyAvailableShifts).some(arr => Array.isArray(arr) && arr.length > 0))
+    );
+
+    if (matched && hasRegisteredShifts) {
       detectedStudent = matched;
-      renderMssvAlertBox(matched);
       populateStudentData(matched);
+      updateSubmitButtonState();
+    } else if (matched) {
+      // Có hồ sơ trong hệ thống nhưng CHƯA TỪNG ĐĂNG KÝ CA RẢNH NÀO
+      detectedStudent = matched;
+      monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+      syncCheckboxesWithActiveWeek();
+      updateSelectedCount();
       updateSubmitButtonState();
     } else {
       clearDetectedStudentState(false);
@@ -841,93 +854,21 @@
     updateSelectedCount();
 
     if (elements.mssvLiveTag) {
-      elements.mssvLiveTag.style.display = 'inline-block';
-      elements.mssvLiveTag.className = 'badge-tag';
-      elements.mssvLiveTag.style.background = '#2563eb';
-      elements.mssvLiveTag.style.color = '#ffffff';
-      elements.mssvLiveTag.style.fontSize = '0.75rem';
-      elements.mssvLiveTag.style.padding = '2px 8px';
-      elements.mssvLiveTag.style.borderRadius = '10px';
-      elements.mssvLiveTag.textContent = '✓ Đã đăng ký';
+      elements.mssvLiveTag.style.display = 'none';
     }
 
     if (elements.inputStudentId) {
-      elements.inputStudentId.style.borderColor = '#3b82f6';
-      elements.inputStudentId.style.backgroundColor = '#eff6ff';
+      elements.inputStudentId.style.borderColor = '';
+      elements.inputStudentId.style.backgroundColor = '';
     }
   }
 
-  function renderMssvAlertBox(student) {
-    if (!elements.mssvAlertBox) return;
-
-    const mShifts = student.monthlyAvailableShifts || {
-      1: student.availableShifts || [],
-      2: student.availableShifts || [],
-      3: student.availableShifts || [],
-      4: student.availableShifts || []
-    };
-
-    const c1 = (mShifts[1] || []).length;
-    const c2 = (mShifts[2] || []).length;
-    const c3 = (mShifts[3] || []).length;
-    const c4 = (mShifts[4] || []).length;
-    const totalMonthCount = c1 + c2 + c3 + c4;
-
-    elements.mssvAlertBox.style.display = 'block';
-    elements.mssvAlertBox.innerHTML = `
-      <div class="mssv-detected-card">
-        <div class="mssv-detected-header">
-          <span class="badge-registered">✓ ĐÃ HOÀN TẤT ĐĂNG KÝ TRƯỚC ĐÓ</span>
-          <button type="button" class="btn-reset-form" id="btn-reset-mssv-form" title="Xóa form để đăng ký cho bạn khác">
-            ✕ Đăng ký MSSV khác
-          </button>
-        </div>
-        <div class="mssv-detected-headline">
-          Hệ thống nhận diện MSSV <strong>${escapeHtml(student.studentId)}</strong> đã có dữ liệu đăng ký!
-        </div>
-        <p class="mssv-detected-desc">
-          Bạn <strong>đã đăng ký trước đó</strong>. Hệ thống đã tự động nạp lại và <strong>đánh dấu sẵn ${totalMonthCount} ca rảnh trong Tháng 10/2026</strong> ở bảng bên dưới.
-        </p>
-        <div class="mssv-detected-data">
-          ${student.fullName ? `<div class="mssv-data-item">Họ tên: <strong>${escapeHtml(student.fullName)}</strong></div>` : ''}
-          <div class="mssv-data-item">MSSV: <strong>${escapeHtml(student.studentId)}</strong></div>
-          <div class="mssv-data-item">Tổng ca rảnh: <strong style="color: var(--primary);">${totalMonthCount} ca / tháng</strong></div>
-        </div>
-        <div style="margin-top: 0.75rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.4rem;">
-            Phân bổ ca rảnh 4 tuần Tháng 10/2026:
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 0.5rem;">
-            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 1 (05/10 - 09/10)</div>
-              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c1} ca rảnh</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 2 (12/10 - 16/10)</div>
-              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c2} ca rảnh</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 3 (19/10 - 23/10)</div>
-              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c3} ca rảnh</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 4 (26/10 - 30/10)</div>
-              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c4} ca rảnh</div>
-            </div>
-          </div>
-        </div>
-        <div class="mssv-detected-actions">
-          <span>
-            ${isRegOpen ? '💡 <em>Cổng đăng ký đang mở: Bạn có thể chọn các tab tuần để xem/sửa lại ca và bấm "Gửi Đăng Ký Ca Trực" nếu muốn cập nhật.</em>' : '🔒 <em>Cổng đăng ký đang đóng: Lịch rảnh của bạn đã được chốt và đưa vào xếp ca.</em>'}
-          </span>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('btn-reset-mssv-form')?.addEventListener('click', () => {
-      clearStudentForm();
-      showToast('Đã làm mới form để đăng ký cho sinh viên khác.', 'info');
-    });
+  function renderMssvAlertBox() {
+    // Đã loại bỏ hoàn toàn khối thông báo banner mssv-detected-card theo yêu cầu của Tris
+    if (elements.mssvAlertBox) {
+      elements.mssvAlertBox.style.display = 'none';
+      elements.mssvAlertBox.innerHTML = '';
+    }
   }
 
   function clearDetectedStudentState(resetInputs = false) {
