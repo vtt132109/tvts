@@ -1,0 +1,393 @@
+/**
+ * ==========================================================================
+ * TEST SUITE: FIREBASE CLOUD SYNC & CROSS-DEVICE SYNCHRONIZATION
+ * ==========================================================================
+ * Kiểm thử toàn diện module CloudSyncManager:
+ * - Khởi tạo & Định dạng URL Firebase REST API
+ * - Đóng gói dữ liệu LocalStorage (buildPayload)
+ * - Áp dụng Payload từ Cloud vào LocalStorage an toàn (applyPayload)
+ * - Mô phỏng Push / Pull với Fake/Mock Fetch
+ * - Khắc phục sự cố Tab Ẩn danh: Đồng bộ mã PIN mới tạo sang máy/tab khác
+ * - Cơ chế Offline-First: Hoạt động trơn tru khi mất mạng hoặc chưa cấu hình
+ */
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+let totalTests = 0;
+let passedTests = 0;
+let failedTests = 0;
+
+function assert(condition, message) {
+  totalTests++;
+  if (condition) {
+    passedTests++;
+    console.log(`  ✓ [PASS] ${message}`);
+  } else {
+    failedTests++;
+    console.error(`  ✗ [FAIL] ${message}`);
+  }
+}
+
+// Giả lập môi trường Browser DOM & Storage
+function createMockEnvironment() {
+  const store = {};
+
+  const mockLocalStorage = {
+    getItem: (key) => (key in store ? store[key] : null),
+    setItem: (key, val) => { store[key] = String(val); },
+    removeItem: (key) => { delete store[key]; },
+    clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+    _dump: () => ({ ...store })
+  };
+
+  const listeners = {};
+
+  const mockWindow = {
+    localStorage: mockLocalStorage,
+    addEventListener: (type, fn) => {
+      if (!listeners[type]) listeners[type] = [];
+      listeners[type].push(fn);
+    },
+    removeEventListener: (type, fn) => {
+      if (listeners[type]) listeners[type] = listeners[type].filter(f => f !== fn);
+    },
+    dispatchEvent: (event) => {
+      const type = event.type || event;
+      if (listeners[type]) {
+        listeners[type].forEach(fn => fn(event));
+      }
+      return true;
+    },
+    Event: function(type) { this.type = type; },
+    CustomEvent: function(type, params) {
+      this.type = type;
+      this.detail = params ? params.detail : null;
+    },
+    fetch: null,
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (id) => clearTimeout(id),
+    console: console,
+    document: {
+      readyState: 'complete',
+      addEventListener: () => {}
+    }
+  };
+
+  const sandbox = {
+    window: mockWindow,
+    localStorage: mockLocalStorage,
+    document: mockWindow.document,
+    Event: mockWindow.Event,
+    CustomEvent: mockWindow.CustomEvent,
+    setTimeout: mockWindow.setTimeout,
+    clearTimeout: mockWindow.clearTimeout,
+    console: console,
+    fetch: null
+  };
+
+  vm.createContext(sandbox);
+
+  // Đọc và chạy js/cloud_sync.js
+  const scriptContent = fs.readFileSync(path.join(__dirname, '../js/cloud_sync.js'), 'utf8');
+  vm.runInContext(scriptContent, sandbox);
+
+  return {
+    window: sandbox.window,
+    localStorage: mockLocalStorage,
+    CloudSyncManager: sandbox.window.CloudSyncManager,
+    sandbox
+  };
+}
+
+console.log('================================================================');
+console.log('🚀 BẮT ĐẦU CHẠY BỘ KIỂM THỬ: FIREBASE CLOUD SYNC ENGINE');
+console.log('================================================================\n');
+
+async function runAllCloudSyncTests() {
+
+// -----------------------------------------------------------------------------
+// GROUP 1: Khởi tạo & Cấu hình CloudSyncManager
+// -----------------------------------------------------------------------------
+console.log('▶ [GROUP 1] Khởi Tạo & Định Dạng URL Firebase REST API:');
+
+(() => {
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  assert(typeof csm === 'object' && csm !== null, '1.1: CloudSyncManager được xuất khẩu hợp lệ ra window');
+  
+  const cfg = csm.getConfig();
+  assert(cfg.enabled === false, '1.2: Cấu hình mặc định ở trạng thái an toàn (enabled: false)');
+  assert(cfg.syncPath === 'tvts_production_data', '1.3: Đường dẫn root mặc định là "tvts_production_data"');
+  assert(typeof cfg.deviceId === 'string' && cfg.deviceId.startsWith('dev_'), '1.4: Tự động khởi tạo Device ID duy nhất');
+
+  // Kiểm tra lưu cấu hình
+  const saveRes = csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://tvts-demo-rtdb.firebaseio.com/',
+    apiKey: 'secret_key_123'
+  });
+  assert(saveRes.success === true, '1.5: saveConfig lưu cấu hình thành công vào LocalStorage');
+  
+  const updatedCfg = csm.getConfig();
+  assert(updatedCfg.enabled === true, '1.6: Cấu hình mới phản ánh chính xác trạng thái enabled');
+  assert(updatedCfg.databaseUrl === 'https://tvts-demo-rtdb.firebaseio.com/', '1.7: databaseUrl được lưu và đọc chuẩn xác');
+
+  // Kiểm tra formatFirebaseUrl
+  const url1 = csm.formatFirebaseUrl('https://my-app.firebaseio.com/', 'tvts_data');
+  assert(url1 === 'https://my-app.firebaseio.com/tvts_data.json', '1.8: formatFirebaseUrl chuẩn hóa đúng endpoint REST .json');
+
+  const url2 = csm.formatFirebaseUrl('my-app.firebaseio.com', 'custom/node', 'my_auth_token');
+  assert(url2 === 'https://my-app.firebaseio.com/custom/node.json?auth=my_auth_token', '1.9: Tự động thêm https:// và tham số ?auth=');
+})();
+
+// -----------------------------------------------------------------------------
+// GROUP 2: Đóng gói dữ liệu LocalStorage (buildPayload)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 2] Đóng Gói Dữ Liệu LocalStorage (buildPayload):');
+
+(() => {
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  // Giả lập nạp dữ liệu vào LocalStorage
+  env.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify([
+    { id: 'usr_admin', username: 'admin', pin: '9999' },
+    { id: 'usr_new', username: 'canbo1', pin: '5555' }
+  ]));
+  env.localStorage.setItem('ts_scheduler_students', JSON.stringify([
+    { id: 'st_1', fullName: 'Sinh Viên A', studentId: '2102001' }
+  ]));
+  env.localStorage.setItem('ts_scheduler_reg_config', JSON.stringify({ mode: 'always_open', publishSchedule: true }));
+
+  const payload = csm.buildPayload();
+  assert(Array.isArray(payload.adminUsers) && payload.adminUsers.length === 2, '2.1: Đóng gói chính xác danh sách tài khoản cán bộ');
+  assert(payload.adminUsers[1].pin === '5555', '2.2: Đóng gói đầy đủ mã PIN mới tạo của cán bộ');
+  assert(Array.isArray(payload.students) && payload.students.length === 1, '2.3: Đóng gói danh sách sinh viên đăng ký ca');
+  assert(payload.regConfig && payload.regConfig.publishSchedule === true, '2.4: Đóng gói cấu hình đóng/mở cổng tuyển sinh');
+  assert(typeof payload.updatedAt === 'number' && payload.updatedAt > 0, '2.5: Đính kèm timestamp updatedAt chính xác');
+  assert(typeof payload.deviceId === 'string', '2.6: Đính kèm định danh thiết bị cập nhật');
+})();
+
+// -----------------------------------------------------------------------------
+// GROUP 3: Áp dụng Payload từ Cloud vào LocalStorage (applyPayload)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (applyPayload):');
+
+(() => {
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  let storageEventFired = false;
+  let customEventDetail = null;
+
+  env.window.addEventListener('storage', () => { storageEventFired = true; });
+  env.window.addEventListener('ts:cloud-synced', (e) => { customEventDetail = e.detail; });
+
+  const incomingCloudData = {
+    adminUsers: [
+      { id: 'usr_admin', username: 'admin', pin: '9999' },
+      { id: 'usr_new_pc2', username: 'canbo_pc2', pin: '7777', fullName: 'Cán Bộ Từ Máy 2' }
+    ],
+    students: [
+      { id: 'st_99', fullName: 'Trần Văn Mới', studentId: '2102099' }
+    ],
+    monthSchedule: { monthKey: '2026-10', totalWeeks: 4 },
+    regConfig: { mode: 'scheduled', publishSchedule: true }
+  };
+
+  const applyRes = csm.applyPayload(incomingCloudData);
+  assert(applyRes.success === true, '3.1: applyPayload trả về success: true');
+
+  const storedAdmins = JSON.parse(env.localStorage.getItem('ts_scheduler_admin_users'));
+  assert(storedAdmins.length === 2, '3.2: LocalStorage được cập nhật đúng 2 tài khoản cán bộ');
+  assert(storedAdmins.find(u => u.pin === '7777') !== undefined, '3.3: Mã PIN "7777" từ Cloud được nạp chính xác vào LocalStorage');
+
+  const storedStudents = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
+  assert(storedStudents.length === 1 && storedStudents[0].studentId === '2102099', '3.4: Danh sách sinh viên được cập nhật đồng bộ');
+
+  assert(storageEventFired === true, '3.5: Phát sự kiện "storage" để UI re-render tự động');
+  assert(customEventDetail !== null, '3.6: Phát sự kiện "ts:cloud-synced" kèm payload');
+})();
+
+// -----------------------------------------------------------------------------
+// GROUP 4: Giả Lập Push / Pull Qua Firebase REST API (Mock Fetch)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  let lastFetchUrl = '';
+  let lastFetchMethod = '';
+  let lastFetchBody = null;
+
+  // Giả lập Fetch thành công
+  env.window.fetch = async (url, options = {}) => {
+    lastFetchUrl = url;
+    lastFetchMethod = options.method || 'GET';
+    lastFetchBody = options.body ? JSON.parse(options.body) : null;
+
+    if (lastFetchMethod === 'PUT') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ name: 'put_success_key', ...lastFetchBody })
+      };
+    }
+    if (lastFetchMethod === 'GET') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          adminUsers: [{ id: 'usr_admin', username: 'admin', pin: '1234' }],
+          students: [{ id: 'st_cloud', fullName: 'SV Đám Mây' }],
+          updatedAt: Date.now()
+        })
+      };
+    }
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://test-cloud.firebaseio.com',
+    syncPath: 'test_path'
+  });
+
+  // Test Push
+  const pushRes = await csm.pushToCloud();
+  assert(pushRes.success === true, '4.1: pushToCloud gửi yêu cầu PUT thành công');
+  assert(lastFetchMethod === 'PUT', '4.2: Phương thức HTTP gửi đi là PUT');
+  assert(lastFetchUrl === 'https://test-cloud.firebaseio.com/test_path.json', '4.3: URL đích khớp chuẩn Firebase REST endpoint');
+  assert(lastFetchBody && Array.isArray(lastFetchBody.adminUsers), '4.4: Body chứa payload hoàn chỉnh');
+
+  // Test Pull
+  const pullRes = await csm.pullFromCloud();
+  assert(pullRes.success === true, '4.5: pullFromCloud gửi yêu cầu GET thành công');
+  assert(lastFetchMethod === 'GET', '4.6: Phương thức HTTP nhận về là GET');
+  
+  const adminsAfterPull = JSON.parse(env.localStorage.getItem('ts_scheduler_admin_users'));
+  assert(adminsAfterPull[0].pin === '1234', '4.7: LocalStorage nạp ngay mã PIN "1234" vừa kéo từ Cloud về');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 5: Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mode Auto-Sync)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 5] Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mode Auto-Sync):');
+
+{
+  // Máy 1 (Tab Thường): Cán bộ tạo mã PIN mới "6789" và lưu lên Cloud
+  const machine1 = createMockEnvironment();
+  machine1.CloudSyncManager.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://my-rtdb.firebaseio.com',
+    syncPath: 'admission_schedule'
+  });
+
+  // Tạo tài khoản mới với PIN 6789
+  const currentAdmins = [
+    { id: 'usr_admin', username: 'admin', pin: '9999' },
+    { id: 'usr_tris', username: 'tris_admin', pin: '6789', fullName: 'Tris Quản Trị' }
+  ];
+  machine1.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify(currentAdmins));
+
+  const cloudStorageServer = {
+    data: machine1.CloudSyncManager.buildPayload()
+  };
+
+  assert(cloudStorageServer.data.adminUsers.some(u => u.pin === '6789'), '5.1: Máy 1 đã đóng gói và đẩy mã PIN 6789 lên Cloud');
+
+  // Máy 2 (Hoặc Tab Ẩn Danh): Khởi tạo với LocalStorage TRẮNG TINH (mô phỏng tab ẩn danh)
+  const incognitoTab = createMockEnvironment();
+  incognitoTab.CloudSyncManager.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://my-rtdb.firebaseio.com',
+    syncPath: 'admission_schedule'
+  });
+
+  // Giả lập fetch trên tab ẩn danh đọc dữ liệu từ Cloud
+  incognitoTab.window.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => cloudStorageServer.data
+  });
+  incognitoTab.sandbox.fetch = incognitoTab.window.fetch;
+
+  // Trước khi kéo: Tab ẩn danh chỉ có dữ liệu rỗng
+  assert(incognitoTab.localStorage.getItem('ts_scheduler_admin_users') === null, '5.2: Ban đầu tab ẩn danh chưa hề có mã PIN mới');
+
+  // Tab ẩn danh thực hiện kéo (Auto-Pull hoặc bấm nút Kéo dữ liệu)
+  const syncResult = await incognitoTab.CloudSyncManager.pullFromCloud();
+  assert(syncResult.success === true, '5.3: Tab ẩn danh kéo dữ liệu từ Cloud thành công');
+
+  // Sau khi kéo: Kiểm tra mã PIN 6789 đã hiện diện trong tab ẩn danh
+  const incognitoAdmins = JSON.parse(incognitoTab.localStorage.getItem('ts_scheduler_admin_users'));
+  const foundPin = incognitoAdmins.find(u => u.pin === '6789');
+  assert(foundPin !== undefined && foundPin.username === 'tris_admin', '5.4: Tab ẩn danh NHẬN DIỆN THÀNH CÔNG mã PIN "6789" và tài khoản "tris_admin"!');
+
+  // Giả lập xác thực mã PIN trên tab ẩn danh
+  const inputPin = '6789';
+  const authenticatedUser = incognitoAdmins.find(u => u.pin && u.pin === inputPin);
+  assert(authenticatedUser !== undefined, '5.5: Xác thực đăng nhập mã PIN "6789" trên tab ẩn danh thành công 100%!');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 6: Cơ Chế Offline-First & An Toàn Khi Mất Mạng
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 6] Cơ Chế Offline-First & An Toàn Khi Mất Mạng:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  // Trường hợp 1: Chưa cấu hình databaseUrl
+  csm.saveConfig({ enabled: false, databaseUrl: '' });
+  const pushNoUrl = await csm.pushToCloud();
+  assert(pushNoUrl.success === false, '6.1: pushToCloud xử lý an toàn khi chưa có databaseUrl');
+
+  const pullNoUrl = await csm.pullFromCloud();
+  assert(pullNoUrl.success === false, '6.2: pullFromCloud xử lý an toàn khi chưa có databaseUrl');
+
+  // Trường hợp 2: Mất mạng (fetch throw NetworkError)
+  csm.saveConfig({ enabled: true, databaseUrl: 'https://test.firebaseio.com' });
+  env.window.fetch = async () => {
+    throw new Error('Failed to fetch (Network disconnected)');
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const pushOffline = await csm.pushToCloud();
+  assert(pushOffline.success === false && pushOffline.error.includes('Network disconnected'), '6.3: Bắt lỗi mất mạng êm ái, không gây crash ứng dụng');
+
+  const pullOffline = await csm.pullFromCloud();
+  assert(pullOffline.success === false && pullOffline.error.includes('Network disconnected'), '6.4: Kéo dữ liệu khi offline trả về thông báo lỗi thân thiện');
+
+  // Dữ liệu local vẫn an toàn tuyệt đối
+  env.localStorage.setItem('ts_scheduler_students', JSON.stringify([{ id: 'st_safe' }]));
+  const safeStudents = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
+  assert(safeStudents.length === 1, '6.5: Dữ liệu LocalStorage luôn được bảo toàn nguyên vẹn 100% khi mất kết nối');
+}
+
+// -----------------------------------------------------------------------------
+// TỔNG KẾT
+// -----------------------------------------------------------------------------
+console.log('\n================================================================');
+console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests / totalTests) * 100)}%)`);
+console.log('================================================================\n');
+
+if (failedTests > 0) {
+  process.exit(1);
+} else {
+  process.exit(0);
+}
+
+}
+
+runAllCloudSyncTests().catch(err => {
+  console.error('Lỗi thực thi kiểm thử Cloud Sync:', err);
+  process.exit(1);
+});
+

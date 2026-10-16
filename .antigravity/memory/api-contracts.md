@@ -284,3 +284,47 @@ interface MonthWeekInfo {
     - Nếu sinh viên có `s.monthlyAvailableShifts && s.monthlyAvailableShifts[w]`: sử dụng mảng ca rảnh riêng biệt của tuần `w`.
     - Nếu không có (sinh viên cũ hoặc trong test case chỉ có `availableShifts`): tự động fallback về `s.availableShifts`.
 - Bảo đảm tính công bằng lũy kế (cumulative fairness) và chống đói ca vẫn phát huy hiệu quả tối đa theo đúng ca rảnh mà sinh viên đã chọn trong từng tuần.
+
+---
+
+## 10. HỢP ĐỒNG ĐỒNG BỘ ĐÁM MÂY ĐA THIẾT BỊ (FIREBASE CLOUD SYNC ARCHITECTURE)
+
+### A. Mô Hình Đồng Bộ Hybrid (Offline-First / Cloud-Synced)
+- **Mục tiêu:** Cho phép mọi máy tính, điện thoại và cả Tab Ẩn Danh (Incognito) tự động nhận diện tài khoản, mã PIN mới tạo, lịch trực và dữ liệu sinh viên một cách tức thì.
+- **Phương thức:** Sử dụng Firebase Realtime Database REST API native (không phụ thuộc SDK nặng nề bên thứ ba, hoạt động trên mọi môi trường trình duyệt).
+
+### B. Cấu Trúc Dữ Liệu Đồng Bộ (`CloudSyncPayload`):
+```typescript
+interface CloudSyncConfig {
+  enabled: boolean;             // Bật/tắt chế độ đồng bộ đám mây
+  provider: 'firebase';         // Dịch vụ đám mây
+  databaseUrl: string;          // Ví dụ: 'https://tvts-schedule-default-rtdb.firebaseio.com'
+  apiKey?: string;              // Khóa bảo mật tùy chọn (nếu có)
+  syncPath: string;             // Đường dẫn root trên Firebase (mặc định: 'tvts_production_data')
+  autoSync: boolean;            // Tự động đẩy dữ liệu khi có thay đổi trên local
+  lastSyncTime?: number;        // Timestamp lần đồng bộ gần nhất
+}
+
+interface CloudSyncPayload {
+  adminUsers: AdminUserItem[];  // Danh sách tài khoản cán bộ kèm mật khẩu & mã PIN mới nhất
+  students: StudentItem[];      // Danh sách sinh viên đăng ký ca
+  scheduleResult: any;          // Kết quả phân ca tuần
+  monthSchedule: any;           // Lịch phân ca 4 tuần
+  regConfig: any;               // Cấu hình đóng/mở cổng tuyển sinh
+  events: any[];                // Danh sách sự kiện ngoại kiểm / tour
+  webBackups: any[];            // Các bản sao lưu 6 tháng
+  updatedAt: number;            // Timestamp cập nhật
+  updatedByDeviceId: string;    // Định danh thiết bị cập nhật
+}
+```
+
+### C. Cơ Chế Auto-Pull & Auto-Push:
+1. **Auto-Pull (Kéo dữ liệu khi mở web):**
+   - Khi `admin.html` hoặc `index.html` được tải (bao gồm cả khi mở trong Tab Ẩn danh):
+   - Nếu có cấu hình Firebase khả dụng, `CloudSyncManager.pullFromCloud()` sẽ tải dữ liệu mới nhất từ Firebase về nạp vào `localStorage` và `state`.
+   - Nhờ đó, mã PIN mới tạo ở Máy A sẽ tự động xuất hiện ở Máy B hoặc Tab Ẩn Danh ngay lập tức.
+2. **Auto-Push (Đẩy dữ liệu khi có thay đổi):**
+   - Mỗi khi Admin thêm/sửa tài khoản, đổi mã PIN, lưu lịch trực, hoặc sinh viên đăng ký ca:
+   - Dữ liệu được lưu vào `localStorage` trước, sau đó `CloudSyncManager.pushToCloud()` đẩy payload lên Firebase REST API.
+3. **Fallback Offline-First:**
+   - Khi mất mạng hoặc chưa cấu hình Firebase, toàn bộ ứng dụng hoạt động 100% trơn tru bằng `localStorage` như bình thường.
