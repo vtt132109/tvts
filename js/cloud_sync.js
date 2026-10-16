@@ -20,7 +20,9 @@
     ADMIN_USERS: 'ts_scheduler_admin_users',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
-    EVENTS: 'ts_scheduler_events_v1'
+    EVENTS: 'ts_scheduler_events_v1',
+    ALL_MONTHS: 'ts_scheduler_all_months_v1',
+    ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
   // Cấu hình đồng bộ mặc định (Tích hợp sẵn Cơ sở dữ liệu Firebase của Ban Tuyển Sinh)
@@ -110,7 +112,12 @@
     function readKey(k, defaultValue) {
       try {
         const raw = localStorage.getItem(k);
-        return raw ? JSON.parse(raw) : defaultValue;
+        if (raw === null || raw === undefined) return defaultValue;
+        try {
+          return JSON.parse(raw);
+        } catch (jsonErr) {
+          return raw;
+        }
       } catch (e) {
         return defaultValue;
       }
@@ -135,6 +142,9 @@
       swapRequests: readKey(STORAGE_KEYS.SWAP_REQUESTS, []),
       events: readKey(STORAGE_KEYS.EVENTS, []),
       webBackups: readKey(STORAGE_KEYS.WEB_BACKUPS, []),
+      allMonthSchedules: readKey(STORAGE_KEYS.ALL_MONTHS, {}),
+      allMonths: readKey(STORAGE_KEYS.ALL_MONTHS, {}),
+      activeMonth: readKey(STORAGE_KEYS.ACTIVE_MONTH, null),
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
       version: '1.0'
@@ -196,6 +206,14 @@
       }
       if (Array.isArray(payload.swapRequests)) {
         localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(payload.swapRequests));
+      }
+      const allMonthsData = payload.allMonthSchedules || payload.allMonths;
+      if (allMonthsData && typeof allMonthsData === 'object') {
+        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonthsData));
+      }
+      if (payload.activeMonth !== undefined && payload.activeMonth !== null) {
+        const activeMonthVal = typeof payload.activeMonth === 'object' ? JSON.stringify(payload.activeMonth) : String(payload.activeMonth);
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, activeMonthVal);
       }
 
       // Cập nhật timestamp lần đồng bộ

@@ -22,7 +22,9 @@
     CURRENT_USER: 'ts_admin_user_data',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
-    EVENTS: 'ts_scheduler_events_v1'
+    EVENTS: 'ts_scheduler_events_v1',
+    ALL_MONTHS: 'ts_scheduler_all_months_v1',
+    ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
   // Danh sách tài khoản cán bộ mặc định có quyền quản trị
@@ -79,6 +81,8 @@
     monthSchedule: null,
     viewWeek: 1, // 1, 2, 3, hoặc 4
     viewMode: 'single', // 'single' (từng tuần) hoặc 'master' (toàn cảnh 4 tuần)
+    currentMonth: 10,
+    currentYear: 2026,
     importedCandidates: [],
     activeTab: 'tab-schedule-mgmt',
     roleFilter: 'all',
@@ -159,6 +163,14 @@
       standbyBox: document.getElementById('admin-standby-box'),
       fairnessListOld: document.getElementById('fairness-list-old'),
       fairnessListNew: document.getElementById('fairness-list-new'),
+
+      // Month Navigator Elements (Task Month Switcher & Auto-Backup)
+      btnPrevMonth: document.getElementById('btn-admin-prev-month'),
+      btnNextMonth: document.getElementById('btn-admin-next-month'),
+      currentMonthTitle: document.getElementById('admin-current-month-title'),
+      monthStatusBadge: document.getElementById('admin-month-status-badge'),
+      selectQuickMonth: document.getElementById('admin-select-quick-month'),
+      timetableMonthSubtitle: document.getElementById('admin-timetable-month-subtitle'),
 
       // Registration Config Panel Elements
       regConfigForm: document.getElementById('admin-reg-config-form'),
@@ -793,6 +805,25 @@
       }
 
       try {
+        const rawActiveMonth = localStorage.getItem(STORAGE_KEYS.ACTIVE_MONTH);
+        if (rawActiveMonth) {
+          const parsed = JSON.parse(rawActiveMonth);
+          if (parsed && parsed.month) state.currentMonth = parseInt(parsed.month, 10);
+          if (parsed && parsed.year) state.currentYear = parseInt(parsed.year, 10);
+        } else {
+          const mStr = localStorage.getItem('ts_scheduler_active_month');
+          const yStr = localStorage.getItem('ts_scheduler_active_year');
+          if (mStr) state.currentMonth = parseInt(mStr, 10);
+          if (yStr) state.currentYear = parseInt(yStr, 10);
+        }
+      } catch (e) {}
+
+      if (state.monthSchedule && state.monthSchedule.month) {
+        state.currentMonth = state.monthSchedule.month;
+        if (state.monthSchedule.year) state.currentYear = state.monthSchedule.year;
+      }
+
+      try {
         state.events = EventManager.getEvents();
       } catch (e) {
         state.events = [];
@@ -826,6 +857,21 @@
     if (state.monthSchedule) {
       localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
       localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.monthSchedule));
+
+      const curY = state.currentYear || 2026;
+      const curM = state.currentMonth || 10;
+      let allMonths = {};
+      try {
+        const rawAll = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
+        if (rawAll) allMonths = JSON.parse(rawAll) || {};
+      } catch (e) {
+        allMonths = {};
+      }
+      allMonths[`${curY}-${String(curM).padStart(2, '0')}`] = state.monthSchedule;
+      try {
+        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: curM, year: curY }));
+      } catch (e) {}
     } else {
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
@@ -848,9 +894,11 @@
       return;
     }
 
-    // Xếp ca trọn vẹn 1 tháng (4 tuần)
+    // Xếp ca trọn vẹn 1 tháng (4 tuần) theo đúng Năm và Tháng đang chọn
+    const curY = state.currentYear || 2026;
+    const curM = state.currentMonth || 10;
     const monthEngine = window.SchedulerEngine?.runMonthSchedule || window.SchedulerEngine?.runTwoWeekSchedule;
-    const monthResult = monthEngine ? monthEngine(state.students) : null;
+    const monthResult = monthEngine ? monthEngine(state.students, curY, curM) : null;
     state.monthSchedule = monthResult;
     state.twoWeekSchedule = monthResult;
 
@@ -881,7 +929,187 @@
     }
   }
 
+  /**
+   * ==========================================================================
+   * ĐIỀU HƯỚNG THÁNG & TỰ ĐỘNG SAO LƯU KHI CHUYỂN THÁNG (TASK MONTH SWITCHER)
+   * ==========================================================================
+   */
+  function updateMonthNavigatorUI() {
+    const curM = state.currentMonth || 10;
+    const curY = state.currentYear || 2026;
+    const pad2 = (n) => String(n).padStart(2, '0');
+
+    // 1. Cập nhật tiêu đề tháng trên thẻ điều hướng
+    if (elements.currentMonthTitle) {
+      if (curM === 1 && curY === 2027) {
+        elements.currentMonthTitle.textContent = 'Tháng 01/2027 (Kỳ 13)';
+      } else {
+        elements.currentMonthTitle.textContent = `Tháng ${pad2(curM)}/${curY}`;
+      }
+    }
+
+    // 2. Cập nhật tiêu đề phụ trên bảng thời khóa biểu
+    if (elements.timetableMonthSubtitle) {
+      if (curM === 1 && curY === 2027) {
+        elements.timetableMonthSubtitle.textContent = 'Tháng 01/2027 (Kỳ 13)';
+      } else {
+        elements.timetableMonthSubtitle.textContent = `Tháng ${pad2(curM)}/${curY}`;
+      }
+    }
+
+    // 3. Cập nhật dropdown chọn nhanh
+    if (elements.selectQuickMonth) {
+      const targetVal = `${curY}-${pad2(curM)}`;
+      if (elements.selectQuickMonth.options && typeof elements.selectQuickMonth.options.length === 'number') {
+        let foundOption = false;
+        const opts = elements.selectQuickMonth.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (opts[i] && opts[i].value === targetVal) {
+            elements.selectQuickMonth.selectedIndex = i;
+            foundOption = true;
+            break;
+          }
+        }
+        if (!foundOption && typeof elements.selectQuickMonth.appendChild === 'function') {
+          try {
+            const opt = document.createElement('option');
+            opt.value = targetVal;
+            opt.textContent = (curM === 1 && curY === 2027) ? 'Tháng 01/2027 (Kỳ 13)' : `Tháng ${pad2(curM)}/${curY}`;
+            elements.selectQuickMonth.appendChild(opt);
+          } catch (e) {}
+        }
+      }
+      try {
+        elements.selectQuickMonth.value = targetVal;
+      } catch (e) {}
+    }
+
+    // 4. Cập nhật ngày tháng trên 4 nút chọn tuần (Tuần 1 -> Tuần 4)
+    let calWeeks = [];
+    if (window.SchedulerEngine?.MonthCalendarHelper) {
+      calWeeks = window.SchedulerEngine.MonthCalendarHelper.getMonthWeeks(curM, curY);
+    }
+    for (let w = 1; w <= 4; w++) {
+      const btn = document.getElementById(`btn-admin-week-${w}`);
+      if (btn && calWeeks[w - 1]) {
+        btn.innerHTML = `Tuần ${w} <span style="font-size:0.75rem; opacity:0.85; margin-left:3px; font-weight:600;">(${calWeeks[w - 1].startDateStr} - ${calWeeks[w - 1].endDateStr})</span>`;
+      }
+    }
+  }
+
+  async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
+    targetMonth = parseInt(targetMonth, 10);
+    targetYear = parseInt(targetYear, 10);
+    if (!targetMonth || !targetYear) return;
+
+    if (targetMonth === state.currentMonth && targetYear === state.currentYear) {
+      return;
+    }
+
+    const oldMonth = state.currentMonth || 10;
+    const oldYear = state.currentYear || 2026;
+    const pad2 = (n) => String(n).padStart(2, '0');
+
+    // 1. Tự động sao lưu tháng cũ nếu có ca trực đã xếp (theo yêu cầu của Tris)
+    if (autoBackup && state.monthSchedule && state.monthSchedule.weeks && state.monthSchedule.weeks.length > 0) {
+      const backupName = `Bản Chấm Công & Tự Động Sao Lưu Tháng ${pad2(oldMonth)}/${oldYear} (Chuyển kỳ)`;
+      try {
+        createWebBackup(backupName);
+        renderWebBackupsTable();
+        showToast(`📦 ĐÃ TỰ ĐỘNG SAO LƯU THÁNG ${pad2(oldMonth)}/${oldYear} VÀO BẢN SAO LƯU WEB & ĐÁM MÂY!`, 'info', 3500);
+      } catch (bkErr) {
+        console.warn('Lỗi tự động sao lưu khi chuyển tháng:', bkErr);
+      }
+    }
+
+    // Lưu lịch của tháng cũ vào kho lưu trữ allMonthSchedules
+    let allMonths = {};
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
+      if (raw) allMonths = JSON.parse(raw) || {};
+    } catch (e) {
+      allMonths = {};
+    }
+
+    if (state.monthSchedule) {
+      allMonths[`${oldYear}-${pad2(oldMonth)}`] = state.monthSchedule;
+      try {
+        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
+      } catch (e) {}
+    }
+
+    // 2. Chuyển sang tháng mới
+    state.currentMonth = targetMonth;
+    state.currentYear = targetYear;
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: targetMonth, year: targetYear }));
+      localStorage.setItem('ts_scheduler_active_month', String(targetMonth));
+      localStorage.setItem('ts_scheduler_active_year', String(targetYear));
+    } catch (e) {}
+
+    // 3. Khôi phục lịch tháng mới nếu đã lưu trước đó, hoặc tự động phân bổ lịch cho tháng mới
+    const targetKey = `${targetYear}-${pad2(targetMonth)}`;
+    if (allMonths[targetKey]) {
+      state.monthSchedule = allMonths[targetKey];
+      state.twoWeekSchedule = allMonths[targetKey];
+      const weekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
+      state.currentSchedule = state.monthSchedule.weeks?.[weekIdx] || state.monthSchedule.week1 || state.monthSchedule;
+      saveSchedule(true);
+    } else {
+      runFullSchedule();
+    }
+
+    // 4. Cập nhật giao diện
+    updateMonthNavigatorUI();
+    renderAll();
+
+    // 5. Đồng bộ lên Firebase Cloud
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+      window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Month switch error:', err));
+    }
+
+    const monthLabel = (targetMonth === 1 && targetYear === 2027) ? 'Tháng 01/2027 (Kỳ 13)' : `Tháng ${pad2(targetMonth)}/${targetYear}`;
+    showToast(`📅 Đã chuyển sang ${monthLabel}! Bảng phân công đã được cập nhật ngày tháng tương ứng.`, 'success', 4000);
+  }
+
+  function goToNextMonth() {
+    let nextMonth = (state.currentMonth || 10) + 1;
+    let nextYear = state.currentYear || 2026;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+    switchAdminMonth(nextMonth, nextYear, true);
+  }
+
+  function goToPrevMonth() {
+    let prevMonth = (state.currentMonth || 10) - 1;
+    let prevYear = state.currentYear || 2026;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+    switchAdminMonth(prevMonth, prevYear, true);
+  }
+
+  function bindMonthNavigatorEvents() {
+    elements.btnPrevMonth?.addEventListener('click', goToPrevMonth);
+    elements.btnNextMonth?.addEventListener('click', goToNextMonth);
+    elements.selectQuickMonth?.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val) {
+        const parts = val.split('-');
+        if (parts.length === 2) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          switchAdminMonth(m, y, true);
+        }
+      }
+    });
+  }
+
   function bindEvents() {
+    bindMonthNavigatorEvents();
     elements.tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const targetTab = btn.getAttribute('data-tab');
@@ -1207,6 +1435,7 @@
   function renderAll() {
     renderSummary();
     renderStudentTable();
+    updateMonthNavigatorUI();
     if (state.viewMode === 'master') {
       renderMasterMonthGrid();
     } else {
@@ -1358,14 +1587,35 @@
       { key: 'T6', name: 'Thứ Sáu', sub: 'Thứ 6' }
     ];
 
+    const curM = state.currentMonth || 10;
+    const curY = state.currentYear || 2026;
+    let calendarWeeks = [];
+    if (window.SchedulerEngine && window.SchedulerEngine.MonthCalendarHelper) {
+      calendarWeeks = window.SchedulerEngine.MonthCalendarHelper.getMonthWeeks(curM, curY);
+    } else if (state.monthSchedule && state.monthSchedule.calendarWeeks) {
+      calendarWeeks = state.monthSchedule.calendarWeeks;
+    }
+
+    const currentWeekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
+    const activeWeekCalendar = calendarWeeks[currentWeekIdx] || null;
+
     let gridHtml = '';
 
-    gridHtml += `<div class="grid-cell grid-header"><span class="day-name">Ca / Ngày</span></div>`;
+    const weekRangeLabel = activeWeekCalendar ? ` (${activeWeekCalendar.startDateStr} - ${activeWeekCalendar.endDateStr})` : '';
+    gridHtml += `
+      <div class="grid-cell grid-header">
+        <span class="day-name">Ca / Ngày</span>
+        <span class="day-sub" style="font-size:0.75rem; color:var(--primary); font-weight:700;">Tuần ${state.viewWeek || 1}${weekRangeLabel}</span>
+      </div>
+    `;
+
     days.forEach(day => {
+      const dayInfo = activeWeekCalendar?.days?.[day.key];
+      const dateDisplay = dayInfo ? dayInfo.dateStr : '';
       gridHtml += `
         <div class="grid-cell grid-header">
           <span class="day-name">${day.name}</span>
-          <span class="day-sub">${day.sub}</span>
+          <span class="day-sub" style="font-weight:700; color:var(--primary); background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-top:2px; display:inline-block;">📅 ${dateDisplay || day.sub}</span>
         </div>
       `;
     });
@@ -2034,11 +2284,14 @@
   function renderMasterMonthGrid() {
     if (!elements.adminMasterMonthContainer) return;
 
+    const curMonth = state.currentMonth || 10;
+    const curYear = state.currentYear || 2026;
+
     if (!state.monthSchedule || !state.monthSchedule.weeks || state.monthSchedule.weeks.length === 0) {
       elements.adminMasterMonthContainer.innerHTML = `
         <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md); width: 100%;">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
-          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công 1 Tháng</h3>
+          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công Tháng ${String(curMonth).padStart(2, '0')}/${curYear}</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
             Nhấn "⚡ TỰ ĐỘNG PHÂN BỔ LỊCH TRỰC" ở trên để hệ thống tự động phân bổ trọn vẹn cả 4 tuần trong tháng!
           </p>
@@ -2048,6 +2301,13 @@
         </div>
       `;
       return;
+    }
+
+    let calendarWeeks = [];
+    if (window.SchedulerEngine && window.SchedulerEngine.MonthCalendarHelper) {
+      calendarWeeks = window.SchedulerEngine.MonthCalendarHelper.getMonthWeeks(curMonth, curYear);
+    } else if (state.monthSchedule && state.monthSchedule.calendarWeeks) {
+      calendarWeeks = state.monthSchedule.calendarWeeks;
     }
 
     const days = [
@@ -2062,16 +2322,20 @@
 
     state.monthSchedule.weeks.forEach((weekObj, wIdx) => {
       const weekNum = wIdx + 1;
+      const weekCal = calendarWeeks[wIdx] || null;
+      const dateRangeStr = weekCal ? ` (${weekCal.startDateStr} - ${weekCal.endDateStr}/${curYear})` : '';
       const schedule = weekObj.scheduleTable || {};
       const fullCount = weekObj.summary?.fullShifts || 0;
 
       let gridHtml = '';
       gridHtml += `<div class="grid-cell grid-header"><span class="day-name">Ca / Ngày</span></div>`;
       days.forEach(day => {
+        const dayInfo = weekCal?.days?.[day.key];
+        const dateStr = dayInfo ? dayInfo.dateStr : '';
         gridHtml += `
           <div class="grid-cell grid-header">
             <span class="day-name">${day.name}</span>
-            <span class="day-sub">${day.sub}</span>
+            <span class="day-sub" style="font-weight:700; color:var(--primary); font-size:0.75rem; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-top:2px; display:inline-block;">📅 ${dateStr || day.sub}</span>
           </div>
         `;
       });
@@ -2106,7 +2370,7 @@
         <div class="master-week-section" id="master-week-section-${weekNum}">
           <div class="master-week-header">
             <div class="master-week-title">
-              <span>🗓️ Tuần ${weekNum} (10 Ca Trực)</span>
+              <span>🗓️ Tuần ${weekNum}${dateRangeStr} (10 Ca Trực)</span>
               <span class="badge" style="background: ${fullCount === 10 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}; color: ${fullCount === 10 ? '#10b981' : '#f59e0b'}; font-size: 0.75rem;">
                 ${fullCount === 10 ? '✓ Đủ 10/10 ca' : `⚠️ Đã lấp đầy ${fullCount}/10 ca`}
               </span>
@@ -3447,6 +3711,9 @@
     try {
       localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
       window.dispatchEvent(new Event('storage'));
+      if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] WebBackups push error:', err));
+      }
     } catch (err) {
       console.error('Lỗi khi lưu bản sao lưu web:', err);
       showToast('Lỗi lưu trữ: Bộ nhớ LocalStorage trình duyệt có thể đã đầy!', 'error');
@@ -3462,14 +3729,14 @@
 
     const now = new Date();
     const createdAt = Date.now();
-    const monthNum = now.getMonth() + 1;
-    const yearNum = now.getFullYear();
+    const monthNum = state.currentMonth || (now.getMonth() + 1);
+    const yearNum = state.currentYear || now.getFullYear();
     const monthKey = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
-    const monthLabel = `Tháng ${monthNum}/${yearNum}`;
+    const monthLabel = `Tháng ${String(monthNum).padStart(2, '0')}/${yearNum}`;
 
     const defaultName = (typeof customName === 'string' && customName.trim())
       ? customName.trim()
-      : `Bản Chấm Công & Sao Lưu Tháng ${monthNum}/${yearNum}`;
+      : `Bản Chấm Công & Sao Lưu Tháng ${String(monthNum).padStart(2, '0')}/${yearNum}`;
 
     let studentList = (state.students && state.students.length > 0) ? state.students : [];
     if (studentList.length === 0) {
@@ -5831,6 +6098,10 @@
     document.getElementById('btn-hero-sync-cloud')?.addEventListener('click', window.adminForceSyncCloud);
     document.getElementById('btn-sync-students-cloud')?.addEventListener('click', window.adminForceSyncCloud);
   }
+
+  window.adminSwitchMonth = (month, year, autoBackup = true) => switchAdminMonth(month, year, autoBackup);
+  window.adminGoToNextMonth = () => goToNextMonth();
+  window.adminGoToPrevMonth = () => goToPrevMonth();
 
   window.adminReloadAdminUsers = function() {
     loadAdminUsers();
