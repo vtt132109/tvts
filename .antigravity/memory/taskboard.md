@@ -15,9 +15,9 @@
 ---
 
 ## 🎯 Tác Vụ Hiện Tại (Active Task Session)
-- **Tên phiên làm việc:** Bảng Chấm Công Tháng, Quản Lý Sự Kiện & Khắc Phục Nút Tạo Sao Lưu
-- **Nhánh Git phụ trách:** `agent/monthly-payroll-events-backup-20261015-1816`
-- **Thời điểm khởi tạo:** 2026-10-15 18:16
+- **Tên phiên làm việc:** Đăng Ký Ca Rảnh Trọn Tháng & Hiển Thị Ngày Cụ Thể (Monthly Shift Registration)
+- **Nhánh Git phụ trách:** `agent/monthly-shift-registration-20261016-1355`
+- **Thời điểm khởi tạo:** 2026-10-16 13:55
 - **Tiến độ tổng thể:** `[x] 100%`
 
 ---
@@ -26,11 +26,11 @@
 
 | ID | Đầu Việc / Tính Năng | Agent Phụ Trách | Phạm Vi Files (`allowed_paths`) | Trạng Thái | Ghi Chú & Bằng Chứng |
 |---|---|---|---|:---:|---|
-| PAYROLL-00 | Đặc tả hợp đồng dữ liệu `EventItem`, `MonthlyPayrollItem` & liên kết tháng | Parent Agent | `.antigravity/memory/api-contracts.md` | `[x]` | Hoàn thành Section 8 trong api-contracts.md |
-| PAYROLL-01 | Xây dựng giao diện Modal Quản lý Sự Kiện & Bảng Chấm Công Chi Tiết Tháng; Sửa triệt để nút Tạo Sao Lưu | `@frontend-agent` | `admin.html`, `css/style.css` | `[x]` | Thêm modal tạo sự kiện (#modal-add-event), modal bảng công tháng (#modal-month-payroll), gắn trực tiếp onclick tạo sao lưu, nút phụ 1-click & nút xem công tháng |
-| PAYROLL-02 | Triển khai logic tính công tự động (Ca văn phòng + Sự kiện), quản lý Events & xem chi tiết theo tháng | `@backend-agent` | `js/admin.js` | `[x]` | Hiện thực hóa EventManager, PayrollCalculator và tích hợp vào WebBackupManager, 100% đồng bộ với UI |
-| PAYROLL-03 | Xây dựng bộ test cases tự động cho tính năng Thêm sự kiện & Tự tính công tháng | `@qa-agent` | `tests/payroll_events.test.js`, `tests/run_all_tests.js` | `[x]` | Hoàn thành 31/31 tests PASS (100%), CI Harness đạt 72/72 PASS |
-| PAYROLL-04 | Thẩm định 5 chiều, chạy toàn bộ CI Harness 100% PASS và thực thi `/merge-clean` | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | Thẩm định 5 chiều hoàn tất, 72/72 tests PASS 100%, thực thi gộp nhánh sạch |
+| MONTHREG-00 | Đặc tả hợp đồng dữ liệu `monthlyAvailableShifts` & `MonthCalendarHelper` | Parent Agent | `.antigravity/memory/api-contracts.md` | `[x]` | Đã hoàn tất Section 9 trong api-contracts.md |
+| MONTHREG-01 | Mở rộng Scheduler Engine hỗ trợ `monthlyAvailableShifts` từng tuần & nạp mẫu 30 CTV | `@backend-agent` | `js/scheduler.js`, `js/sample30.js`, `data/` | `[x]` | Hoàn thành MonthCalendarHelper, hỗ trợ ca riêng từng tuần trong solveMultiWeekSchedule, nạp 30 CTV mẫu |
+| MONTHREG-02 | Giao diện chọn ca nguyên 1 tháng kèm ngày dương lịch cụ thể (Tabs tuần, copy nhanh cả tháng) | `@frontend-agent` | `index.html`, `admin.html`, `css/style.css`, `js/student.js` | `[x]` | Hoàn tất Tabs 4 tuần + xem cả tháng, badge ngày cụ thể, toolbar tiện ích, bộ đếm tuần và nạp lại ca khi gõ MSSV cũ |
+| MONTHREG-03 | Xây dựng test suite tự động kiểm thử đăng ký ca rảnh trọn tháng & giải đa tuần | `@qa-agent` | `tests/monthly_registration.test.js`, `tests/run_all_tests.js` | `[x]` | Hoàn thành 30/30 tests PASS, tích hợp CI Harness đạt 102/102 PASS (100%) |
+| MONTHREG-04 | Thẩm định 5 chiều, kiểm tra F12 Console & chạy `/merge-clean` | `@release-gatekeeper` | Toàn bộ dự án | `[x]` | 102/102 test cases PASS, Console sạch lỗi, merge-clean hoàn tất |
 
 ---
 
@@ -52,4 +52,7 @@
 - `18:53`: Thiết lập 2 workflows `/seed-data` và `/clean-project` kèm bộ scripts hỗ trợ, xác thực Chrome DevTools 0 error và CI Harness đạt 72/72 PASS (100%).
 - `13:40`: Tạo nhánh `agent/remove-add-event-20261016-1340` theo yêu cầu của Tris: Gỡ bỏ hoàn toàn phần Thêm Sự Kiện (các nút Thêm Sự Kiện trên Header, Sticky Bar, Hero Toolbar và Modal Thêm Sự Kiện #modal-add-event).
 - `13:45`: Tối ưu hóa Bảng Chấm Công Tháng (#modal-month-payroll) tập trung thuần túy vào công trực văn phòng 4 tuần, cân bằng chuẩn 306 thẻ <div> trong admin.html, kiểm tra trực quan Chrome DevTools và xác nhận CI Harness đạt 72/72 PASS (100%).
+- `14:04`: `@qa-agent` hoàn thành toàn bộ test suite `tests/monthly_registration.test.js` (30/30 tests PASS 100%), tích hợp vào `tests/run_all_tests.js`, nâng tổng số test cases toàn hệ thống lên 102/102 PASS (100%).
+- `14:08`: `@backend-agent` và `@frontend-agent` hoàn tất đồng bộ module `js/month_calendar.js`, bộ Tabs 4 tuần, hiển thị ngày dương lịch cụ thể (05/10 - 09/10), thanh công cụ chọn nhanh và sao chép tuần ra cả tháng.
+- `14:10`: Kiểm tra toàn diện CI Harness đạt 102/102 PASS (100%), thực hiện quy trình `/merge-clean` sáp nhập an toàn vào nhánh `main`.
 

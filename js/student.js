@@ -20,6 +20,62 @@
     SWAP_REQUESTS: 'ts_scheduler_swap_requests'
   };
 
+  // Cấu hình 4 tuần hành chính trong Tháng 10/2026 (Section 9 API Contract)
+  const MONTH_WEEKS_CONFIG = [
+    {
+      weekNumber: 1,
+      name: 'Tuần 1',
+      dateRange: '05/10 - 09/10',
+      fullRange: '05/10/2026 - 09/10/2026',
+      days: {
+        T2: { name: 'Thứ Hai', dateStr: '05/10', fullDate: '2026-10-05' },
+        T3: { name: 'Thứ Ba', dateStr: '06/10', fullDate: '2026-10-06' },
+        T4: { name: 'Thứ Tư', dateStr: '07/10', fullDate: '2026-10-07' },
+        T5: { name: 'Thứ Năm', dateStr: '08/10', fullDate: '2026-10-08' },
+        T6: { name: 'Thứ Sáu', dateStr: '09/10', fullDate: '2026-10-09' }
+      }
+    },
+    {
+      weekNumber: 2,
+      name: 'Tuần 2',
+      dateRange: '12/10 - 16/10',
+      fullRange: '12/10/2026 - 16/10/2026',
+      days: {
+        T2: { name: 'Thứ Hai', dateStr: '12/10', fullDate: '2026-10-12' },
+        T3: { name: 'Thứ Ba', dateStr: '13/10', fullDate: '2026-10-13' },
+        T4: { name: 'Thứ Tư', dateStr: '14/10', fullDate: '2026-10-14' },
+        T5: { name: 'Thứ Năm', dateStr: '15/10', fullDate: '2026-10-15' },
+        T6: { name: 'Thứ Sáu', dateStr: '16/10', fullDate: '2026-10-16' }
+      }
+    },
+    {
+      weekNumber: 3,
+      name: 'Tuần 3',
+      dateRange: '19/10 - 23/10',
+      fullRange: '19/10/2026 - 23/10/2026',
+      days: {
+        T2: { name: 'Thứ Hai', dateStr: '19/10', fullDate: '2026-10-19' },
+        T3: { name: 'Thứ Ba', dateStr: '20/10', fullDate: '2026-10-20' },
+        T4: { name: 'Thứ Tư', dateStr: '21/10', fullDate: '2026-10-21' },
+        T5: { name: 'Thứ Năm', dateStr: '22/10', fullDate: '2026-10-22' },
+        T6: { name: 'Thứ Sáu', dateStr: '23/10', fullDate: '2026-10-23' }
+      }
+    },
+    {
+      weekNumber: 4,
+      name: 'Tuần 4',
+      dateRange: '26/10 - 30/10',
+      fullRange: '26/10/2026 - 30/10/2026',
+      days: {
+        T2: { name: 'Thứ Hai', dateStr: '26/10', fullDate: '2026-10-26' },
+        T3: { name: 'Thứ Ba', dateStr: '27/10', fullDate: '2026-10-27' },
+        T4: { name: 'Thứ Tư', dateStr: '28/10', fullDate: '2026-10-28' },
+        T5: { name: 'Thứ Năm', dateStr: '29/10', fullDate: '2026-10-29' },
+        T6: { name: 'Thứ Sáu', dateStr: '30/10', fullDate: '2026-10-30' }
+      }
+    }
+  ];
+
   // State
   let viewWeek = 1;
   let regConfig = null;
@@ -27,6 +83,15 @@
   let detectedStudent = null;
   let currentLookupStudent = null;
   let currentLookupShifts = [];
+
+  // Quản lý ca rảnh từng tuần trong tháng (MONTHREG-02)
+  let currentRegWeek = 1; // 1, 2, 3, 4, hoặc 'all'
+  let monthlyAvailableShifts = {
+    1: [],
+    2: [],
+    3: [],
+    4: []
+  };
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -54,6 +119,26 @@
       selectedCountDisplay: document.getElementById('selected-shift-count'),
       btnSubmit: document.getElementById('btn-submit-reg'),
       btnSubmit2: document.getElementById('btn-submit-reg-2'),
+
+      // Monthly Registration Tab & Toolbar Elements
+      regWeekTabs: document.querySelectorAll('#reg-week-tabs .month-week-tab'),
+      currentWeekLabel: document.getElementById('current-week-label'),
+      btnQuickCopyAll: document.getElementById('btn-quick-copy-all'),
+      monthOverviewContainer: document.getElementById('month-overview-container'),
+      dateBadges: {
+        T2: document.getElementById('date-badge-T2'),
+        T3: document.getElementById('date-badge-T3'),
+        T4: document.getElementById('date-badge-T4'),
+        T5: document.getElementById('date-badge-T5'),
+        T6: document.getElementById('date-badge-T6')
+      },
+      badgeWeekCounts: {
+        1: document.getElementById('badge-week-count-1'),
+        2: document.getElementById('badge-week-count-2'),
+        3: document.getElementById('badge-week-count-3'),
+        4: document.getElementById('badge-week-count-4'),
+        all: document.getElementById('badge-week-count-all')
+      },
 
       // Registration Window & Locked State Elements
       regStatusBanner: document.getElementById('student-reg-status-banner'),
@@ -130,6 +215,8 @@
     initThemeToggle();
     evaluateRegistrationWindow();
     bindEvents();
+    switchRegWeek(1);
+    updateSelectedCount();
     renderCommonSchedule();
 
     // Cập nhật trạng thái đếm ngược thời gian mở cổng mỗi 30 giây
@@ -147,70 +234,71 @@
   }
 
   function bindEvents() {
-    // Checkbox Ma Trận Ca Rảnh
-    elements.matrixCheckboxes.forEach(cb => {
-      cb.addEventListener('change', () => {
-        updateCheckboxVisual(cb);
-        updateSelectedCount();
+    // Thanh chuyển Tab tuần (Tuần 1 - Tuần 4 & Xem Cả Tháng)
+    elements.regWeekTabs?.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetWeek = tab.getAttribute('data-week');
+        switchRegWeek(targetWeek === 'all' ? 'all' : (parseInt(targetWeek, 10) || 1));
       });
     });
 
-    elements.slotToggles.forEach(toggle => {
+    // Checkbox Ma Trận Ca Rảnh
+    elements.matrixCheckboxes?.forEach(cb => {
+      cb.addEventListener('change', () => {
+        handleShiftCheckboxToggle(cb);
+      });
+    });
+
+    elements.slotToggles?.forEach(toggle => {
       toggle.addEventListener('click', (e) => {
         const cb = toggle.querySelector('.slot-checkbox');
         if (!cb) return;
         if (e.target !== cb) {
           e.preventDefault();
           cb.checked = !cb.checked;
-          updateCheckboxVisual(cb);
-          updateSelectedCount();
+          handleShiftCheckboxToggle(cb);
         }
       });
     });
 
     // Quick selection buttons
+    // Áp dụng tuần này cho các tuần còn lại
+    elements.btnQuickCopyAll?.addEventListener('click', (e) => {
+      e.preventDefault();
+      handleQuickCopyCurrentWeekToMonth();
+    });
+
+    // Tất cả ca Sáng cả tháng
     elements.btnQuickMorning?.addEventListener('click', (e) => {
       e.preventDefault();
-      elements.matrixCheckboxes.forEach(cb => {
-        if (cb.value.endsWith('_S')) {
-          cb.checked = true;
-          updateCheckboxVisual(cb);
-        }
-      });
-      updateSelectedCount();
-      showToast('Đã chọn tất cả ca Sáng (Thứ 2 - Thứ 6)!', 'info');
+      handleQuickMorningAllMonth();
     });
 
+    // Tất cả ca Chiều cả tháng
     elements.btnQuickAfternoon?.addEventListener('click', (e) => {
       e.preventDefault();
-      elements.matrixCheckboxes.forEach(cb => {
-        if (cb.value.endsWith('_C')) {
-          cb.checked = true;
-          updateCheckboxVisual(cb);
-        }
-      });
-      updateSelectedCount();
-      showToast('Đã chọn tất cả ca Chiều (Thứ 2 - Thứ 6)!', 'info');
+      handleQuickAfternoonAllMonth();
     });
 
+    // Chọn Cả Tuần (10 ca)
     elements.btnQuickAll?.addEventListener('click', (e) => {
       e.preventDefault();
-      elements.matrixCheckboxes.forEach(cb => {
-        cb.checked = true;
-        updateCheckboxVisual(cb);
-      });
-      updateSelectedCount();
-      showToast('Đã chọn toàn bộ 10 ca trong tuần!', 'info');
+      if (currentRegWeek >= 1 && currentRegWeek <= 4) {
+        elements.matrixCheckboxes?.forEach(cb => {
+          cb.checked = true;
+          updateCheckboxVisual(cb);
+        });
+        monthlyAvailableShifts[currentRegWeek] = getSelectedShiftsFromDOM();
+        updateSelectedCount();
+        showToast(`Đã chọn toàn bộ 10 ca cho Tuần ${currentRegWeek}!`, 'info');
+      }
     });
 
+    // Xóa hết ca rảnh cả tháng
     elements.btnQuickClear?.addEventListener('click', (e) => {
       e.preventDefault();
-      elements.matrixCheckboxes.forEach(cb => {
-        cb.checked = false;
-        updateCheckboxVisual(cb);
-      });
-      updateSelectedCount();
-      showToast('Đã xóa chọn tất cả các ca.', 'info');
+      handleQuickClearAllMonth();
     });
 
     // Tự động nhận diện MSSV khi sinh viên gõ hoặc blur
@@ -565,22 +653,27 @@
     const roleRadio = document.querySelector(`input[name="studentRole"][value="${student.role}"]`);
     if (roleRadio) roleRadio.checked = true;
 
-    // Checkboxes in shift matrix
-    const shifts = student.availableShifts || [];
-    elements.matrixCheckboxes.forEach(cb => {
-      const isSelected = shifts.includes(cb.value);
-      cb.checked = isSelected;
-      updateCheckboxVisual(cb);
-      const parent = cb.closest('.slot-toggle');
-      if (parent) {
-        if (isSelected) {
-          parent.classList.add('pre-checked');
-        } else {
-          parent.classList.remove('pre-checked');
-        }
-      }
-    });
+    // Nạp lại ca rảnh theo từng tuần (monthlyAvailableShifts)
+    if (student.monthlyAvailableShifts && typeof student.monthlyAvailableShifts === 'object') {
+      monthlyAvailableShifts = {
+        1: Array.isArray(student.monthlyAvailableShifts[1]) ? [...student.monthlyAvailableShifts[1]] : [],
+        2: Array.isArray(student.monthlyAvailableShifts[2]) ? [...student.monthlyAvailableShifts[2]] : [],
+        3: Array.isArray(student.monthlyAvailableShifts[3]) ? [...student.monthlyAvailableShifts[3]] : [],
+        4: Array.isArray(student.monthlyAvailableShifts[4]) ? [...student.monthlyAvailableShifts[4]] : []
+      };
+    } else if (Array.isArray(student.availableShifts) && student.availableShifts.length > 0) {
+      // Tương thích ngược: Điền đều cho cả 4 tuần
+      monthlyAvailableShifts = {
+        1: [...student.availableShifts],
+        2: [...student.availableShifts],
+        3: [...student.availableShifts],
+        4: [...student.availableShifts]
+      };
+    } else {
+      monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+    }
 
+    syncCheckboxesWithActiveWeek();
     updateSelectedCount();
 
     if (elements.mssvLiveTag) {
@@ -603,12 +696,19 @@
   function renderMssvAlertBox(student) {
     if (!elements.mssvAlertBox) return;
 
-    const shiftCount = (student.availableShifts || []).length;
+    const mShifts = student.monthlyAvailableShifts || {
+      1: student.availableShifts || [],
+      2: student.availableShifts || [],
+      3: student.availableShifts || [],
+      4: student.availableShifts || []
+    };
+
+    const c1 = (mShifts[1] || []).length;
+    const c2 = (mShifts[2] || []).length;
+    const c3 = (mShifts[3] || []).length;
+    const c4 = (mShifts[4] || []).length;
+    const totalMonthCount = c1 + c2 + c3 + c4;
     const roleText = student.role === 'old' ? '🎓 Người Cũ (Kinh nghiệm)' : '🌱 Người Mới (Tập sự)';
-    const shiftsReadable = (student.availableShifts || []).map(sid => {
-      const shift = SHIFT_MAP ? SHIFT_MAP[sid] : null;
-      return shift ? `${shift.dayName} ${shift.period}` : sid;
-    });
 
     elements.mssvAlertBox.style.display = 'block';
     elements.mssvAlertBox.innerHTML = `
@@ -623,25 +723,40 @@
           Hệ thống nhận diện MSSV <strong>${escapeHtml(student.studentId)}</strong> đã có trên hệ thống!
         </div>
         <p class="mssv-detected-desc">
-          Bạn <strong>đã điền thông tin và đăng ký trước đó rồi nên không cần phải nhập lại từ đầu</strong>. Hệ thống đã tự động nạp lại thông tin cá nhân và <strong>đánh dấu sẵn ${shiftCount} ca bạn đã chọn</strong> ở bảng bên phải.
+          Bạn <strong>đã điền thông tin và đăng ký trước đó rồi nên không cần phải nhập lại từ đầu</strong>. Hệ thống đã tự động nạp lại thông tin cá nhân và <strong>đánh dấu sẵn ${totalMonthCount} ca rảnh trong Tháng 10/2026</strong> ở bảng bên phải.
         </p>
         <div class="mssv-detected-data">
           <div class="mssv-data-item">Họ tên: <strong>${escapeHtml(student.fullName)}</strong></div>
           <div class="mssv-data-item">MSSV: <strong>${escapeHtml(student.studentId)}</strong></div>
           <div class="mssv-data-item">Phân loại: <strong>${roleText}</strong></div>
-          <div class="mssv-data-item">Số ca rảnh đã lưu: <strong style="color: var(--primary);">${shiftCount} ca</strong></div>
+          <div class="mssv-data-item">Tổng ca rảnh: <strong style="color: var(--primary);">${totalMonthCount} ca / tháng</strong></div>
         </div>
-        <div>
-          <div style="font-size: 0.78rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.25rem;">
-            Các ca bạn đã tích chọn:
+        <div style="margin-top: 0.75rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.4rem;">
+            Phân bổ ca rảnh 4 tuần Tháng 10/2026:
           </div>
-          <div class="mssv-shift-chips">
-            ${shiftsReadable.map(s => `<span class="shift-chip-registered">✓ ${s}</span>`).join('')}
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 0.5rem;">
+            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 1 (05/10 - 09/10)</div>
+              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c1} ca rảnh</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 2 (12/10 - 16/10)</div>
+              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c2} ca rảnh</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 3 (19/10 - 23/10)</div>
+              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c3} ca rảnh</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; font-size: 0.74rem; color: var(--primary);">Tuần 4 (26/10 - 30/10)</div>
+              <div style="font-size: 0.82rem; font-weight: 700; color: #059669;">${c4} ca rảnh</div>
+            </div>
           </div>
         </div>
         <div class="mssv-detected-actions">
           <span>
-            ${isRegOpen ? '💡 <em>Cổng đăng ký đang mở: Bạn có thể chọn lại ca trên ma trận và bấm "Cập Nhật" nếu muốn thay đổi.</em>' : '🔒 <em>Cổng đăng ký đang đóng: Lịch rảnh của bạn đã được chốt và đưa vào xếp ca.</em>'}
+            ${isRegOpen ? '💡 <em>Cổng đăng ký đang mở: Bạn có thể chuyển các tab tuần để xem/sửa lại ca và bấm "Cập Nhật" nếu muốn thay đổi.</em>' : '🔒 <em>Cổng đăng ký đang đóng: Lịch rảnh của bạn đã được chốt và đưa vào xếp ca.</em>'}
           </span>
         </div>
       </div>
@@ -666,7 +781,7 @@
       elements.inputStudentId.style.borderColor = '';
       elements.inputStudentId.style.backgroundColor = '';
     }
-    elements.matrixCheckboxes.forEach(cb => {
+    elements.matrixCheckboxes?.forEach(cb => {
       const parent = cb.closest('.slot-toggle');
       if (parent) parent.classList.remove('pre-checked');
     });
@@ -680,15 +795,206 @@
     const newRoleRadio = document.querySelector('input[name="studentRole"][value="new"]');
     if (newRoleRadio) newRoleRadio.checked = true;
 
-    elements.matrixCheckboxes.forEach(cb => {
-      cb.checked = false;
-      updateCheckboxVisual(cb);
-      const parent = cb.closest('.slot-toggle');
-      if (parent) parent.classList.remove('pre-checked');
-    });
-
+    monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+    switchRegWeek(1);
     updateSelectedCount();
     clearDetectedStudentState();
+  }
+
+  function handleShiftCheckboxToggle(cb) {
+    if (currentRegWeek >= 1 && currentRegWeek <= 4) {
+      const activeList = new Set(monthlyAvailableShifts[currentRegWeek] || []);
+      if (cb.checked) {
+        activeList.add(cb.value);
+      } else {
+        activeList.delete(cb.value);
+      }
+      monthlyAvailableShifts[currentRegWeek] = Array.from(activeList);
+    }
+    updateCheckboxVisual(cb);
+    updateSelectedCount();
+  }
+
+  function handleQuickCopyCurrentWeekToMonth() {
+    const srcWeek = (currentRegWeek >= 1 && currentRegWeek <= 4) ? currentRegWeek : 1;
+    const currentWeekShifts = [...(monthlyAvailableShifts[srcWeek] || [])];
+    
+    if (currentWeekShifts.length === 0) {
+      showToast(`Tuần ${srcWeek} hiện chưa chọn ca nào để sao chép. Vui lòng chọn ít nhất 1 ca trước!`, 'warning');
+      return;
+    }
+
+    for (let w = 1; w <= 4; w++) {
+      monthlyAvailableShifts[w] = [...currentWeekShifts];
+    }
+
+    syncCheckboxesWithActiveWeek();
+    updateSelectedCount();
+    if (currentRegWeek === 'all') {
+      renderMonthOverview();
+    }
+    showToast(`⚡ Đã áp dụng ${currentWeekShifts.length} ca rảnh của Tuần ${srcWeek} cho tất cả các tuần còn lại trong tháng!`, 'success');
+  }
+
+  function handleQuickMorningAllMonth() {
+    const morningShifts = ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'];
+    for (let w = 1; w <= 4; w++) {
+      const set = new Set(monthlyAvailableShifts[w] || []);
+      morningShifts.forEach(s => set.add(s));
+      monthlyAvailableShifts[w] = Array.from(set);
+    }
+    syncCheckboxesWithActiveWeek();
+    updateSelectedCount();
+    if (currentRegWeek === 'all') {
+      renderMonthOverview();
+    }
+    showToast('☀️ Đã chọn tất cả ca Sáng (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng!', 'info');
+  }
+
+  function handleQuickAfternoonAllMonth() {
+    const afternoonShifts = ['T2_C', 'T3_C', 'T4_C', 'T5_C', 'T6_C'];
+    for (let w = 1; w <= 4; w++) {
+      const set = new Set(monthlyAvailableShifts[w] || []);
+      afternoonShifts.forEach(s => set.add(s));
+      monthlyAvailableShifts[w] = Array.from(set);
+    }
+    syncCheckboxesWithActiveWeek();
+    updateSelectedCount();
+    if (currentRegWeek === 'all') {
+      renderMonthOverview();
+    }
+    showToast('⛅ Đã chọn tất cả ca Chiều (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng!', 'info');
+  }
+
+  function handleQuickClearAllMonth() {
+    monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+    syncCheckboxesWithActiveWeek();
+    updateSelectedCount();
+    if (currentRegWeek === 'all') {
+      renderMonthOverview();
+    }
+    showToast('🔄 Đã xóa toàn bộ ca rảnh trong tháng.', 'info');
+  }
+
+  function switchRegWeek(week) {
+    currentRegWeek = week;
+
+    // Cập nhật trạng thái active trên thanh Tab
+    elements.regWeekTabs?.forEach(tab => {
+      const wVal = tab.getAttribute('data-week');
+      const isActive = (week === 'all' && wVal === 'all') || (String(week) === wVal);
+      tab.classList.toggle('active', isActive);
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    if (week === 'all') {
+      // Ẩn bảng tuần, hiển thị bảng tổng quan cả tháng
+      if (elements.shiftMatrixContainer) elements.shiftMatrixContainer.style.display = 'none';
+      if (elements.monthOverviewContainer) {
+        elements.monthOverviewContainer.style.display = 'grid';
+        renderMonthOverview();
+      }
+      if (elements.currentWeekLabel) {
+        elements.currentWeekLabel.innerHTML = '📊 Đang xem: <strong>Tổng Quan Lịch Rảnh Trọn Tháng 10/2026 (4 Tuần)</strong>';
+      }
+    } else {
+      // Hiển thị bảng chọn ca tuần cụ thể
+      if (elements.shiftMatrixContainer) elements.shiftMatrixContainer.style.display = 'block';
+      if (elements.monthOverviewContainer) elements.monthOverviewContainer.style.display = 'none';
+
+      const weekCfg = MONTH_WEEKS_CONFIG[week - 1];
+      if (weekCfg) {
+        // Cập nhật nhãn tuần & ngày cụ thể
+        if (elements.currentWeekLabel) {
+          elements.currentWeekLabel.innerHTML = `📍 Đang chọn ca cho: <strong>${escapeHtml(weekCfg.name)} (${escapeHtml(weekCfg.fullRange)})</strong>`;
+        }
+        // Cập nhật badge ngày trên tiêu đề từng cột T2 -> T6
+        ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(dayKey => {
+          const badgeEl = elements.dateBadges ? elements.dateBadges[dayKey] : null;
+          if (badgeEl && weekCfg.days[dayKey]) {
+            badgeEl.textContent = weekCfg.days[dayKey].dateStr;
+          }
+          // Cập nhật nhãn trong từng ô ca trực
+          const slotTextS = document.getElementById(`slot-text-${dayKey}_S`);
+          if (slotTextS && weekCfg.days[dayKey]) {
+            slotTextS.textContent = `Sáng (${weekCfg.days[dayKey].dateStr})`;
+          }
+          const slotTextC = document.getElementById(`slot-text-${dayKey}_C`);
+          if (slotTextC && weekCfg.days[dayKey]) {
+            slotTextC.textContent = `Chiều (${weekCfg.days[dayKey].dateStr})`;
+          }
+        });
+      }
+
+      syncCheckboxesWithActiveWeek();
+    }
+  }
+
+  function syncCheckboxesWithActiveWeek() {
+    if (currentRegWeek < 1 || currentRegWeek > 4) return;
+    const activeList = monthlyAvailableShifts[currentRegWeek] || [];
+    elements.matrixCheckboxes?.forEach(cb => {
+      const isChecked = activeList.includes(cb.value);
+      cb.checked = isChecked;
+      updateCheckboxVisual(cb);
+    });
+  }
+
+  function renderMonthOverview() {
+    if (!elements.monthOverviewContainer) return;
+
+    let html = '';
+    MONTH_WEEKS_CONFIG.forEach(cfg => {
+      const wShifts = monthlyAvailableShifts[cfg.weekNumber] || [];
+      const count = wShifts.length;
+
+      html += `
+        <div class="overview-week-card">
+          <div class="overview-week-header">
+            <div>
+              <div class="overview-week-title">${escapeHtml(cfg.name)}</div>
+              <div class="overview-week-badge">📅 ${escapeHtml(cfg.dateRange)}</div>
+            </div>
+            <span class="overview-week-count">${count} ca</span>
+          </div>
+          <div class="overview-days-grid">
+      `;
+
+      ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(dayKey => {
+        const dInfo = cfg.days[dayKey];
+        const hasS = wShifts.includes(`${dayKey}_S`);
+        const hasC = wShifts.includes(`${dayKey}_C`);
+
+        html += `
+          <div class="overview-day-row">
+            <div class="overview-day-info">
+              <span>${dInfo.name}</span>
+              <span class="overview-day-date">(${dInfo.dateStr})</span>
+            </div>
+            <div class="overview-shifts-status">
+              <span class="overview-shift-pill ${hasS ? 'active' : 'inactive'}">
+                ${hasS ? '☀️ Sáng' : 'Sáng'}
+              </span>
+              <span class="overview-shift-pill ${hasC ? 'active' : 'inactive'}">
+                ${hasC ? '⛅ Chiều' : 'Chiều'}
+              </span>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+          <div class="overview-week-action">
+            <button type="button" class="btn-overview-edit" onclick="window.studentSwitchToWeek && window.studentSwitchToWeek(${cfg.weekNumber})">
+              <span>✏️ Chỉnh sửa ${escapeHtml(cfg.name)}</span>
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    elements.monthOverviewContainer.innerHTML = html;
   }
 
   function updateCheckboxVisual(cb) {
@@ -703,22 +1009,50 @@
   }
 
   function updateSelectedCount() {
-    const selected = getSelectedShifts();
+    const c1 = (monthlyAvailableShifts[1] || []).length;
+    const c2 = (monthlyAvailableShifts[2] || []).length;
+    const c3 = (monthlyAvailableShifts[3] || []).length;
+    const c4 = (monthlyAvailableShifts[4] || []).length;
+    const total = c1 + c2 + c3 + c4;
+
+    // Update tab badges
+    if (elements.badgeWeekCounts) {
+      if (elements.badgeWeekCounts[1]) elements.badgeWeekCounts[1].textContent = `${c1} ca`;
+      if (elements.badgeWeekCounts[2]) elements.badgeWeekCounts[2].textContent = `${c2} ca`;
+      if (elements.badgeWeekCounts[3]) elements.badgeWeekCounts[3].textContent = `${c3} ca`;
+      if (elements.badgeWeekCounts[4]) elements.badgeWeekCounts[4].textContent = `${c4} ca`;
+      if (elements.badgeWeekCounts.all) elements.badgeWeekCounts.all.textContent = `${total} ca`;
+    }
+
+    // Update main counter
     if (elements.selectedCountDisplay) {
-      elements.selectedCountDisplay.textContent = `${selected.length} ca đã chọn`;
+      elements.selectedCountDisplay.innerHTML = `
+        <span class="counter-total">${total} ca đã chọn / tháng</span>
+        <span class="counter-breakdown">T1: ${c1} • T2: ${c2} • T3: ${c3} • T4: ${c4}</span>
+      `;
     }
   }
 
-  function getSelectedShifts() {
+  function getSelectedShiftsFromDOM() {
     const selected = [];
-    elements.matrixCheckboxes.forEach(cb => {
+    elements.matrixCheckboxes?.forEach(cb => {
       if (cb.checked) selected.push(cb.value);
     });
     return selected;
   }
 
+  function getSelectedShifts() {
+    const union = new Set([
+      ...(monthlyAvailableShifts[1] || []),
+      ...(monthlyAvailableShifts[2] || []),
+      ...(monthlyAvailableShifts[3] || []),
+      ...(monthlyAvailableShifts[4] || [])
+    ]);
+    return Array.from(union);
+  }
+
   /**
-   * Xử lý lưu đăng ký sinh viên
+   * Xử lý lưu đăng ký sinh viên trọn tháng (Section 9 API Contract)
    */
   function processStudentRegistration() {
     if (!isRegOpen) {
@@ -730,7 +1064,12 @@
     const studentId = elements.inputStudentId ? elements.inputStudentId.value.trim() : '';
     const phone = elements.inputPhone ? elements.inputPhone.value.trim() : '';
     const selectedRole = document.querySelector('input[name="studentRole"]:checked')?.value || 'new';
-    const availableShifts = getSelectedShifts();
+
+    const c1 = (monthlyAvailableShifts[1] || []).length;
+    const c2 = (monthlyAvailableShifts[2] || []).length;
+    const c3 = (monthlyAvailableShifts[3] || []).length;
+    const c4 = (monthlyAvailableShifts[4] || []).length;
+    const totalMonthShifts = c1 + c2 + c3 + c4;
 
     if (!studentId) {
       showToast('Vui lòng nhập Mã số sinh viên (MSSV)!', 'error');
@@ -744,10 +1083,19 @@
       return;
     }
 
-    if (availableShifts.length === 0) {
-      showToast('Vui lòng chọn ít nhất 1 ca rảnh từ Thứ 2 đến Thứ 6!', 'error');
+    if (totalMonthShifts === 0) {
+      showToast('Vui lòng chọn ít nhất 1 ca rảnh trong tháng 10/2026!', 'error');
       return;
     }
+
+    // Hợp nhất (Union) toàn bộ ca rảnh trong tháng
+    const unionShiftsSet = new Set([
+      ...(monthlyAvailableShifts[1] || []),
+      ...(monthlyAvailableShifts[2] || []),
+      ...(monthlyAvailableShifts[3] || []),
+      ...(monthlyAvailableShifts[4] || [])
+    ]);
+    const availableShifts = Array.from(unionShiftsSet);
 
     let students = [];
     try {
@@ -760,36 +1108,45 @@
 
     const existingIndex = students.findIndex(s => s.studentId && s.studentId.toLowerCase() === studentId.toLowerCase());
 
+    const studentRecordData = {
+      fullName,
+      studentId,
+      phone,
+      role: selectedRole,
+      registrationMonth: '2026-10',
+      monthlyAvailableShifts: {
+        1: [...(monthlyAvailableShifts[1] || [])],
+        2: [...(monthlyAvailableShifts[2] || [])],
+        3: [...(monthlyAvailableShifts[3] || [])],
+        4: [...(monthlyAvailableShifts[4] || [])]
+      },
+      availableShifts: availableShifts
+    };
+
     if (existingIndex !== -1) {
-      students[existingIndex].fullName = fullName;
-      students[existingIndex].phone = phone;
-      students[existingIndex].role = selectedRole;
-      students[existingIndex].availableShifts = availableShifts;
-      students[existingIndex].updatedAt = Date.now();
+      students[existingIndex] = {
+        ...students[existingIndex],
+        ...studentRecordData,
+        updatedAt: Date.now()
+      };
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
 
-      showSuccessBanner(`Cập nhật thành công! Đã lưu lại thông tin và <strong>${availableShifts.length} ca rảnh</strong> của bạn (${escapeHtml(fullName)} - MSSV: ${escapeHtml(studentId)}).`);
-      showToast(`Đã cập nhật ${availableShifts.length} ca rảnh của bạn thành công!`, 'success');
+      showSuccessBanner(`Cập nhật thành công! Đã lưu lại thông tin và <strong>${totalMonthShifts} lượt ca rảnh trong tháng</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) của bạn (${escapeHtml(fullName)} - MSSV: ${escapeHtml(studentId)}).`);
+      showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
 
-      // Tự động làm mới thẻ thông báo đã đăng ký để sinh viên nhìn thấy ca vừa cập nhật
       handleMssvAutoDetect();
     } else {
       const newStudent = {
         id: 's_' + Date.now(),
-        fullName,
-        studentId,
-        phone,
-        role: selectedRole,
-        availableShifts,
+        ...studentRecordData,
         createdAt: Date.now()
       };
       students.push(newStudent);
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
 
-      showSuccessBanner(`Đăng ký thành công! Chào mừng bạn <strong>${escapeHtml(fullName)}</strong> (${selectedRole === 'old' ? 'Người Cũ' : 'Người Mới'}). Bạn đã đăng ký <strong>${availableShifts.length} ca rảnh</strong> trong tuần.`);
-      showToast('Đăng ký lịch trực thành công!', 'success');
+      showSuccessBanner(`Đăng ký thành công! Chào mừng bạn <strong>${escapeHtml(fullName)}</strong> (${selectedRole === 'old' ? 'Người Cũ' : 'Người Mới'}). Bạn đã đăng ký <strong>${totalMonthShifts} ca rảnh trong tháng 10/2026</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}).`);
+      showToast('Đăng ký lịch trực trọn tháng thành công!', 'success');
 
-      // Nhận diện ngay sinh viên vừa tạo và hiển thị trạng thái đã đăng ký
       handleMssvAutoDetect();
     }
 
