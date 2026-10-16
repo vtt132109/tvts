@@ -164,289 +164,253 @@
     <!-- ====================================================================
          PHẦN 1: FORM ĐIỀN THÔNG TIN CÁ NHÂN & CHỌN LỊCH RẢNH
          ==================================================================== -->
+    <!-- ====================================================================
+         PHẦN 1: FORM ĐĂNG KÝ CA RẢNH TRỌN THÁNG (STREAMLINED CENTERED CARD)
+         ==================================================================== -->
     <section id="section-student-registration" style="margin-bottom: 2.5rem;">
-      <div class="form-layout">
+      <div class="card student-reg-card" style="max-width: 1040px; margin: 0 auto; box-shadow: var(--shadow-lg);">
         
-        <!-- Cột trái: Nhập tên, MSSV, SĐT và Chọn Người Mới / Người Cũ -->
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">📝 Thông Tin Cá Nhân</h2>
-              <p class="card-desc">Vui lòng điền chính xác họ tên và MSSV của bạn</p>
-            </div>
+        <!-- Header Khối Tập Trung -->
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 class="card-title">📝 Đăng Ký Ca Rảnh Trọn Tháng (Tháng 10/2026)</h2>
+            <p class="card-desc">Nhập MSSV của bạn để chọn ca rảnh Thứ 2 - Thứ 6 phù hợp thời khóa biểu học tập</p>
           </div>
-          <div class="card-body">
+          <div class="selected-counter" id="selected-shift-count">
+            <span class="counter-total">0 ca đã chọn</span>
+            <span class="counter-breakdown">T1: 0 • T2: 0 • T3: 0 • T4: 0</span>
+          </div>
+        </div>
+
+        <div class="card-body" style="padding: 1.5rem;">
+          
+          <form id="student-reg-form" onsubmit="return false;">
+            <!-- Khối Nhập Duy Nhất: Mã Số Sinh Viên (MSSV) To Rõ Ở Trung Tâm -->
+            <div class="student-id-input-section" style="max-width: 600px; margin: 0 auto 1.5rem; text-align: center;">
+              <label class="form-label" for="input-studentid" style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.6rem; display: block; color: var(--text-main);">
+                🆔 Mã Số Sinh Viên (MSSV) Của Bạn <span class="required">*</span>
+                <span id="mssv-live-tag" style="margin-left: 0.5rem; display: none;"></span>
+              </label>
+              <div style="position: relative;">
+                <input type="text" id="input-studentid" class="form-input" 
+                       inputmode="numeric" pattern="[0-9]*" 
+                       placeholder="Nhập Mã Số Sinh Viên (MSSV) của bạn để chọn ca..." 
+                       autocomplete="off" required aria-label="Mã Số Sinh Viên (MSSV)"
+                       style="font-size: 1.15rem; padding: 0.9rem 1.25rem; text-align: center; font-weight: 700; letter-spacing: 0.5px; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 48px;">
+              </div>
+              <div class="form-hint" id="mssv-input-hint" style="margin-top: 0.45rem; font-size: 0.84rem;">
+                💡 Nhập MSSV hệ thống sẽ tự nhận diện và nạp lại ca rảnh đã đăng ký trước đó (nếu có).
+              </div>
+            </div>
 
             <!-- Hộp Thông Báo Nhận Diện Trùng MSSV (Đã Đăng Ký Trước Đó) -->
-            <div id="mssv-registered-alert-box" style="display: none;"></div>
+            <div id="mssv-registered-alert-box" style="display: none; max-width: 800px; margin: 0 auto 1.5rem;"></div>
 
-            <form id="student-reg-form">
-              <div class="form-group">
-                <label class="form-label" for="input-studentid">
-                  Mã Số Sinh Viên (MSSV) <span class="required">*</span>
-                  <span id="mssv-live-tag" style="margin-left: 0.5rem; display: none;"></span>
-                </label>
-                <input type="text" id="input-studentid" class="form-input" placeholder="Ví dụ: 2102001 (Nhập để tự kiểm tra đăng ký)" required autocomplete="off" aria-label="Mã Số Sinh Viên (MSSV)">
-                <div class="form-hint" id="mssv-input-hint">Nhập MSSV hệ thống sẽ tự nhận diện nếu bạn đã đăng ký trước đó.</div>
-              </div>
+            <!-- Cảnh báo nếu Cổng Đăng Ký đang Đóng bởi Admin -->
+            <div id="matrix-locked-notice" class="matrix-locked-notice" style="display: none; max-width: 800px; margin: 0 auto 1.25rem;">
+              <span>🔒 <strong>Cổng đăng ký hiện đang đóng.</strong> Chức năng chọn ca trực đang tạm khóa. Bạn vẫn có thể nhập MSSV ở trên để xem lại các ca bạn đã chọn trước đó.</span>
+            </div>
 
-              <div class="form-group">
-                <label class="form-label" for="input-fullname">
-                  Họ và Tên Sinh Viên <span class="required">*</span>
-                </label>
-                <input type="text" id="input-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required aria-label="Họ và Tên Sinh Viên">
-              </div>
+            <!-- Vùng Thông Báo Khóa / Mở Khóa Ma Trận (#matrix-gate-notice) -->
+            <div id="matrix-gate-notice" class="matrix-gate-notice" style="max-width: 800px; margin: 0 auto 1.25rem;">
+              <span>🔒 Vui lòng nhập Mã Số Sinh Viên (MSSV) của bạn ở trên để bắt đầu chọn ca rảnh.</span>
+            </div>
 
-              <div class="form-group">
-                <label class="form-label" for="input-phone">
-                  Số Điện Thoại (Zalo liên hệ)
-                </label>
-                <input type="tel" id="input-phone" class="form-input" placeholder="Ví dụ: 0912345678" aria-label="Số Điện Thoại Zalo liên hệ">
-              </div>
-
-              <div class="form-group" role="group" aria-labelledby="label-role-group">
-                <div class="form-label" id="label-role-group" style="font-weight: 700;">
-                  Phân Loại Kinh Nghiệm <span class="required">*</span>
-                </div>
-                <div class="role-cards">
-                  <!-- Người cũ -->
-                  <label class="role-card-label" for="role-old">
-                    <input type="radio" id="role-old" name="studentRole" value="old" aria-label="Người Cũ - Đã có kinh nghiệm trực">
-                    <span class="role-icon">🎓</span>
-                    <span class="role-name">Người Cũ</span>
-                    <span class="role-sub">Đã có kinh nghiệm trực</span>
-                  </label>
-
-                  <!-- Người mới -->
-                  <label class="role-card-label" for="role-new">
-                    <input type="radio" id="role-new" name="studentRole" value="new" checked aria-label="Người Mới - Tập sự / Mới tham gia">
-                    <span class="role-icon">🌱</span>
-                    <span class="role-name">Người Mới</span>
-                    <span class="role-sub">Tập sự / Mới tham gia</span>
-                  </label>
-                </div>
-                <div class="form-hint" style="margin-top: 0.5rem;">
-                  ⭐ <em>Mỗi ca trực Ban điều hành sẽ ghép <strong>1 bạn người cũ + 1 bạn người mới</strong> để hỗ trợ nhau tốt nhất.</em>
-                </div>
-              </div>
-
-              <div style="margin-top: 1.5rem;">
-                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-reg">
-                  <span>Gửi Đăng Ký Ca Trực</span>
+            <!-- Vùng Bảng Chọn Ca Rảnh (Mờ nhẹ khi chưa nhập MSSV) -->
+            <div id="student-matrix-area" class="matrix-locked-state">
+              
+              <!-- Thanh chuyển Tab chọn 4 tuần & Xem Cả Tháng -->
+              <div class="month-week-tabs" id="reg-week-tabs" role="tablist" aria-label="Chọn tuần đăng ký ca rảnh">
+                <button type="button" class="month-week-tab active" data-week="1" role="tab" aria-selected="true">
+                  <span class="tab-week-title">Tuần 1</span>
+                  <span class="tab-week-dates">05/10 - 09/10</span>
+                  <span class="tab-week-count" id="badge-week-count-1">0 ca</span>
+                </button>
+                <button type="button" class="month-week-tab" data-week="2" role="tab" aria-selected="false">
+                  <span class="tab-week-title">Tuần 2</span>
+                  <span class="tab-week-dates">12/10 - 16/10</span>
+                  <span class="tab-week-count" id="badge-week-count-2">0 ca</span>
+                </button>
+                <button type="button" class="month-week-tab" data-week="3" role="tab" aria-selected="false">
+                  <span class="tab-week-title">Tuần 3</span>
+                  <span class="tab-week-dates">19/10 - 23/10</span>
+                  <span class="tab-week-count" id="badge-week-count-3">0 ca</span>
+                </button>
+                <button type="button" class="month-week-tab" data-week="4" role="tab" aria-selected="false">
+                  <span class="tab-week-title">Tuần 4</span>
+                  <span class="tab-week-dates">26/10 - 30/10</span>
+                  <span class="tab-week-count" id="badge-week-count-4">0 ca</span>
+                </button>
+                <button type="button" class="month-week-tab tab-view-all" data-week="all" role="tab" aria-selected="false">
+                  <span class="tab-week-title">📊 Xem Cả Tháng</span>
+                  <span class="tab-week-dates">Toàn bộ 4 tuần</span>
+                  <span class="tab-week-count" id="badge-week-count-all">0 ca</span>
                 </button>
               </div>
-            </form>
-          </div>
+
+              <!-- Quick Toolbar -->
+              <div class="matrix-toolbar" id="matrix-quick-toolbar">
+                <div class="matrix-toolbar-header">
+                  <span class="matrix-toolbar-indicator" id="current-week-label">
+                    📍 Đang chọn ca cho: <strong>Tuần 1 (05/10/2026 - 09/10/2026)</strong>
+                  </span>
+                </div>
+                <div class="matrix-quick-btns">
+                  <button type="button" class="btn-chip btn-chip-copy" id="btn-quick-copy-all" title="Sao chép ca đã chọn của tuần hiện tại cho các tuần còn lại trong tháng">
+                    <span>⚡ Áp dụng tuần này cho các tuần còn lại</span>
+                  </button>
+                  <button type="button" class="btn-chip" id="btn-quick-morning" title="Đăng ký tất cả ca Sáng (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
+                    <span>☀️ Tất cả ca Sáng cả tháng</span>
+                  </button>
+                  <button type="button" class="btn-chip" id="btn-quick-afternoon" title="Đăng ký tất cả ca Chiều (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
+                    <span>⛅ Tất cả ca Chiều cả tháng</span>
+                  </button>
+                  <button type="button" class="btn-chip btn-chip-clear" id="btn-clear-current-week" title="Xóa các ca rảnh đã chọn của tuần hiện tại">
+                    <span>🗑️ Xóa ca tuần này</span>
+                  </button>
+                  <button type="button" class="btn-chip btn-chip-clear" id="btn-quick-clear" title="Xóa toàn bộ ca rảnh đã chọn trong tháng">
+                    <span>🔄 Xóa hết</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Matrix Table (Tuần 1 -> Tuần 4) -->
+              <div class="matrix-wrapper" id="shift-matrix-container">
+                <table class="matrix-table" aria-label="Bảng chọn ca rảnh">
+                  <thead>
+                    <tr>
+                      <th class="period-header">Ca / Giờ</th>
+                      <th id="col-header-T2">
+                        <div class="matrix-col-day">Thứ Hai</div>
+                        <div class="matrix-col-date" id="date-badge-T2">05/10</div>
+                      </th>
+                      <th id="col-header-T3">
+                        <div class="matrix-col-day">Thứ Ba</div>
+                        <div class="matrix-col-date" id="date-badge-T3">06/10</div>
+                      </th>
+                      <th id="col-header-T4">
+                        <div class="matrix-col-day">Thứ Tư</div>
+                        <div class="matrix-col-date" id="date-badge-T4">07/10</div>
+                      </th>
+                      <th id="col-header-T5">
+                        <div class="matrix-col-day">Thứ Năm</div>
+                        <div class="matrix-col-date" id="date-badge-T5">08/10</div>
+                      </th>
+                      <th id="col-header-T6">
+                        <div class="matrix-col-day">Thứ Sáu</div>
+                        <div class="matrix-col-date" id="date-badge-T6">09/10</div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <!-- Ca Sáng -->
+                    <tr>
+                      <td class="period-header">
+                        <span class="period-title">☀️ Sáng</span>
+                        <span class="period-time">07:30 - 11:30</span>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T2_S">
+                          <input type="checkbox" id="cb-T2_S" class="slot-checkbox" value="T2_S" aria-label="Rảnh Sáng Thứ Hai">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T2_S">Rảnh Sáng T2</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T3_S">
+                          <input type="checkbox" id="cb-T3_S" class="slot-checkbox" value="T3_S" aria-label="Rảnh Sáng Thứ Ba">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T3_S">Rảnh Sáng T3</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T4_S">
+                          <input type="checkbox" id="cb-T4_S" class="slot-checkbox" value="T4_S" aria-label="Rảnh Sáng Thứ Tư">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T4_S">Rảnh Sáng T4</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T5_S">
+                          <input type="checkbox" id="cb-T5_S" class="slot-checkbox" value="T5_S" aria-label="Rảnh Sáng Thứ Năm">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T5_S">Rảnh Sáng T5</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T6_S">
+                          <input type="checkbox" id="cb-T6_S" class="slot-checkbox" value="T6_S" aria-label="Rảnh Sáng Thứ Sáu">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T6_S">Rảnh Sáng T6</span>
+                        </label>
+                      </td>
+                    </tr>
+
+                    <!-- Ca Chiều -->
+                    <tr>
+                      <td class="period-header">
+                        <span class="period-title">🌤️ Chiều</span>
+                        <span class="period-time">13:00 - 16:30</span>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T2_C">
+                          <input type="checkbox" id="cb-T2_C" class="slot-checkbox" value="T2_C" aria-label="Rảnh Chiều Thứ Hai">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T2_C">Rảnh Chiều T2</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T3_C">
+                          <input type="checkbox" id="cb-T3_C" class="slot-checkbox" value="T3_C" aria-label="Rảnh Chiều Thứ Ba">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T3_C">Rảnh Chiều T3</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T4_C">
+                          <input type="checkbox" id="cb-T4_C" class="slot-checkbox" value="T4_C" aria-label="Rảnh Chiều Thứ Tư">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T4_C">Rảnh Chiều T4</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T5_C">
+                          <input type="checkbox" id="cb-T5_C" class="slot-checkbox" value="T5_C" aria-label="Rảnh Chiều Thứ Năm">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T5_C">Rảnh Chiều T5</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="slot-toggle" for="cb-T6_C">
+                          <input type="checkbox" id="cb-T6_C" class="slot-checkbox" value="T6_C" aria-label="Rảnh Chiều Thứ Sáu">
+                          <span class="slot-icon">✓</span>
+                          <span class="slot-state-text" id="slot-text-T6_C">Rảnh Chiều T6</span>
+                        </label>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Khung Tổng Quan 4 Tuần (Hiển thị khi chọn Tab [Xem Cả Tháng]) -->
+              <div id="month-overview-container" class="month-overview-wrapper" style="display: none;">
+                <!-- Nội dung sẽ được render động bởi js/student.js -->
+              </div>
+
+              <!-- Thanh Hành Động Gửi Đăng Ký & Xóa Toàn Bộ Ca (Task 3) -->
+              <div class="student-action-bar" style="margin-top: 1.5rem; display: flex; gap: 0.85rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="btn btn-danger-outline" id="btn-clear-all-shifts" style="border-color: #fca5a5; color: #dc2626; min-height: 48px; padding: 0.75rem 1.25rem; font-weight: 700;">
+                  <span>🗑️ Hủy Đăng Ký / Xóa Hết Ca</span>
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-submit-reg" style="font-size: 1rem; padding: 0.85rem 2rem; font-weight: 700; min-height: 48px; flex: 1; max-width: 380px;">
+                  <span>✓ Gửi Đăng Ký Ca Trực</span>
+                </button>
+              </div>
+
+            </div>
+          </form>
+
         </div>
-
-        <!-- Cột phải: Chọn các ca rảnh T2 đến T6 trọn tháng 10/2026 -->
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">🗓️ Chọn Ca Rảnh Trọn Tháng (Tháng 10/2026)</h2>
-              <p class="card-desc">Chọn ca rảnh theo từng tuần (Thứ 2 - Thứ 6) phù hợp với thời khóa biểu học tập của bạn</p>
-            </div>
-            <div class="selected-counter" id="selected-shift-count">
-              <span class="counter-total">0 ca đã chọn</span>
-              <span class="counter-breakdown">T1: 0 • T2: 0 • T3: 0 • T4: 0</span>
-            </div>
-          </div>
-          <div class="card-body">
-            
-            <!-- Cảnh báo nếu Cổng Đăng Ký đang Đóng -->
-            <div id="matrix-locked-notice" class="matrix-locked-notice" style="display: none;">
-              <span>🔒 <strong>Cổng đăng ký hiện đang đóng.</strong> Chức năng chọn ca trực đang tạm khóa. Bạn vẫn có thể nhập MSSV bên trái để xem lại các ca bạn đã chọn trước đó.</span>
-            </div>
-
-            <!-- Thanh chuyển Tab chọn 4 tuần & Xem Cả Tháng -->
-            <div class="month-week-tabs" id="reg-week-tabs" role="tablist" aria-label="Chọn tuần đăng ký ca rảnh">
-              <button type="button" class="month-week-tab active" data-week="1" role="tab" aria-selected="true">
-                <span class="tab-week-title">Tuần 1</span>
-                <span class="tab-week-dates">05/10 - 09/10</span>
-                <span class="tab-week-count" id="badge-week-count-1">0 ca</span>
-              </button>
-              <button type="button" class="month-week-tab" data-week="2" role="tab" aria-selected="false">
-                <span class="tab-week-title">Tuần 2</span>
-                <span class="tab-week-dates">12/10 - 16/10</span>
-                <span class="tab-week-count" id="badge-week-count-2">0 ca</span>
-              </button>
-              <button type="button" class="month-week-tab" data-week="3" role="tab" aria-selected="false">
-                <span class="tab-week-title">Tuần 3</span>
-                <span class="tab-week-dates">19/10 - 23/10</span>
-                <span class="tab-week-count" id="badge-week-count-3">0 ca</span>
-              </button>
-              <button type="button" class="month-week-tab" data-week="4" role="tab" aria-selected="false">
-                <span class="tab-week-title">Tuần 4</span>
-                <span class="tab-week-dates">26/10 - 30/10</span>
-                <span class="tab-week-count" id="badge-week-count-4">0 ca</span>
-              </button>
-              <button type="button" class="month-week-tab tab-view-all" data-week="all" role="tab" aria-selected="false">
-                <span class="tab-week-title">📊 Xem Cả Tháng</span>
-                <span class="tab-week-dates">Toàn bộ 4 tuần</span>
-                <span class="tab-week-count" id="badge-week-count-all">0 ca</span>
-              </button>
-            </div>
-
-            <!-- Quick Toolbar -->
-            <div class="matrix-toolbar" id="matrix-quick-toolbar">
-              <div class="matrix-toolbar-header">
-                <span class="matrix-toolbar-indicator" id="current-week-label">
-                  📍 Đang chọn ca cho: <strong>Tuần 1 (05/10/2026 - 09/10/2026)</strong>
-                </span>
-              </div>
-              <div class="matrix-quick-btns">
-                <button type="button" class="btn-chip btn-chip-copy" id="btn-quick-copy-all" title="Sao chép ca đã chọn của tuần hiện tại cho các tuần còn lại trong tháng">
-                  <span>⚡ Áp dụng tuần này cho các tuần còn lại</span>
-                </button>
-                <button type="button" class="btn-chip" id="btn-quick-morning" title="Đăng ký tất cả ca Sáng (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
-                  <span>☀️ Tất cả ca Sáng cả tháng</span>
-                </button>
-                <button type="button" class="btn-chip" id="btn-quick-afternoon" title="Đăng ký tất cả ca Chiều (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
-                  <span>⛅ Tất cả ca Chiều cả tháng</span>
-                </button>
-                <button type="button" class="btn-chip btn-chip-clear" id="btn-quick-clear" title="Xóa toàn bộ ca rảnh đã chọn trong tháng">
-                  <span>🔄 Xóa hết</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Matrix Table (Tuần 1 -> Tuần 4) -->
-            <div class="matrix-wrapper" id="shift-matrix-container">
-              <table class="matrix-table" aria-label="Bảng chọn ca rảnh">
-                <thead>
-                  <tr>
-                    <th class="period-header">Ca / Giờ</th>
-                    <th id="col-header-T2">
-                      <div class="matrix-col-day">Thứ Hai</div>
-                      <div class="matrix-col-date" id="date-badge-T2">05/10</div>
-                    </th>
-                    <th id="col-header-T3">
-                      <div class="matrix-col-day">Thứ Ba</div>
-                      <div class="matrix-col-date" id="date-badge-T3">06/10</div>
-                    </th>
-                    <th id="col-header-T4">
-                      <div class="matrix-col-day">Thứ Tư</div>
-                      <div class="matrix-col-date" id="date-badge-T4">07/10</div>
-                    </th>
-                    <th id="col-header-T5">
-                      <div class="matrix-col-day">Thứ Năm</div>
-                      <div class="matrix-col-date" id="date-badge-T5">08/10</div>
-                    </th>
-                    <th id="col-header-T6">
-                      <div class="matrix-col-day">Thứ Sáu</div>
-                      <div class="matrix-col-date" id="date-badge-T6">09/10</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- Ca Sáng -->
-                  <tr>
-                    <td class="period-header">
-                      <span class="period-title">☀️ Sáng</span>
-                      <span class="period-time">07:30 - 11:30</span>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T2_S">
-                        <input type="checkbox" id="cb-T2_S" class="slot-checkbox" value="T2_S" aria-label="Rảnh Sáng Thứ Hai">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T2_S">Rảnh Sáng T2</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T3_S">
-                        <input type="checkbox" id="cb-T3_S" class="slot-checkbox" value="T3_S" aria-label="Rảnh Sáng Thứ Ba">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T3_S">Rảnh Sáng T3</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T4_S">
-                        <input type="checkbox" id="cb-T4_S" class="slot-checkbox" value="T4_S" aria-label="Rảnh Sáng Thứ Tư">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T4_S">Rảnh Sáng T4</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T5_S">
-                        <input type="checkbox" id="cb-T5_S" class="slot-checkbox" value="T5_S" aria-label="Rảnh Sáng Thứ Năm">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T5_S">Rảnh Sáng T5</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T6_S">
-                        <input type="checkbox" id="cb-T6_S" class="slot-checkbox" value="T6_S" aria-label="Rảnh Sáng Thứ Sáu">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T6_S">Rảnh Sáng T6</span>
-                      </label>
-                    </td>
-                  </tr>
-
-                  <!-- Ca Chiều -->
-                  <tr>
-                    <td class="period-header">
-                      <span class="period-title">🌤️ Chiều</span>
-                      <span class="period-time">13:00 - 16:30</span>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T2_C">
-                        <input type="checkbox" id="cb-T2_C" class="slot-checkbox" value="T2_C" aria-label="Rảnh Chiều Thứ Hai">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T2_C">Rảnh Chiều T2</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T3_C">
-                        <input type="checkbox" id="cb-T3_C" class="slot-checkbox" value="T3_C" aria-label="Rảnh Chiều Thứ Ba">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T3_C">Rảnh Chiều T3</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T4_C">
-                        <input type="checkbox" id="cb-T4_C" class="slot-checkbox" value="T4_C" aria-label="Rảnh Chiều Thứ Tư">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T4_C">Rảnh Chiều T4</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T5_C">
-                        <input type="checkbox" id="cb-T5_C" class="slot-checkbox" value="T5_C" aria-label="Rảnh Chiều Thứ Năm">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T5_C">Rảnh Chiều T5</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="slot-toggle" for="cb-T6_C">
-                        <input type="checkbox" id="cb-T6_C" class="slot-checkbox" value="T6_C" aria-label="Rảnh Chiều Thứ Sáu">
-                        <span class="slot-icon">✓</span>
-                        <span class="slot-state-text" id="slot-text-T6_C">Rảnh Chiều T6</span>
-                      </label>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Khung Tổng Quan 4 Tuần (Hiển thị khi chọn Tab [Xem Cả Tháng]) -->
-            <div id="month-overview-container" class="month-overview-wrapper" style="display: none;">
-              <!-- Nội dung sẽ được render động bởi js/student.js -->
-            </div>
-
-            <div style="margin-top: 1rem; padding: 0.9rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-              💡 <em>Đăng ký ca rảnh trọn tháng giúp bạn chủ động sắp xếp lịch học. Nếu lịch học cố định cả 4 tuần, hãy chọn tuần 1 rồi nhấn <strong>"⚡ Áp dụng tuần này cho các tuần còn lại"</strong> để điền nhanh cả tháng.</em>
-            </div>
-
-            <!-- Nút gửi đăng ký to nổi bật ngay dưới bảng ca rảnh -->
-            <div style="margin-top: 1.25rem;">
-              <button type="button" class="btn btn-primary btn-block" id="btn-submit-reg-2" style="font-size: 1rem; padding: 0.85rem; font-weight: 700;">
-                <span>✓ Gửi Đăng Ký Ca Trực Ngay</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-
       </div>
     </section>
 
@@ -472,8 +436,8 @@
       <div class="card-body">
         <label for="input-lookup-mssv" class="sr-only">Mã Số Sinh Viên (MSSV) tra cứu ca trực</label>
         <div style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
-          <input type="text" id="input-lookup-mssv" class="form-input" style="flex: 1; min-width: 220px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)" aria-label="Nhập MSSV của bạn để tra cứu ca trực">
-          <button type="button" id="btn-lookup" class="btn btn-primary">
+          <input type="text" id="input-lookup-mssv" class="form-input" inputmode="numeric" pattern="[0-9]*" style="flex: 1; min-width: 220px; min-height: 48px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)" aria-label="Nhập MSSV của bạn để tra cứu ca trực">
+          <button type="button" id="btn-lookup" class="btn btn-primary" style="min-height: 48px; padding: 0.75rem 1.5rem;">
             <span>Tra Cứu</span>
           </button>
         </div>
@@ -488,9 +452,9 @@
       <div class="card-header">
         <div>
           <h2 class="card-title">📅 Lịch Trực Chung Văn Phòng Tư Vấn Tuyển Sinh</h2>
-          <p class="card-desc" id="schedule-update-time">Lịch trực chính thức (Mỗi ca: 1 Người Cũ + 1 Người Mới)</p>
+          <p class="card-desc" id="schedule-update-time">Lịch trực chính thức của Ban Tư Vấn Tuyển Sinh</p>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
           <!-- Chọn Tuần 1 -> Tuần 4 (Lịch 1 Tháng) -->
           <div class="filter-group" id="student-week-selector">
             <button class="filter-btn active" data-week="1" id="btn-student-week-1">Tuần 1</button>
@@ -503,15 +467,10 @@
       </div>
       <div class="card-body" style="padding: 1rem;">
         
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.8rem; flex-wrap: wrap;">
-          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-            <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span>
-            <strong>Người Cũ:</strong> Thành viên hướng dẫn, phụ trách chính
-          </span>
-          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-            <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
-            <strong>Người Mới:</strong> Thành viên tập sự, phối hợp tư vấn
-          </span>
+        <!-- Bộ Chuyển Đổi Tháng: Tháng 10/2026 (Hiện tại) vs Tháng 09/2026 (Tháng trước) -->
+        <div class="month-selector-tabs" id="student-month-selector" style="display: inline-flex; background: var(--border-color); padding: 3px; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+          <button type="button" class="month-sel-btn active" data-month="current" id="btn-month-current">📅 Tháng 10/2026 (Hiện tại)</button>
+          <button type="button" class="month-sel-btn" data-month="prev" id="btn-month-prev">⏮️ Tháng 09/2026 (Tháng trước)</button>
         </div>
 
         <div class="timetable-wrapper">
@@ -587,7 +546,7 @@
             <select id="select-target-student" class="form-select" required aria-label="Cộng tác viên nhận đổi hoặc trực thay">
               <option value="">-- Chọn CTV nhận đổi hoặc trực thay --</option>
             </select>
-            <div class="form-hint" id="swap-target-hint">Hệ thống liệt kê các bạn cùng vai trò (Người Cũ hoặc Người Mới) để đảm bảo chất lượng ca trực.</div>
+            <div class="form-hint" id="swap-target-hint">Chọn bạn CTV bạn muốn hoán đổi ca cùng hoặc nhờ trực thay.</div>
           </div>
 
           <!-- Lý do -->

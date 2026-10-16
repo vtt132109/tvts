@@ -139,7 +139,7 @@
   <!-- In ấn banner -->
   <div class="print-header-banner">
     <h1>BẢNG PHÂN CÔNG LỊCH TRỰC VĂN PHÒNG TƯ VẤN TUYỂN SINH</h1>
-    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Quy định: 1 Người Cũ (Kinh nghiệm) + 1 Người Mới (Tập sự) mỗi ca</p>
+    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Quy định: 1 Chính Thức (Kinh nghiệm) + 1 Tập Sự mỗi ca</p>
   </div>
 
   <!-- ====================================================================
@@ -329,14 +329,14 @@
     <div class="summary-card">
       <div class="summary-icon old">🎓</div>
       <div class="summary-info">
-        <div class="label">Người cũ (Kinh nghiệm)</div>
+        <div class="label">Chính Thức (Kinh nghiệm)</div>
         <div class="value" id="count-old-students">0</div>
       </div>
     </div>
     <div class="summary-card">
       <div class="summary-icon new">🌱</div>
       <div class="summary-info">
-        <div class="label">Người mới (Tập sự)</div>
+        <div class="label">Tập Sự (Mới)</div>
         <div class="value" id="count-new-students">0</div>
       </div>
     </div>
@@ -357,40 +357,28 @@
          ==================================================================== -->
     <div class="tab-content active" id="tab-schedule-mgmt">
       
-      <!-- Schedule Hero Section with Admin Actions -->
-      <section class="schedule-hero">
-        <div class="schedule-hero-info">
-          <h2>⚡ Điều Phối & Phân Bổ Ca Trực Tự Động</h2>
-          <p>Thuật toán tối ưu hóa công bằng: Mỗi ca đúng <strong>1 Người Cũ</strong> + <strong>1 Người Mới</strong>, ai cũng có lịch trực.</p>
+      <!-- Schedule Hero Section with Admin Actions (Enterprise Standard) -->
+      <section class="schedule-hero-enterprise">
+        <div class="hero-left">
+          <h2>⚡ Điều Phối & Phân Bổ Lịch Trực</h2>
+          <p>Tự động ghép 1 Chính Thức + 1 Tập Sự mỗi ca, đảm bảo công bằng.</p>
         </div>
-        <div class="schedule-hero-actions">
-          <button class="btn-magic" id="btn-admin-auto-schedule">
-            <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH TRỰC</span>
+        <div class="hero-right-actions">
+          <button class="btn btn-primary" id="btn-admin-auto-schedule" style="font-weight: 700; padding: 0.75rem 1.5rem;">
+            <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH</span>
           </button>
-          <button class="btn btn-primary" id="btn-open-excel-modal" style="background: linear-gradient(135deg, #107c41, #185a37); color: #ffffff; border: none; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 124, 65, 0.35);" title="Mở bảng tính xuất Excel & Copy sang Google Sheets chuẩn mẫu HCM-UTE">
-            <span>📊 Xuất Excel Mẫu HCM-UTE</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-hero-view-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()" style="font-weight: 700; background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0;" title="Xem Bảng Chấm Công tháng hiện tại">
-            <span>📋 Bảng Chấm Công Tháng</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-toggle-publish-schedule" style="background: #eef2ff; color: #4338ca; border: 1.5px solid #a5b4fc; font-weight: 700;" title="Bật/Tắt hiển thị lịch trực trên Cổng Sinh Viên">
-            <span id="btn-publish-schedule-icon">📢</span> <span id="btn-publish-schedule-text">Công Bố Lịch Cho SV</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-quick-copy-sheet" style="background: #eef2ff; color: #4338ca; border: 1.5px solid #c7d2fe; font-weight: 700;" title="Sao chép toàn bộ bảng vào clipboard để dán Ctrl+V sang Google Sheets">
-            <span>📋 Sao Chép Bảng (Ctrl+V)</span>
-          </button>
-          <button class="btn btn-danger-outline" id="btn-clear-schedule" style="background: #fef2f2; color: #dc2626; border: 1.5px solid #fca5a5; font-weight: 700;" title="Xóa toàn bộ ca trực đã phân bổ (vẫn giữ nguyên danh sách đăng ký sinh viên)">
-            <span>🗑️ Xóa Bảng Phân Công</span>
-          </button>
-          <button class="btn btn-danger-outline" id="btn-clear-students" style="background: #fff1f2; color: #be123c; border: 1.5px solid #fda4af; font-weight: 700;" title="Xóa toàn bộ hồ sơ sinh viên đã đăng ký trong hệ thống">
-            <span>👥 Xóa Toàn Bộ Sinh Viên</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-export-csv" title="Tải file Excel/CSV">
-            <span>📥 Xuất CSV</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-print-schedule" title="In hoặc lưu PDF A4">
-            <span>🖨️ In Lịch Trực</span>
-          </button>
+          <div class="action-group">
+            <button class="btn btn-secondary" id="btn-open-excel-modal"><span>📊 Xuất Excel UTE</span></button>
+            <button class="btn btn-secondary" id="btn-hero-view-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()"><span>📋 Bảng Chấm Công</span></button>
+            <button class="btn btn-secondary" id="btn-toggle-publish-schedule"><span id="btn-publish-schedule-icon">📢</span> <span id="btn-publish-schedule-text">Công Bố Lịch</span></button>
+            <button class="btn btn-secondary" id="btn-quick-copy-sheet"><span>📋 Copy (Ctrl+V)</span></button>
+          </div>
+          <div class="action-group">
+            <button class="btn btn-secondary btn-sm" id="btn-export-csv"><span>📥 CSV</span></button>
+            <button class="btn btn-secondary btn-sm" id="btn-print-schedule"><span>🖨️ In Lịch</span></button>
+            <button class="btn btn-danger-outline btn-sm" id="btn-clear-schedule"><span>🗑️ Xóa Lịch</span></button>
+            <button class="btn btn-danger-outline btn-sm" id="btn-clear-students"><span>👥 Xóa SV</span></button>
+          </div>
         </div>
       </section>
 
@@ -529,10 +517,10 @@
 
             <div style="display: flex; gap: 0.75rem; font-size: 0.78rem;">
               <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span> Người Cũ
+                <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span> Chính Thức
               </span>
               <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span> Người Mới
+                <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span> Tập Sự
               </span>
             </div>
           </div>
@@ -596,32 +584,32 @@
       <!-- Khu vực Thống Kê Độ Công Bằng (Fairness Analytics) -->
       <div class="fairness-section">
         
-        <!-- Cột Người Cũ -->
+        <!-- Cột Chính Thức -->
         <div class="card">
           <div class="card-header">
             <div>
-              <h3 class="card-title">🎓 Thống Kê Số Ca: Người Cũ</h3>
+              <h3 class="card-title">🎓 Thống Kê Số Ca: Chính Thức</h3>
               <p class="card-desc">Theo dõi phân bổ đều khối lượng ca trực</p>
             </div>
           </div>
           <div class="card-body">
             <div class="fairness-list" id="fairness-list-old">
-              <!-- Render số ca người cũ -->
+              <!-- Render số ca chính thức -->
             </div>
           </div>
         </div>
 
-        <!-- Cột Người Mới -->
+        <!-- Cột Tập Sự -->
         <div class="card">
           <div class="card-header">
             <div>
-              <h3 class="card-title">🌱 Thống Kê Số Ca: Người Mới</h3>
+              <h3 class="card-title">🌱 Thống Kê Số Ca: Tập Sự</h3>
               <p class="card-desc">Đảm bảo ai đăng ký cũng được phân công trực</p>
             </div>
           </div>
           <div class="card-body">
             <div class="fairness-list" id="fairness-list-new">
-              <!-- Render số ca người mới -->
+              <!-- Render số ca tập sự -->
             </div>
           </div>
         </div>
@@ -664,8 +652,8 @@
           <div class="table-toolbar">
             <div class="filter-group">
               <button class="filter-btn active" data-filter="all">Tất cả</button>
-              <button class="filter-btn" data-filter="old">🎓 Người cũ</button>
-              <button class="filter-btn" data-filter="new">🌱 Người mới</button>
+              <button class="filter-btn" data-filter="old">🎓 Chính Thức</button>
+              <button class="filter-btn" data-filter="new">🌱 Tập Sự</button>
             </div>
 
             <div class="search-input-wrap">
@@ -675,18 +663,30 @@
             </div>
           </div>
 
+          <!-- Floating Bulk Action Bar (#bulk-student-actions) -->
+          <div id="bulk-student-actions" class="bulk-actions-bar" style="display: none; margin-bottom: 1rem; padding: 0.85rem 1.25rem; background: var(--bg-card); border: 1.5px solid var(--primary); border-radius: var(--radius-md); box-shadow: var(--shadow-md); align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="font-weight: 600;">Đã chọn <strong id="bulk-selected-count" style="color: var(--primary); font-size: 1.1rem;">0</strong> sinh viên:</div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-role-old"><span>🎓 Chuyển sang Chính Thức</span></button>
+              <button type="button" class="btn btn-success btn-sm" id="btn-bulk-role-new" style="background: #10b981; color: #fff;"><span>🌱 Chuyển sang Tập Sự</span></button>
+              <button type="button" class="btn btn-warning-outline btn-sm" id="btn-bulk-clear-shifts" style="border-color: #f59e0b; color: #d97706;"><span>🧹 Xóa ca đã chọn</span></button>
+              <button type="button" class="btn btn-danger-outline btn-sm" id="btn-bulk-delete-students"><span>🗑️ Xóa khỏi danh sách</span></button>
+            </div>
+          </div>
+
           <!-- Bảng quản lý sinh viên -->
           <div class="data-table-container">
-            <table class="data-table">
+            <table class="data-table" id="table-students">
               <thead>
                 <tr>
+                  <th style="width: 44px; text-align: center;"><input type="checkbox" id="cb-student-select-all" title="Chọn tất cả"></th>
                   <th style="width: 50px;">STT</th>
                   <th>Họ và Tên</th>
                   <th>MSSV</th>
                   <th>Phân Loại</th>
                   <th>Ca Rảnh Đã Đăng Ký</th>
                   <th>Số Ca Trực</th>
-                  <th style="width: 130px;">Hành Động</th>
+                  <th style="width: 175px;">Hành Động</th>
                 </tr>
               </thead>
               <tbody id="admin-student-table-body">
@@ -779,12 +779,12 @@
               <div class="form-label" id="label-admin-student-role" style="font-weight: 700;">Phân Loại <span class="required">*</span></div>
               <div style="display: flex; gap: 1rem; margin-top: 0.4rem;" role="radiogroup" aria-labelledby="label-admin-student-role">
                 <label for="admin-role-old" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" id="admin-role-old" name="adminStudentRole" value="old" aria-label="Người Cũ - Đã có kinh nghiệm">
-                  <span>🎓 Người cũ</span>
+                  <input type="radio" id="admin-role-old" name="adminStudentRole" value="old" aria-label="Thành viên Chính Thức">
+                  <span>🎓 Thành viên Chính Thức</span>
                 </label>
                 <label for="admin-role-new" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" id="admin-role-new" name="adminStudentRole" value="new" checked aria-label="Người Mới - Tập sự">
-                  <span>🌱 Người mới</span>
+                  <input type="radio" id="admin-role-new" name="adminStudentRole" value="new" checked aria-label="Cộng tác viên Tập Sự">
+                  <span>🌱 Cộng tác viên Tập Sự</span>
                 </label>
               </div>
             </div>
@@ -792,11 +792,12 @@
 
           <!-- Ma trận ca rảnh trong modal -->
           <div class="form-group" style="margin-top: 0.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
               <div class="form-label" style="margin: 0; font-weight: 700;">Chọn Các Ca Rảnh:</div>
-              <div style="display: flex; gap: 0.3rem;">
+              <div style="display: flex; gap: 0.35rem; align-items: center;">
                 <button type="button" class="btn-chip" id="btn-admin-quick-all">Cả tuần</button>
                 <button type="button" class="btn-chip" id="btn-admin-quick-clear">Xóa hết</button>
+                <button type="button" class="btn btn-warning-outline btn-sm" id="btn-admin-modal-clear-shifts" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; border-color: #f59e0b; color: #d97706;">🧹 Đưa về 0 ca</button>
               </div>
             </div>
 
@@ -1431,8 +1432,8 @@
             <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); margin-right: 0.25rem;">Lọc vai trò:</span>
             <div class="filter-group" id="payroll-role-filters">
               <button type="button" class="filter-btn active" data-payroll-filter="all" id="btn-payroll-filter-all">Tất cả</button>
-              <button type="button" class="filter-btn" data-payroll-filter="old" id="btn-payroll-filter-old">🎓 Người cũ</button>
-              <button type="button" class="filter-btn" data-payroll-filter="new" id="btn-payroll-filter-new">🌱 Người mới</button>
+              <button type="button" class="filter-btn" data-payroll-filter="old" id="btn-payroll-filter-old">🎓 Chính Thức</button>
+              <button type="button" class="filter-btn" data-payroll-filter="new" id="btn-payroll-filter-new">🌱 Tập Sự</button>
             </div>
           </div>
 
