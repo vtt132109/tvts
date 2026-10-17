@@ -4010,6 +4010,79 @@ select.form-input,
   background-color: var(--bg-card-hover);
 }
 
+/* --------------------------------------------------------------------------
+   LÀM BẢNG CHẤM CÔNG THOÁT + TÊN TO HƠN
+   --------------------------------------------------------------------------
+   Vấn đề đo được: khung chỉ còn ~95px chiều cao cho bảng nên chỉ thấy 1 CTV.
+   Nguyên nhân: 3 thẻ thống kê ăn ~185px + thanh lọc ăn ~150px, còn mỗi dòng
+   cao ~64px do padding 0.75rem và các badge bên trong to.
+
+   Cách sửa: bóp chiều cao vỗn (thống kê + thanh lọc + dòng) để nhảy ra
+   ~200px cho bảng, rồi bù lại bằng cách tăng cỡ chữ tên — tên to hơn mà
+   vẫn thấy được nhiều người cùng lúc.
+   -------------------------------------------------------------------------- */
+.payroll-modal-body {
+  padding: 0.85rem 1rem !important;
+}
+
+.payroll-stats-grid {
+  gap: 0.6rem !important;
+  margin-bottom: 0.7rem !important;
+}
+
+.payroll-stat-card {
+  padding: 0.5rem 0.7rem !important;
+  gap: 0.25rem !important;
+}
+
+.payroll-stat-card .stat-value {
+  font-size: 1.3rem !important;
+}
+
+.payroll-stat-card .stat-label,
+.payroll-stat-card .stat-title {
+  font-size: 0.68rem !important;
+}
+
+.payroll-table {
+  font-size: 0.98rem;                 /* 0.88rem -> to hơn, dễ đọc khi đứng xa */
+}
+
+.payroll-table th {
+  padding: 0.45rem 0.55rem;
+}
+
+.payroll-table td {
+  padding: 0.34rem 0.55rem;           /* 0.75rem -> gần một nửa, dòng thấp hơn nhiều */
+}
+
+/* Cột "HỌ VÀ TÊN" (cột thứ 2) to lên — thứ người xem tìm trước tiên */
+.payroll-table td:nth-child(2) {
+  font-size: 1.08rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Badge toàn bộ trong bảng: nhỏ lại để không kéo giãn dòng */
+.payroll-table .badge-total-work {
+  min-width: 34px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.86rem;
+}
+
+.payroll-table .badge,
+.payroll-table .role-badge,
+.payroll-table .shift-count-badge {
+  padding: 0.14rem 0.45rem;
+  font-size: 0.78rem;
+}
+
+/* Nút "Chi tiết" gọn lại */
+.payroll-table .btn {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+}
+
 /* Badge Tổng Công Nổi Bật */
 .badge-total-work {
   display: inline-flex;
