@@ -1456,6 +1456,143 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     });
   }
 
+
+// ------------------------------------------------------------------
+  // XÁC NHẬN 2 BƯỚC cho thao tác xóa sạch dữ liệu
+  //
+  // confirm() của trình duyệt chỉ có 1 bước: bấm nhầm là mất luôn cả bảng
+  // phân công 4 tuần hoặc cả 58 CTV — mà mất thì chỉ khôi phục được từ bản
+  // sao lưu trên web, tốn công nhập lại tay. Bước 2 bắt gõ đúng từ khoá
+  // để người dùng phải đọc và xác nhận đúng ý mình.
+  //
+  // Dùng lại class CSS sẵn có (.modal-overlay + .active, .btn-danger-outline,
+  // .form-input) nên không phải thêm dòng CSS nào. Ẩn/hiện bằng CẢ thuộc
+  // tính `hidden` lẫn class `active` để không phụ thuộc giá trị display mặc
+  // định của .modal-overlay.
+  // ------------------------------------------------------------------
+  let dangerConfirmResolver = null;
+
+  const ensureDangerConfirmModal = () => {
+    const existing = document.getElementById('danger-confirm-overlay');
+    if (existing) return existing;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'danger-confirm-overlay';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
+        <div class="modal-header">
+          <h3 class="modal-title" id="danger-confirm-title"></h3>
+        </div>
+        <div class="modal-body">
+          <p id="danger-confirm-msg" style="white-space: pre-line;"></p>
+          <ul id="danger-confirm-list" style="margin: .6rem 0 0; padding-left: 1.2rem;"></ul>
+          <label for="danger-confirm-input" id="danger-confirm-hint"
+                 style="display: block; margin: 1rem 0 .4rem; font-weight: 700;"></label>
+          <input type="text" id="danger-confirm-input" class="form-input"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="danger-confirm-cancel">Huỷ bỏ</button>
+          <button type="button" class="btn btn-danger-outline" id="danger-confirm-ok" disabled></button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('#danger-confirm-input');
+    const okBtn = overlay.querySelector('#danger-confirm-ok');
+    input.addEventListener('input', () => {
+      const want = (overlay.dataset.keyword || '').toUpperCase();
+      okBtn.disabled = input.value.trim().toUpperCase() !== want;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !okBtn.disabled) { e.preventDefault(); closeDangerConfirm(true); }
+      if (e.key === 'Escape') { e.preventDefault(); closeDangerConfirm(false); }
+    });
+    okBtn.addEventListener('click', () => closeDangerConfirm(true));
+    overlay.querySelector('#danger-confirm-cancel').addEventListener('click', () => closeDangerConfirm(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDangerConfirm(false); });
+    return overlay;
+  };
+
+  function closeDangerConfirm(accepted) {
+    const resolver = dangerConfirmResolver;
+    dangerConfirmResolver = null;
+    const overlay = document.getElementById('danger-confirm-overlay');
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.classList.remove('active');
+      overlay.querySelector('#danger-confirm-input').value = '';
+      overlay.querySelector('#danger-confirm-ok').disabled = true;
+    }
+    if (typeof resolver === 'function') resolver(!!accepted);
+  }
+
+  // Trả về Promise<boolean>: true = đã gõ đúng từ khoá và bấm nút xác nhận.
+  const confirmDangerAction = ({ title, message, losses = [], keyword, confirmLabel }) => {
+    // Còn một hộp thoại nào đang mở dở -> coi như huỷ, tránh mất resolver.
+    if (dangerConfirmResolver) closeDangerConfirm(false);
+
+    // Môi trường không dựng được DOM thật (unit test dùng mock DOM thiếu
+    // querySelector/dataset, hoặc trình duyệt quá cũ): lùi về confirm() gốc để
+    // thao tác vẫn chạy được, thay vì treo vô hạn ở một Promise không ai giải.
+    const fallBackToNativeConfirm = (err) => {
+      console.warn('[confirmDangerAction] Không dựng được hộp thoại, dùng confirm():', err);
+      try {
+        const bad = document.getElementById('danger-confirm-overlay');
+        if (bad && bad.parentElement) bad.parentElement.removeChild(bad);
+      } catch (_) { /* không dọn được thì kệ */ }
+      return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+    };
+
+    let overlay;
+    try {
+      overlay = ensureDangerConfirmModal();
+      if (!overlay.dataset || typeof overlay.querySelector !== 'function') {
+        throw new Error('overlay không có dataset/querySelector');
+      }
+    } catch (err) {
+      return fallBackToNativeConfirm(err);
+    }
+
+    try {
+      overlay.dataset.keyword = keyword;
+      overlay.querySelector('#danger-confirm-title').textContent = title;
+      overlay.querySelector('#danger-confirm-msg').textContent = message;
+      overlay.querySelector('#danger-confirm-hint').textContent = `Gõ đúng "${keyword}" để xác nhận:`;
+
+      const list = overlay.querySelector('#danger-confirm-list');
+      list.innerHTML = '';
+      losses.forEach((text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        list.appendChild(li);
+      });
+
+      const okBtn = overlay.querySelector('#danger-confirm-ok');
+      okBtn.textContent = confirmLabel;
+      okBtn.disabled = true;
+      const input = overlay.querySelector('#danger-confirm-input');
+      input.value = '';
+    } catch (err) {
+      return fallBackToNativeConfirm(err);
+    }
+
+    overlay.hidden = false;
+    overlay.classList.add('active');
+    setTimeout(() => input.focus(), 30);
+
+    return new Promise((resolve) => { dangerConfirmResolver = resolve; });
+  };
+
+  // Đếm tổng số lượt ca rảnh đã đăng ký của một danh sách CTV (để hiện trong cảnh báo).
+  const countRegisteredShifts = (list) => (list || []).reduce(
+    (total, s) => total + Object.values(s.monthlyAvailableShifts || {})
+      .reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+    0
+  );
+
   function bindEvents() {
     bindMonthNavigatorEvents();
     elements.tabButtons.forEach(btn => {
@@ -1496,116 +1633,6 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       triggerAutoSchedule(true);
     });
 
-// ------------------------------------------------------------------
-    // XÁC NHẬN 2 BƯỚC cho thao tác xóa sạch dữ liệu
-    //
-    // confirm() của trình duyệt chỉ có 1 bước: bấm nhầm là mất luôn cả bảng
-    // phân công 4 tuần hoặc cả 58 CTV — mà mất thì chỉ khôi phục được từ bản
-    // sao lưu trên web, tốn công nhập lại tay. Bước 2 bắt gõ đúng từ khoá
-    // để người dùng phải đọc và xác nhận đúng ý mình.
-    //
-    // Dùng lại class CSS sẵn có (.modal-overlay + .active, .btn-danger-outline,
-    // .form-input) nên không phải thêm dòng CSS nào. Ẩn/hiện bằng CẢ thuộc
-    // tính `hidden` lẫn class `active` để không phụ thuộc giá trị display mặc
-    // định của .modal-overlay.
-    // ------------------------------------------------------------------
-    let dangerConfirmResolver = null;
-
-    const ensureDangerConfirmModal = () => {
-      const existing = document.getElementById('danger-confirm-overlay');
-      if (existing) return existing;
-
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay';
-      overlay.id = 'danger-confirm-overlay';
-      overlay.hidden = true;
-      overlay.innerHTML = `
-        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
-          <div class="modal-header">
-            <h3 class="modal-title" id="danger-confirm-title"></h3>
-          </div>
-          <div class="modal-body">
-            <p id="danger-confirm-msg" style="white-space: pre-line;"></p>
-            <ul id="danger-confirm-list" style="margin: .6rem 0 0; padding-left: 1.2rem;"></ul>
-            <label for="danger-confirm-input" id="danger-confirm-hint"
-                   style="display: block; margin: 1rem 0 .4rem; font-weight: 700;"></label>
-            <input type="text" id="danger-confirm-input" class="form-input"
-                   autocomplete="off" autocapitalize="characters" spellcheck="false">
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" id="danger-confirm-cancel">Huỷ bỏ</button>
-            <button type="button" class="btn btn-danger-outline" id="danger-confirm-ok" disabled></button>
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
-
-      const input = overlay.querySelector('#danger-confirm-input');
-      const okBtn = overlay.querySelector('#danger-confirm-ok');
-      input.addEventListener('input', () => {
-        const want = (overlay.dataset.keyword || '').toUpperCase();
-        okBtn.disabled = input.value.trim().toUpperCase() !== want;
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !okBtn.disabled) { e.preventDefault(); closeDangerConfirm(true); }
-        if (e.key === 'Escape') { e.preventDefault(); closeDangerConfirm(false); }
-      });
-      okBtn.addEventListener('click', () => closeDangerConfirm(true));
-      overlay.querySelector('#danger-confirm-cancel').addEventListener('click', () => closeDangerConfirm(false));
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDangerConfirm(false); });
-      return overlay;
-    };
-
-    function closeDangerConfirm(accepted) {
-      const resolver = dangerConfirmResolver;
-      dangerConfirmResolver = null;
-      const overlay = document.getElementById('danger-confirm-overlay');
-      if (overlay) {
-        overlay.hidden = true;
-        overlay.classList.remove('active');
-        overlay.querySelector('#danger-confirm-input').value = '';
-        overlay.querySelector('#danger-confirm-ok').disabled = true;
-      }
-      if (typeof resolver === 'function') resolver(!!accepted);
-    }
-
-    // Trả về Promise<boolean>: true = đã gõ đúng từ khoá và bấm nút xác nhận.
-    const confirmDangerAction = ({ title, message, losses = [], keyword, confirmLabel }) => {
-      // Còn một hộp thoại nào đang mở dở -> coi như huỷ, tránh mất resolver.
-      if (dangerConfirmResolver) closeDangerConfirm(false);
-
-      const overlay = ensureDangerConfirmModal();
-      overlay.dataset.keyword = keyword;
-      overlay.querySelector('#danger-confirm-title').textContent = title;
-      overlay.querySelector('#danger-confirm-msg').textContent = message;
-      overlay.querySelector('#danger-confirm-hint').textContent = `Gõ đúng "${keyword}" để xác nhận:`;
-
-      const list = overlay.querySelector('#danger-confirm-list');
-      list.innerHTML = '';
-      losses.forEach((text) => {
-        const li = document.createElement('li');
-        li.textContent = text;
-        list.appendChild(li);
-      });
-
-      const okBtn = overlay.querySelector('#danger-confirm-ok');
-      okBtn.textContent = confirmLabel;
-      okBtn.disabled = true;
-      const input = overlay.querySelector('#danger-confirm-input');
-      input.value = '';
-
-      overlay.hidden = false;
-      overlay.classList.add('active');
-      setTimeout(() => input.focus(), 30);
-
-      return new Promise((resolve) => { dangerConfirmResolver = resolve; });
-    };
-
-    // Đếm tổng số lượt ca rảnh đã đăng ký của một danh sách CTV (để hiện trong cảnh báo).
-    const countRegisteredShifts = (list) => (list || []).reduce(
-      (total, s) => total + Object.values(s.monthlyAvailableShifts || {})
-        .reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
-      0
-    );
 
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
     elements.btnClearSchedule?.addEventListener('click', async () => {
@@ -1794,13 +1821,20 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Tập Sự!`, 'success');
     });
 
-    elements.btnBulkClearShifts?.addEventListener('click', () => {
+elements.btnBulkClearShifts?.addEventListener('click', async () => {
       const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
       if (selectedIds.length === 0) {
         showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
         return;
       }
-      if (!confirm(`Bạn có chắc muốn xóa sạch toàn bộ ca rảnh của ${selectedIds.length} sinh viên đã chọn về 0 ca không?`)) {
+      const dcclrMany = await confirmDangerAction({
+        title: "Xóa ca rảnh của CTV đã chọn",
+        message: "${selectedIds.length} CTV đã chọn sẽ bị xóa sạch toàn bộ ca rảnh, đưa về 0 ca.",
+        losses: ["Toàn bộ ca rảnh của ${selectedIds.length} CTV đã chọn", "Hồ sơ CTV: GIỮ NGUYÊN"],
+        keyword: 'XOA CA RANH',
+        confirmLabel: "Xóa ca rảnh của ${selectedIds.length} CTV",
+      });
+      if (!dcclrMany) {
         return;
       }
       state.students.forEach(s => {
@@ -1816,13 +1850,20 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       showToast(`Đã xóa sạch ca rảnh của ${selectedIds.length} sinh viên!`, 'success');
     });
 
-    elements.btnBulkDeleteStudents?.addEventListener('click', () => {
+elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
       const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
       if (selectedIds.length === 0) {
         showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
         return;
       }
-      if (!confirm(`Bạn có chắc muốn xóa ${selectedIds.length} sinh viên đã chọn khỏi danh sách không? Thao tác này không thể hoàn tác!`)) {
+      const dcdelMany = await confirmDangerAction({
+        title: "Xóa CTV đã chọn khỏi danh sách",
+        message: "${selectedIds.length} CTV đã chọn sẽ bị xóa khỏi danh sách. Thao tác này không thể hoàn tác.",
+        losses: ["${selectedIds.length} hồ sơ CTV đã chọn", "Toàn bộ ca rảnh và lịch trực của họ"],
+        keyword: 'XOA NTV',
+        confirmLabel: "Xóa ${selectedIds.length} CTV",
+      });
+      if (!dcdelMany) {
         return;
       }
       state.students = state.students.filter(s => !selectedIds.includes(s.id));
@@ -2604,11 +2645,18 @@ function renderStudentTable() {
     closeStudentModal();
   }
 
-  window.adminClearStudentShifts = function(studentId) {
+window.adminClearStudentShifts = async function(studentId) {
     const student = state.students.find(s => s.id === studentId);
     if (!student) return;
 
-    if (confirm(`Bạn có chắc muốn xóa sạch toàn bộ ca rảnh của bạn "${student.fullName}" (MSSV: ${student.studentId}) về 0 ca không?`)) {
+      const dcclrOne = await confirmDangerAction({
+        title: "Xóa sạch ca rảnh của một CTV",
+        message: "Toàn bộ ca rảnh đã đăng ký của CTV này sẽ về 0 ca.",
+        losses: ["Toàn bộ ca rảnh đã đăng ký của CTV này — hồ sơ vẫn được giữ"],
+        keyword: 'XOA CA',
+        confirmLabel: "Xóa sạch ca rảnh",
+      });
+      if (dcclrOne) {
       student.availableShifts = [];
       student.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
       student.updatedAt = Date.now();
@@ -2619,11 +2667,18 @@ function renderStudentTable() {
     }
   };
 
-  window.adminDeleteStudent = function(studentId) {
+window.adminDeleteStudent = async function(studentId) {
     const student = state.students.find(s => s.id === studentId);
     if (!student) return;
 
-    if (confirm(`Bạn có chắc muốn xóa bạn "${student.fullName}" (MSSV: ${student.studentId}) không?`)) {
+      const dcdelOne = await confirmDangerAction({
+        title: "Xóa CTV khỏi danh sách",
+        message: "Hồ sơ CTV này sẽ bị xóa cùng toàn bộ ca rảnh đã đăng ký.",
+        losses: ["1 hồ sơ CTV", "Toàn bộ ca rảnh đã đăng ký của người đó"],
+        keyword: 'XOA NTV',
+        confirmLabel: "Xóa CTV",
+      });
+      if (dcdelOne) {
       state.students = state.students.filter(s => s.id !== studentId);
       saveStudents();
       runFullSchedule();
@@ -3367,7 +3422,13 @@ function renderStudentTable() {
     const isReplace = modeRadio && modeRadio.value === 'replace';
 
     if (isReplace) {
-      const ok = confirm(`Bạn đã chọn chế độ "🔄 Thay thế toàn bộ". Thao tác này sẽ XÓA TOÀN BỘ danh sách hiện tại và thay thế bằng ${candidates.length} sinh viên mới này. Bạn có chắc chắn muốn tiếp tục không?`);
+      const ok = await confirmDangerAction({
+        title: "Thay thế toàn bộ danh sách CTV",
+        message: "Toàn bộ danh sách hiện tại sẽ bị XÓA và thay bằng danh sách trong file. Ca rảnh đã đăng ký của CTV cũ cũng mất theo.",
+        losses: ["Toàn bộ danh sách CTV đang có trong hệ thống", "Toàn bộ ca rảnh đã đăng ký của CTV cũ"],
+        keyword: 'THAY THE',
+        confirmLabel: "Thay thế toàn bộ",
+      });
       if (!ok) return;
       state.students = [];
     }
@@ -3969,7 +4030,7 @@ function renderStudentTable() {
     reader.readAsText(file, 'UTF-8');
   }
 
-  function handleConfirmRestore() {
+async function handleConfirmRestore() {
     if (!pendingRestoreData) {
       showToast('Không có dữ liệu hợp lệ để khôi phục!', 'error');
       return;
@@ -4059,9 +4120,15 @@ function renderStudentTable() {
     }
   }
 
-  function handleStartNewMonth() {
-    const confirmMsg = 'BẠN CÓ CHẮC CHẮN MUỐN KHỞI TẠO LỊCH THÁNG MỚI?\n\n• Hệ thống sẽ tự động lưu 1 bản snapshot vào danh sách Sao Lưu Trên Web (Lưu 6 tháng).\n• Tự động xuất 1 file dự phòng kỳ cũ về máy bạn.\n• Bảng lịch 4 tuần sẽ được làm sạch để xếp lịch mới.\n• Toàn bộ danh sách CTV đã đăng ký VẪN ĐƯỢC GIỮ NGUYÊN 100%.';
-    if (!confirm(confirmMsg)) return;
+async function handleStartNewMonth() {
+      const dcreset = await confirmDangerAction({
+        title: "Khởi tạo lịch tháng mới",
+        message: "Bảng lịch 4 tuần sẽ được làm sạch và xếp mới. Danh sách CTV đã đăng ký được giữ nguyên.",
+        losses: ["Bảng phân công ca trực hiện tại của cả tháng"],
+        keyword: 'TAO LICH MOI',
+        confirmLabel: "Khởi tạo lịch tháng mới",
+      });
+      if (!dcreset) return;
 
     // Tự động lưu 1 snapshot vào Web Backups trước khi reset
     const now = new Date();
@@ -4804,7 +4871,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     }).join('');
   }
 
-  function handleRestoreFromWebBackup(backupId) {
+async function handleRestoreFromWebBackup(backupId) {
     const backups = getWebBackups();
     const target = backups.find(b => b.id === backupId);
     if (!target || !target.payload) {
@@ -4814,9 +4881,15 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
     const createdDate = new Date(target.createdAt);
     const dateStr = `${createdDate.toLocaleDateString('vi-VN')} ${String(createdDate.getHours()).padStart(2, '0')}:${String(createdDate.getMinutes()).padStart(2, '0')}`;
-    const confirmMsg = `XÁC NHẬN KHÔI PHỤC HỆ THỐNG TỪ BẢN SAO LƯU TRÊN WEB:\n\n• Bản lưu: ${target.name}\n• Thời điểm tạo: ${dateStr}\n• Dữ liệu: ${(target.payload.students || []).length} CTV, ${(target.payload.monthSchedule?.weeks || []).length || 4} tuần lịch trực\n\n⚠️ CẢNH BÁO: Toàn bộ dữ liệu hiện tại trên trình duyệt sẽ được thay thế bằng bản sao lưu này. Bạn có chắc chắn muốn khôi phục không?`;
 
-    if (!confirm(confirmMsg)) return;
+      const dcrestore = await confirmDangerAction({
+        title: "Khôi phục hệ thống từ bản sao lưu",
+        message: "Toàn bộ dữ liệu đang có trên trình duyệt sẽ bị THAY THẾ bằng bản sao lưu này.",
+        losses: ["Toàn bộ danh sách CTV hiện tại", "Toàn bộ ca rảnh và lịch trực hiện tại", "Mọi thay đổi chưa được lưu lên sao lưu"],
+        keyword: 'KHOI PHUC',
+        confirmLabel: "Khôi phục và ghi đè",
+      });
+      if (!dcrestore) return;
 
     try {
       const payload = target.payload;
@@ -4902,14 +4975,21 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     showToast(`Đã tải xuống file sao lưu "${target.name}" (.json)!`, 'success');
   }
 
-  function handleDeleteWebBackup(backupId) {
+async function handleDeleteWebBackup(backupId) {
     const backups = getWebBackups();
     const target = backups.find(b => b.id === backupId);
     if (!target) return;
 
-    if (!confirm(`Bạn có chắc chắn muốn xóa bản sao lưu "${target.name}" khỏi trình duyệt không? Thao tác này không thể hoàn tác.`)) {
-      return;
-    }
+      const dcbackup = await confirmDangerAction({
+        title: "Xóa bản sao lưu",
+        message: "Bản sao lưu này sẽ bị xóa khỏi trình duyệt và không thể khôi phục lại.",
+        losses: ["1 bản sao lưu (dữ liệu CTV + lịch trực trong bản sao đó)"],
+        keyword: 'XOA BACKUP',
+        confirmLabel: "Xóa bản sao lưu",
+      });
+      if (!dcbackup) {
+        return;
+      }
 
     const updated = backups.filter(b => b.id !== backupId);
     saveWebBackups(updated);
@@ -5366,10 +5446,17 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     return savedItem;
   }
 
-  function handleDeleteEvent(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa sự kiện này không? Thao tác này sẽ xóa công của các bạn tham gia sự kiện.')) {
-      return;
-    }
+async function handleDeleteEvent(id) {
+      const dcevent = await confirmDangerAction({
+        title: "Xóa sự kiện",
+        message: "Sự kiện này sẽ bị xóa cùng toàn bộ công của các bạn tham gia.",
+        losses: ["Sự kiện", "Mọi bản ghi công của người tham gia"],
+        keyword: 'XOA SK',
+        confirmLabel: "Xóa sự kiện",
+      });
+      if (!dcevent) {
+        return;
+      }
     const updated = EventManager.deleteEvent(id);
     showToast('Đã xóa sự kiện thành công!', 'info');
     return updated;

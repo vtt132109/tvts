@@ -587,16 +587,27 @@ console.log('================================================================\n'
 let passedTests = 0;
 let totalTests = 0;
 
+let testChain = Promise.resolve();
 function runTest(testName, fn) {
   totalTests++;
-  try {
-    fn();
-    console.log(`  ✓ [PASS] ${testName}`);
-    passedTests++;
-  } catch (err) {
-    console.error(`  ✕ [FAIL] ${testName}: ${err.message}`);
-    console.error(err.stack);
-  }
+  const report = (err) => {
+    if (!err) {
+      console.log(`  ✓ [PASS] ${testName}`);
+      passedTests++;
+    } else {
+      console.error(`  ✗ [FAIL] ${testName}: ${err.message}`);
+      console.error(err.stack);
+    }
+  };
+  // XEP HANG: khong chay ngay, ma noi vao chuoi. Cac test chia se
+  // mockLocalStorage nen bat buoc phai xong test nay moi den test sau.
+  testChain = testChain.then(() => {
+    try {
+      return Promise.resolve(fn()).then(() => report(null), report);
+    } catch (err) {
+      report(err);
+    }
+  });
 }
 
 // ============================================================================
@@ -1167,7 +1178,7 @@ runTest('6.3: restoreFromWebBackup khôi phục đầy đủ danh sách events v
   assert.strictEqual(restoredEvents[0].title, 'Sự kiện Cần Khôi Phục');
 });
 
-runTest('6.4: Tự động snapshot khi khởi tạo tháng mới (adminStartNewMonth) bảo toàn events', () => {
+runTest('6.4: Tự động snapshot khi khởi tạo tháng mới (adminStartNewMonth) bảo toàn events', async () => {
   mockLocalStorage.clear();
 
   // Tạo 1 sự kiện tháng cũ
@@ -1183,7 +1194,7 @@ runTest('6.4: Tự động snapshot khi khởi tạo tháng mới (adminStartNew
   if (typeof global.window.adminStartNewMonth === 'function') {
     global.confirm = () => true;
     global.window.confirm = () => true;
-    global.window.adminStartNewMonth();
+    await global.window.adminStartNewMonth();
 
     const backups = WebBackupManager.getWebBackups();
     assert.ok(backups.length >= 1, 'Phải có bản sao lưu tự động');
@@ -1220,6 +1231,8 @@ runTest('6.5: Tương thích ngược (Backward Compatibility): Khôi phục b�
 // ============================================================================
 // TỔNG KẾT VÀ BÁO CÁO KẾT QUẢ
 // ============================================================================
+// Cho het cac test async truoc khi in tong ket
+testChain.then(() => {
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests / totalTests) * 100)}%)`);
 console.log('================================================================\n');
@@ -1229,3 +1242,5 @@ if (passedTests !== totalTests) {
 } else {
   process.exit(0);
 }
+
+});
