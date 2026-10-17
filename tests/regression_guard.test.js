@@ -1202,22 +1202,42 @@ runTest('9.7: 2 bản MonthCalendarHelper phải cho KẾT QUẢ GIỐNG HỆT N
           diffs.push(`${m}/${y} tuần ${i + 1} ${k}: "${wkA[k]}" vs "${wkB[k]}"`);
         }
       });
+      // fullDate của từng ngày — nơi bug năm 2194 lộ ra rõ nhất.
+      ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(dk => {
+        if (wkA.days[dk].fullDate !== wkB.days[dk].fullDate) {
+          diffs.push(`${m}/${y} tuần ${i + 1} ${dk}.fullDate: "${wkA.days[dk].fullDate}" vs "${wkB.days[dk].fullDate}"`);
+        }
+      });
     });
   });
   assert.strictEqual(diffs.length, 0,
     `Hai bản MonthCalendarHelper đã phân kỳ:\n      ${diffs.slice(0, 6).join('\n      ')}`);
 
-  // getFirstMonday gọi 1 tham số phải cho đúng tháng 10 năm đó
-  const one = B.getFirstMonday(2026);
-  assert.strictEqual(one.getFullYear(), 2026,
-    `getFirstMonday(2026) phải trả năm 2026, thực tế ${one.getFullYear()} (thường là 2194 do default param)`);
-  assert.strictEqual(one.getMonth(), 9,
-    `getFirstMonday(2026) phải trả tháng 10, thực tế tháng ${one.getMonth() + 1}`);
+  // PHẢI kiểm CẢ HAI bản, không chỉ bản B. Trình duyệt nạp month_calendar.js
+  // TRƯỚC scheduler.js nên window.MonthCalendarHelper là bản trong
+  // scheduler.js — bản thực sự chạy. Trước đây test chỉ kiểm bản B nên
+  // bản đang chạy sai mà test vẫn xanh.
+  [['scheduler.js', A], ['month_calendar.js', B]].forEach(([ten, H]) => {
+    // getFirstMonday gọi 1 tham số phải cho đúng tháng 10 năm đó
+    const one = H.getFirstMonday(2026);
+    assert.strictEqual(one.getFullYear(), 2026,
+      `${ten}: getFirstMonday(2026) phải trả năm 2026, thực tế ${one.getFullYear()} (thường là 2194 do default param)`);
+    assert.strictEqual(one.getMonth(), 9,
+      `${ten}: getFirstMonday(2026) phải trả tháng 10, thực tế tháng ${one.getMonth() + 1}`);
 
-  // Nhãn tuần cuối tháng 12/2026 phải kết thúc năm 2027
-  const dec = B.getMonthWeeks(12, 2026);
-  assert.ok(/\/2027\)?$/.test(dec[3].label),
-    `Nhãn tuần 4 tháng 12/2026 phải kết thúc bằng /2027, thực tế: ${dec[3].label}`);
+    // Gọi 1 tham số vào getMonthWeeks: (2026) bị hiểu là (year) → không được
+    // biến thành tháng 2026 / năm 2194.
+    const solo = H.getMonthWeeks(2026);
+    assert.ok(!/2194/.test(solo[0].label),
+      `${ten}: getMonthWeeks(2026) 1 tham số không được ra năm 2194, thực tế: ${solo[0].label}`);
+    assert.ok(solo[0].days.T2.fullDate.startsWith('2026-'),
+      `${ten}: getMonthWeeks(2026) 1 tham số phải ra năm 2026, thực tế: ${solo[0].days.T2.fullDate}`);
+
+    // Nhãn tuần cuối tháng 12/2026 phải kết thúc năm 2027
+    const dec = H.getMonthWeeks(12, 2026);
+    assert.ok(/\/2027\)?$/.test(dec[3].label),
+      `${ten}: nhãn tuần 4 tháng 12/2026 phải kết thúc bằng /2027, thực tế: ${dec[3].label}`);
+  });
 });
 
 runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () => {
