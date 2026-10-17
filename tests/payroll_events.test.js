@@ -139,6 +139,9 @@ global.document = {
 };
 
 // 2. Nạp SchedulerEngine và dữ liệu mẫu
+// month_calendar.js phai duoc nap TRUOC scheduler.js: scheduler.js lay
+// MonthCalendarHelper tu window va nem loi neu chua co.
+require('../js/month_calendar.js');
 require('../js/scheduler.js');
 require('../js/sample30.js');
 
