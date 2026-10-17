@@ -201,24 +201,51 @@
 
       let bestCandidate = null;
       let minScore = Infinity;
+      let fallbackCandidate = null;
+      let fallbackScore = Infinity;
+
+      // Ca đối lưu trong cùng ngày (Sáng <-> Chiều)
+      const siblingShiftId = shift.id.endsWith('_S')
+        ? `${shift.dayKey}_C`
+        : `${shift.dayKey}_S`;
 
       for (const cand of candidates) {
         const currentCount = result.counts[cand.id] || 0;
         const histCount = safeHistCounts[cand.id] || 0;
         const totalSoFar = histCount + currentCount;
-        const sameDayShiftId = shift.id.endsWith('_S') ? `${shift.dayKey}_C` : `${shift.dayKey}_S`;
-        const alreadySameDay = result.assignments[sameDayShiftId]?.id === cand.id;
+        const alreadySameDay = result.assignments[siblingShiftId]?.id === cand.id;
 
-        // Trọng số tối ưu hóa:
+        // Trọng số tối ưu hoá (KHÔNG còn trộn phạt trùng ngày vào đây):
         // 1. Tổng số ca lũy kế cả tháng (5000) - bảo đảm cân bằng tổng
         // 2. Số ca trong tuần hiện tại (1000) - chia đều trong tuần
-        // 3. Tránh 2 ca cùng 1 ngày (400) - giảm quá tải thể lực
-        // 4. Số ca rảnh của ứng viên (1) - tie-breaker
-        const score = (totalSoFar * 5000) + (currentCount * 1000) + (alreadySameDay ? 400 : 0) + (cand.availableShifts?.length || 0);
+        // 3. Số ca rảnh của ứng viên (1) - tie-breaker
+        const score = (totalSoFar * 5000) + (currentCount * 1000) + (cand.availableShifts?.length || 0);
 
-        if (score < minScore) {
-          minScore = score;
-          bestCandidate = cand;
+        // ⚠️ RÀNG BUỘC CỨNG: một người không thể trực CẢ 2 ca (sáng + chiều)
+        // trong cùng một ngày. Trước đây trùng ngày chỉ là phạt 400 điểm, nhỏ
+        // hơn nhiều so với currentCount*1000, nên hành vi LUÔN thắng ->
+        // đã xảy ra tình huống 1 Tập Sự phải trực 10 ca/tuần
+        // (T2_S+T2_C, T3_S+T3_C, ... T6_S+T6_C) mà KHÔNG có cảnh báo.
+        // Nay: ưu tiên tuyệt đối người CHƯA trực trong ngày; chỉ dùng
+        // người đã trực khi thực sự không còn lựa chọn nào khác.
+        if (!alreadySameDay) {
+          if (score < minScore) {
+            minScore = score;
+            bestCandidate = cand;
+          }
+        } else if (score < fallbackScore) {
+          fallbackScore = score;
+          fallbackCandidate = cand;
+        }
+      }
+
+      if (!bestCandidate) {
+        bestCandidate = fallbackCandidate;
+        if (bestCandidate) {
+          result.warnings.push(
+            `Ca ${shift.id}: không còn ứng viên nào rảnh khác — buộc phải xếp ` +
+            `${bestCandidate.fullName || bestCandidate.id} dù đã có ca ${siblingShiftId} cùng ngày ` +
+            `(trùng ngày). Hãy thêm CTV hoặc cập nhật ca rảnh.`);
         }
       }
 
@@ -819,6 +846,21 @@
     const unassignedMonthMembers = safeStudents.filter(s => (combinedStats[s.id]?.totalCount || 0) === 0);
 
     const monthWarnings = [...normalizeWarnings];
+
+    // ⚠️ THIẾU: gom cảnh báo của TỪNG TUẦN lên cấp tháng.
+    // Trước đây monthWarnings chỉ nhận cảnh báo cấp tháng + normalize, còn
+    // result.warnings của từng tuần (ví dụ "không còn ứng viên nào rảnh, buộc
+    // phải xếp trùng ngày") bị bỏ rơi hoàn toàn. Giao diện chỉ đọc
+    // result.warnings -> người dùng KHÔNG BAO GIỜ thấy những cảnh báo này,
+    // dù dữ liệu lịch thực tế là bất khả thi.
+    weeks.forEach(week => {
+      (week.warnings || []).forEach(w => {
+        // Gộp trùng lặp: 4 tuần có thể sinh cùng một cảnh báo.
+        const msg = `Tuần ${week.weekNumber}: ${w}`;
+        if (!monthWarnings.includes(msg)) monthWarnings.push(msg);
+      });
+    });
+
     if (safeStudents.length < 2) {
       monthWarnings.push('Tổng số sinh viên < 2 người, không thể hoàn thiện đủ các ca trực chuẩn (1 Cũ + 1 Mới).');
     }
