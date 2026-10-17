@@ -1004,6 +1004,119 @@ runTest('8.2: Role hợp lệ thì KHÔNG sinh cảnh báo', () => {
     'Dữ liệu hợp lệ không được sinh cảnh báo');
 });
 
+runTest('9.4: Trùng ca cùng ngày phải được TRÁNH khi còn ứng viên khác', () => {
+  // Trong bước 2 (greedy), trùng ngày trước đây chỉ là phạt 400 điểm —
+  // nhỏ hơn nhiều so với currentCount*1000, nên hành vi luôn thắng.
+  // Đo thực tế (trước khi sửa): 3 Chính Thức + 3 Tập Sự (tất cả rảnh mọi
+  // ca) -> 2 ca bị trùng ngày dù hoàn toàn có thể tránh.
+  const global = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  const S = global.SchedulerEngine;
+  const ALL = S.SHIFTS.map(x => x.id);
+
+  const list = [
+    ...Array.from({ length: 3 }, (_, i) => ({ id: 'o' + i, fullName: 'O' + i, role: 'old', availableShifts: ALL })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: 'n' + i, fullName: 'N' + i, role: 'new', availableShifts: ALL }))
+  ];
+  const res = S.runMonthSchedule(list, 2026, 10);
+
+  let sameDayPairs = 0;
+  res.weeks.forEach(w => {
+    const perDay = {};
+    Object.entries(w.scheduleTable).forEach(([sid, slot]) => {
+      const dayKey = S.SHIFT_MAP[sid] && S.SHIFT_MAP[sid].dayKey;
+      if (!dayKey) return;
+      [slot.oldMember, slot.newMember].forEach(m => {
+        if (!m) return;
+        const key = m.id + '|' + dayKey;
+        perDay[key] = (perDay[key] || 0) + 1;
+      });
+    });
+    Object.values(perDay).forEach(v => { if (v > 1) sameDayPairs++; });
+  });
+
+  assert.strictEqual(sameDayPairs, 0,
+    `Có ${sameDayPairs} ca bị trùng ngày dù có ứng viên khác rảnh — ràng buộc cứng đã bị phá bởi trọng số`);
+});
+
+runTest('9.5: Trùng ngày KHÔNG tránh được thì phải CẢNH BÁO, không im lặng', () => {
+  // 2 Chính Thức + 1 Tập Sự: về nguyên tắc 10 ca "Người Mới" buộc phải do
+  // N1 đảm nhiệm, tức 10 ca trùng ngày là KHÔNG tránh được.
+  // Trước đây: 0 cảnh báo dù lịch bất khả thi (1 người trực sáng + chiều
+  // T2→T6 liên tục). Nay phải nói rõ để Ban điều hành biết mà thêm CTV.
+  const global = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  const S = global.SchedulerEngine;
+  const ALL = S.SHIFTS.map(x => x.id);
+
+  const list = [
+    { id: 'o1', fullName: 'O1', role: 'old', availableShifts: ALL },
+    { id: 'o2', fullName: 'O2', role: 'old', availableShifts: ALL },
+    { id: 'n1', fullName: 'N1', role: 'new', availableShifts: ALL }
+  ];
+  const res = S.runMonthSchedule(list, 2026, 10);
+  const joined = res.warnings.join(' | ');
+
+  assert.ok(/trùng ngày/.test(joined),
+    `Trùng ngày không tránh được phải được cảnh báo. Warnings: ${joined}`);
+  assert.ok(/Tuần 1/.test(joined),
+    'Cảnh báo phải nêu rõ tuần nào, không chỉ nói chung chung');
+});
+
+runTest('9.6: Cảnh báo của TỪNG TUẦN phải được gom lên warnings cấp tháng', () => {
+  // Bug rất dễ bỏ sót: monthWarnings chỉ nhận cảnh báo cấp tháng, còn
+  // result.warnings của từng tuần bị bỏ rơi. Giao diện chỉ đọc
+  // result.warnings -> người dùng không bao giờ thấy cảnh báo tuần.
+  const global = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  const S = global.SchedulerEngine;
+  const ALL = S.SHIFTS.map(x => x.id);
+
+  const list = [
+    { id: 'o1', fullName: 'O1', role: 'old', availableShifts: ALL },
+    { id: 'n1', fullName: 'N1', role: 'new', availableShifts: ALL }
+  ];
+  const res = S.runMonthSchedule(list, 2026, 10);
+
+  // Cảnh báo tuần nào sinh ra thì phải xuất hiện ở cấp tháng
+  res.weeks.forEach(w => {
+    (w.warnings || []).forEach(msg => {
+      assert.ok(res.warnings.some(m => m.includes(msg)),
+        `Cảnh báo của tuần ${w.weekNumber} không được gom lên cấp tháng: "${msg}"`);
+    });
+  });
+
+  // Và không được trùng lặp vô ích
+  assert.strictEqual(res.warnings.length, new Set(res.warnings).size,
+    'warnings cấp tháng bị trùng lặp');
+});
+
+runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () => {
+  // Test 8.1/8.1b đã phủ; test này khẳng định ngưỡng "an toàn": role thiếu
+  // hay sai đều KHÔNG bao giờ bị nâng lên Chính Thức.
+  const global = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  const S = global.SchedulerEngine;
+  const ALL = S.SHIFTS.map(x => x.id);
+
+  // Chỉ giá trị THỰC SỰ vô nghĩa. 'Chính Thức' và 'ts' là bí danh hợp lệ
+  // (xem 8.1b) nên không đưa vào đây.
+  const weird = [null, undefined, '', 'veteran2', 42, {}, [], 'ChínhThức', 'OLD-NEW'];
+  weird.forEach(role => {
+    const res = S.runMonthSchedule(
+      [{ id: 'x', fullName: 'X', role, availableShifts: ALL }],
+      2026, 10
+    );
+    const w0 = res.weeks[0].summary;
+    assert.strictEqual(w0.oldStudentsCount, 0,
+      `role=${JSON.stringify(role)} bị nâng lên Chính Thức — không được phép`);
+  });
+});
+
 runTest('8.3: Mã định danh trùng được ghi nhận cảnh báo', () => {
   const global = {};
   // eslint-disable-next-line no-new-func
