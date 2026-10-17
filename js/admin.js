@@ -24,7 +24,12 @@
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
     EVENTS: 'ts_scheduler_events_v1',
     ALL_MONTHS: 'ts_scheduler_all_months_v1',
-    ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
+    ACTIVE_MONTH: 'ts_scheduler_active_month_v1',
+    // Các ô đã được quản trị viên chỉnh tay (đổi nhân sự, duyệt đổi ca).
+    // Trước đây runFullSchedule() dựng lại lịch từ đầu ở mọi thao tác
+    // (đổi vai trò hàng loạt, nhập danh sách, thêm/xoá SV) nên mọi chỉnh
+    // sửa tay biến mất không một dòng cảnh báo.
+    MANUAL_SLOTS: 'ts_scheduler_manual_slots'
   };
 
   // Danh sách tài khoản cán bộ mặc định.
@@ -982,7 +987,135 @@
     }
   }
 
-  function runFullSchedule() {
+  /** Ghi nhận ô ca đã được chỉnh tay, để không mất khi xếp lại lịch.
+ * @param {number} weekNumber - 1..4
+ * @param {string} shiftId - ví dụ 'T2_S'
+ * @param {object} slot - { oldMember, newMember }
+ */
+function recordManualSlot(weekNumber, shiftId, slot) {
+  try {
+    let map = {};
+    try {
+      map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
+    } catch (e) { map = {}; }
+
+    const wk = String(weekNumber || 1);
+    if (!map[wk]) map[wk] = {};
+    // Chỉ lưu tham chiếu nhẹ (id + tên) chứ không nhân bản cả hồ sơ SV,
+    // tránh phình localStorage.
+    map[wk][shiftId] = {
+      oldId: slot.oldMember ? slot.oldMember.id : null,
+      newId: slot.newMember ? slot.newMember.id : null,
+      at: Date.now()
+    };
+
+    localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(map));
+  } catch (e) {
+    console.warn('[Admin] Không lưu được ô ca chỉnh tay:', e);
+  }
+}
+
+/** Xoá nhận ký chỉnh tay của một tuần (dùng khi quản trị viên muốn xếp lại). */
+function clearManualSlots(weekNumber) {
+  try {
+    let map = {};
+    try {
+      map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
+    } catch (e) { map = {}; }
+    if (weekNumber === undefined) {
+      map = {};
+    } else {
+      delete map[String(weekNumber)];
+    }
+    localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(map));
+  } catch (e) {
+    console.warn('[Admin] Không xoá được ô ca chỉnh tay:', e);
+  }
+}
+
+/**
+ * Áp lại các ô đã được chỉnh tay sau khi xếp lịch tự động.
+ *
+ * Mỗi chỉnh sửa được kiểm tra lại: sinh viên còn tồn tại không, còn rảnh ca
+ * đó không, còn trùng ngày không. Ô không hợp lệ bị bỏ qua và ghi cảnh báo
+ * thay vì âm thầm tạo lịch không hợp lệ.
+ *
+ * @returns {{ applied: number, skipped: string[] }}
+ */
+function reapplyManualSlots(monthSchedule) {
+  const result = { applied: 0, skipped: [] };
+  if (!monthSchedule || !monthSchedule.weeks) return result;
+
+  let map = {};
+  try {
+    map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
+  } catch (e) { return result; }
+
+  const byId = {};
+  state.students.forEach(s => { if (s && s.id) byId[s.id] = s; });
+
+  Object.keys(map).forEach(wk => {
+    const weekIdx = parseInt(wk, 10) - 1;
+    const weekData = monthSchedule.weeks[weekIdx];
+    if (!weekData || !weekData.scheduleTable) return;
+
+    Object.keys(map[wk] || {}).forEach(shiftId => {
+      const override = map[wk][shiftId];
+      if (!override) return;
+      const slot = weekData.scheduleTable[shiftId];
+      if (!slot) {
+        result.skipped.push(`${wk}/${shiftId}: không có ô ca này`);
+        return;
+      }
+
+      const resolve = (id) => {
+        if (!id) return null;
+        const st = byId[id];
+        if (!st) {
+          result.skipped.push(`${wk}/${shiftId}: CTV #${id} không còn trong danh sách`);
+          return undefined; // undefined = lỗi, null = xoá hẳn
+        }
+        const declared = st.monthlyAvailableShifts
+          ? (st.monthlyAvailableShifts[weekIdx + 1] || st.monthlyAvailableShifts[String(weekIdx + 1)])
+          : st.availableShifts;
+        if (Array.isArray(declared) && !declared.includes(shiftId)) {
+          result.skipped.push(`${wk}/${shiftId}: ${st.fullName} không còn rảnh ca này`);
+          return undefined;
+        }
+        return st;
+      };
+
+      const oldM = resolve(override.oldId);
+      const newM = resolve(override.newId);
+      if (oldM === undefined || newM === undefined) return;
+
+      if (oldM && newM && oldM.id === newM.id) {
+        result.skipped.push(`${wk}/${shiftId}: không thể gán cùng 1 người cho cả 2 vị trí`);
+        return;
+      }
+      if (oldM && oldM.role !== 'old') {
+        result.skipped.push(`${wk}/${shiftId}: ${oldM.fullName} không phải Chính Thức`);
+        return;
+      }
+      if (newM && newM.role !== 'new') {
+        result.skipped.push(`${wk}/${shiftId}: ${newM.fullName} không phải Tập Sự`);
+        return;
+      }
+
+      slot.oldMember = oldM;
+      slot.newMember = newM;
+      slot.status = (oldM && newM) ? 'full' : ((oldM || newM) ? 'partial' : 'empty');
+      slot.manuallyEdited = true;
+      result.applied++;
+    });
+
+    recomputeWeekStats(weekData);
+  });
+
+  return result;
+}
+
+function runFullSchedule() {
     if (state.students.length === 0) {
       state.currentSchedule = null;
       state.twoWeekSchedule = null;
@@ -996,6 +1129,21 @@
     const curM = state.currentMonth || 10;
     const monthEngine = window.SchedulerEngine?.runMonthSchedule || window.SchedulerEngine?.runTwoWeekSchedule;
     const monthResult = monthEngine ? monthEngine(state.students, curY, curM) : null;
+
+    // Áp lại các ô quản trị viên đã chỉnh tay. Trước đây mọi thao tác gọi
+    // runFullSchedule() (đổi vai trò hàng loạt, nhập CSV, thêm/xoá SV) đều
+    // xoá sạch các đổi nhân sự tay đã được phê duyệt.
+    if (monthResult) {
+      const reapplied = reapplyManualSlots(monthResult);
+      if (reapplied.applied > 0) {
+        console.log(`[Admin] Đã giữ lại ${reapplied.applied} phân công chỉnh tay qua lần xếp lại.`);
+      }
+      if (reapplied.skipped.length > 0) {
+        console.warn('[Admin] Bỏ qua phân công chỉnh tay không còn hợp lệ:', reapplied.skipped);
+        showToast(`⚠️ Có ${reapplied.skipped.length} phân công chỉnh tay không còn hợp lệ (CTV đã bị xoá / không còn rảnh ca) và đã được bỏ qua. Xem Console để biết chi tiết.`, 'warning', 8000);
+      }
+    }
+
     state.monthSchedule = monthResult;
     state.twoWeekSchedule = monthResult;
 
@@ -1094,7 +1242,40 @@
     }
   }
 
-  async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
+  /**
+ * Số tháng tối đa giữ lại trong kho lịch (ts_scheduler_all_months_v1).
+ *
+ * Mỗi monthSchedule ~108KB với 30 sinh viên. Giữ không giới hạn thì:
+ *   24 tháng = 2.5 MB, 36 tháng = 3.8 MB
+ * cộng 6 bản sao lưu web (~750KB) là vượt quota localStorage 5MB.
+ * Khi vượt, setItem ném QuotaExceededError và bị nuốt bởi try/catch ->
+ * mất lịch tháng mà người dùng không hề biết.
+ * 24 tháng là ranh giới hợp lý (2 năm lịch trực), vẫn xem được các tháng cũ
+ * qua phần lịch sử.
+ */
+const MAX_MONTH_ARCHIVE = 24;
+
+/**
+ * Cắt bớt kho lịch, luôn GIỮ LẠI tháng vừa lưu.
+ * @param {Object} archive - Dạng { '2026-10': monthSchedule, ... }
+ * @param {string} keepKey - Khoá tháng bắt buộc phải giữ (tháng vừa chuyển khỏi)
+ * @returns {Object} Đối tượng đã cắt
+ */
+function trimMonthArchive(archive, keepKey) {
+  if (!archive || typeof archive !== 'object') return {};
+  const keys = Object.keys(archive).sort().reverse();
+  if (keys.length <= MAX_MONTH_ARCHIVE) return archive;
+
+  const kept = [];
+  keys.forEach(k => {
+    if (k === keepKey || kept.length < MAX_MONTH_ARCHIVE) kept.push(k);
+  });
+  const result = {};
+  kept.forEach(k => { result[k] = archive[k]; });
+  return result;
+}
+
+async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     targetMonth = parseInt(targetMonth, 10);
     targetYear = parseInt(targetYear, 10);
     if (!targetMonth || !targetYear) return;
@@ -1132,7 +1313,22 @@
       allMonths[`${oldYear}-${pad2(oldMonth)}`] = state.monthSchedule;
       try {
         localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
-      } catch (e) {}
+      } catch (e) {
+        // ⚠️ TRƯỚC ĐÂY `catch (e) {}` — lỗi hết dung lượng bị nuốt hoàn toàn.
+        // Người dùng thấy thông báo "Đã chuyển sang Tháng X" trong khi lịch
+        // tháng cũ đã bị mất vĩnh viễn, không có cảnh báo nào.
+        // Mỗi monthSchedule ~108KB; 24 tháng = 2.5MB, 36 tháng = 3.8MB,
+        // vượt quota 5MB kèm 6 bản sao lưu web.
+        // Thử lại sau khi cắt bớt các tháng cũ nhất (xem MAX_MONTH_ARCHIVE).
+        const trimmed = trimMonthArchive(allMonths, `${oldYear}-${pad2(oldMonth)}`);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(trimmed));
+          showToast(`⚠️ Bộ nhớ đã đầy — đã tự động dọn lịch sử, chỉ giữ ${MAX_MONTH_ARCHIVE} tháng gần nhất (đã lưu lịch tháng ${pad2(oldMonth)}/${oldYear}).`, 'warning', 7000);
+        } catch (e2) {
+          showToast(`⚠️ BỘ NHỚ TRÌNH DUYỆT ĐÃ ĐẦY — không lưu được lịch tháng ${pad2(oldMonth)}/${oldYear} vào lịch sử. Hãy xoá bớt Sao Lưu cũ trong Trung Tâm Sao Lưu.`, 'error', 9000);
+          console.error('[Admin] Không lưu được kho lịch tháng:', e2);
+        }
+      }
     }
 
     // 2. Chuyển sang tháng mới
@@ -1930,46 +2126,88 @@
       ? state.monthSchedule.weeks[weekNumber - 1]
       : state.currentSchedule;
 
-    if (!targetSchedule) return;
+    if (!targetSchedule) {
+      showToast('Không tìm thấy tuần/lịch cần sửa. Vui lòng tải lại trang rồi thử lại.', 'error');
+      return;
+    }
 
-    const selectedStudentId = elements.modalCandidateSelect.value;
+    const selectedStudentId = elements.modalCandidateSelect?.value;
     const newStudent = selectedStudentId ? state.students.find(s => s.id === selectedStudentId) : null;
 
-    const slot = targetSchedule.scheduleTable[shiftId];
-    if (!slot) return;
+    const slot = targetSchedule.scheduleTable?.[shiftId];
+    if (!slot) {
+      showToast(`Không tìm thấy ca ${shiftId} trong lịch. Lịch có thể đã thay đổi — vui lòng tải lại trang.`, 'error');
+      return;
+    }
+
+    // Chặn gán sai vai trò: một Tập Sự không thể đảm nhiệm vị trí Chính Thức
+    // (và ngược lại). Trước đây chỉ gán thẳng, phá vỡ luật 1 Cũ + 1 Mới.
+    if (newStudent && role === 'old' && newStudent.role !== 'old') {
+      showToast(`${newStudent.fullName} là Tập Sự, không thể đảm nhiệm vị trí Người Cũ (Kinh Nghiệm)!`, 'error');
+      return;
+    }
+    if (newStudent && role === 'new' && newStudent.role !== 'new') {
+      showToast(`${newStudent.fullName} là Chính Thức, không thể đảm nhiệm vị trí Người Mới (Tập Sự)!`, 'error');
+      return;
+    }
+
+    // KIỂM TRA CA RẢNH. Modal có cả danh sách "⚠️ Không đăng ký rảnh" và trước
+    // đây cho phép chọn -> gán ca vượt ngoài ca SV đã đăng ký.
+    const realWeekNumber = weekNumber
+      || ((state.monthSchedule?.weeks || []).findIndex(w => w === targetSchedule) + 1)
+      || state.currentWeek
+      || 1;
+    if (newStudent) {
+      const declared = newStudent.monthlyAvailableShifts
+        ? (newStudent.monthlyAvailableShifts[realWeekNumber] || newStudent.monthlyAvailableShifts[String(realWeekNumber)])
+        : newStudent.availableShifts;
+      // monthlyAvailableShifts có thể là mảng rỗng (nghĩa là KHÔNG rảnh)
+      if (Array.isArray(declared) && !declared.includes(shiftId)) {
+        showToast(`${newStudent.fullName} KHÔNG đăng ký rảnh ca ${shiftId} ở tuần ${realWeekNumber}! Vui lòng chọn người khác hoặc cập nhật ca rảnh trước.`, 'error');
+        return;
+      }
+
+      // Chặn trùng ca cùng ngày (vd gán cả T2_S và T2_C cho một người).
+      const dayKey = (window.SchedulerEngine?.SHIFT_MAP || {})[shiftId]?.dayKey
+        || String(shiftId).split('_')[0];
+      const clash = Object.entries(targetSchedule.scheduleTable).some(([sid, other]) => {
+        if (sid === shiftId) return false;
+        if (other.oldMember?.id === newStudent.id || other.newMember?.id === newStudent.id) return false;
+        const oKey = (window.SchedulerEngine?.SHIFT_MAP || {})[sid]?.dayKey || String(sid).split('_')[0];
+        return oKey === dayKey;
+      });
+      if (clash) {
+        showToast(`${newStudent.fullName} đã được xếp một ca khác trong cùng ngày ${dayKey} ở tuần này!`, 'error');
+        return;
+      }
+    }
 
     if (role === 'old') {
-      slot.oldMember = newStudent;
+      slot.oldMember = newStudent || null;
     } else {
-      slot.newMember = newStudent;
+      slot.newMember = newStudent || null;
     }
 
-    if (slot.oldMember && slot.newMember) {
-      slot.status = 'full';
-    } else if (!slot.oldMember && !slot.newMember) {
-      slot.status = 'empty';
-    } else {
-      slot.status = 'partial';
-    }
+    slot.status = (slot.oldMember && slot.newMember) ? 'full' : ((slot.oldMember || slot.newMember) ? 'partial' : 'empty');
 
-    const newStats = {};
-    state.students.forEach(s => {
-      newStats[s.id] = {
-        student: s,
-        assignedCount: 0,
-        registeredCount: (s.availableShifts || []).length
-      };
-    });
-
-    Object.values(targetSchedule.scheduleTable).forEach(s => {
-      if (s.oldMember && newStats[s.oldMember.id]) newStats[s.oldMember.id].assignedCount++;
-      if (s.newMember && newStats[s.newMember.id]) newStats[s.newMember.id].assignedCount++;
-    });
-
-    targetSchedule.studentStats = newStats;
+    // Tính lại TOÀN BỘ thống kê của tuần. Trước đây chỉ cập nhật studentStats,
+    // còn summary.fullShifts/partialShifts và combinedStats bị đóng băng ->
+    // ô "X/40 ca", thanh công bằng, badge "✓ Đủ 10/10 ca" đều sai.
+    recomputeWeekStats(targetSchedule);
+    // Ghi nhận để lần xếp lịch tự động sau (đổi vai trò hàng loạt, nhập CSV,
+    // thêm/xoá SV) không xoá mất thay đổi này.
+    slot.manuallyEdited = true;
+    recordManualSlot(realWeekNumber, shiftId, slot);
     targetSchedule.timestamp = Date.now();
 
-    saveSchedule();
+    state.currentSchedule = targetSchedule;
+    state.twoWeekSchedule = state.monthSchedule;
+    localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    saveSchedule(true);
+    window.dispatchEvent(new CustomEvent('ts:data-changed', {
+      detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SCHEDULE] }
+    }));
+
     renderAll();
     closeReassignModal();
     showToast(`Đã lưu thay đổi nhân sự trực ${weekNumber ? `Tuần ${weekNumber}` : ''}!`, 'success');
@@ -3092,11 +3330,14 @@
       return;
     }
 
-    slot.status = (slot.oldMember && slot.newMember) ? 'full' : 'partial';
+    slot.status = (slot.oldMember && slot.newMember) ? 'full' : ((slot.oldMember || slot.newMember) ? 'partial' : 'empty');
+    slot.manuallyEdited = true;
 
     // Tính lại toàn bộ thống kê của tuần (studentStats + summary).
     // Trước đây bỏ qua bước này -> bảng SV, thanh công bằng và số ca đều lệch.
     recomputeWeekStats(weekData);
+    // Giữ lại để không mất khi hệ thống xếp lại lịch tự động.
+    recordManualSlot(weekNumber, req.shiftId, slot);
 
     state.currentSchedule = weekData;
     state.twoWeekSchedule = state.monthSchedule;
@@ -4053,10 +4294,24 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       eventList = state.events;
     }
 
-    const payroll = PayrollCalculator.calculateMonthlyPayroll(studentList, monthSched, eventList);
+    // ⚠️ Phải truyền monthKey: không có nó, calculateEventWorkUnits KHÔNG lọc
+    // theo tháng, nên công của sự kiện MỌI tháng đều cộng vào bản sao lưu của
+    // tháng này — tổng công bị thổi phồng theo thời gian.
+    const backupMonthKey = monthSched?.monthKey
+      || (monthSched?.month && monthSched?.year
+        ? `${monthSched.year}-${String(monthSched.month).padStart(2, '0')}`
+        : `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`);
+
+    const payroll = PayrollCalculator.calculateMonthlyPayroll(studentList, monthSched, eventList, backupMonthKey);
     const totalWorkUnits = payroll.reduce((sum, item) => sum + (item.totalWorkUnits || 0), 0);
 
     const backupPayload = {
+      // monthKey để về sau lọc đúng công sự kiện của kỳ này. Trước đây
+      // payload không có khoá tháng nên khi xem bảng chấm công của một bản
+      // sao lưu, công của mọi tháng cộng chung vào.
+      monthKey,
+      month: monthNum,
+      year: yearNum,
       students: studentList,
       monthSchedule: monthSched,
       scheduleResult: schedRes,
@@ -4344,6 +4599,9 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     let monthSchedule = null;
     let events = [];
     let monthLabel = '';
+    // Khoá tháng đang xem, ví dụ '2026-10'. Bắt buộc để lọc công sự kiện
+    // theo đúng kỳ — xem calculateEventWorkUnits.
+    let monthKey = null;
 
     if (backupId && backupId !== 'current') {
       const backups = getWebBackups();
@@ -4356,6 +4614,13 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       monthSchedule = target.payload.monthSchedule || null;
       events = target.payload.events || [];
       monthLabel = target.name || target.monthLabel || 'Kỳ Sao Lưu';
+      // Bản sao lưu có thể đã mang monthKey do createWebBackup ghi kèm
+      monthKey = target.payload.monthKey
+        || target.monthKey
+        || (monthSchedule?.monthKey
+          || (monthSchedule?.month && monthSchedule?.year
+            ? `${monthSchedule.year}-${String(monthSchedule.month).padStart(2, '0')}`
+            : null));
     } else {
       // Dữ liệu tháng hiện tại
       students = (state.students && state.students.length > 0) ? state.students : [];
@@ -4373,11 +4638,17 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         } catch (e) {}
       }
       events = EventManager.getEvents();
+      // Bắt buộc lọc theo kỳ: nếu không, công sự kiện của MỌI tháng cộng vào
+      // bảng "Tháng X/YYYY" đang xem và tổng côg bị thổi phồng.
+      monthKey = monthSchedule?.monthKey
+        || (monthSchedule?.month && monthSchedule?.year
+          ? `${monthSchedule.year}-${String(monthSchedule.month).padStart(2, '0')}`
+          : `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`);
       const now = new Date();
       monthLabel = `Tháng ${now.getMonth() + 1}/${now.getFullYear()} (Hiện Tại)`;
     }
 
-    const payrollData = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events);
+    const payrollData = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events, monthKey);
     renderMonthlyPayrollModal(payrollData, monthLabel);
     return payrollData;
   }
@@ -4981,7 +5252,12 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       }
     }
 
-    const payrollList = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events);
+    // Lọc công sự kiện theo kỳ đang xem — không có monthKey thì mọi tháng cộng chung
+    const payrollMonthKey = monthSchedule?.monthKey
+      || (monthSchedule?.month && monthSchedule?.year
+        ? `${monthSchedule.year}-${String(monthSchedule.month).padStart(2, '0')}`
+        : `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`);
+    const payrollList = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events, payrollMonthKey);
 
     activePayrollData.list = payrollList;
     activePayrollData.monthLabel = monthLabel;
