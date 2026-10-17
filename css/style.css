@@ -5781,6 +5781,63 @@ input[type="checkbox"]:checked {
   }
 }
 
+/* ==========================================================================
+   SỬA LỖI IN BẢNG LỊCH — MẤT CỘT THỨ SÁU
+   --------------------------------------------------------------------------
+   .timetable-grid đặt `min-width: 1000px` (dòng ~1085) vì trên màn hình rộng
+   cần 1000px cho 6 cột (Ca/Giờ + T2→T6) cho dễ đọc. Nhưng khổ in A4 chỉ còn
+   ~718px sau lề — bảng 1000px bị CẮT, cột Thứ Sáu mất sạch khỏi bản in.
+
+   Đây là mất dữ liệu thật: Thứ Sáu có ca trực, in ra lại không có.
+
+   Cách sửa: khi in thì bỏ min-width, ép bảng chia đều 6 cột theo khổ trang,
+   thu nhỏ chữ + padding, và lặp lại hàng tiêu đề ở mỗi trang.
+   ========================================================================== */
+@media print {
+  .timetable-grid,
+  .timetable-grid * {
+    min-width: 0 !important;          /* phá vỡ min-width:1000px */
+  }
+
+  .timetable-grid {
+    width: 100% !important;
+  }
+
+  /* ĐÂY MỚI LÀ THỦ PHẠM THẬT: #admin-timetable-grid là CSS grid với
+     grid-template-columns: 110px 190px 190px 190px 190px 190px  (tổng 1060px).
+     Khổ in A4 chỉ ~718px -> bảng tràn, và .timetable-card có overflow-x:hidden
+     nên cột Thứ Sáu bị CẮT HOÀN TOÀN khỏi bản in (mất ca trực thật).
+     Ép 6 cột chia theo TỶ LỆ thay vì px cứng: 14% cho cột Ca/Giờ, 5 cột ngày
+     chia đều phần còn lại. */
+  #admin-timetable-grid {
+    grid-template-columns: 14% repeat(5, 1fr) !important;
+  }
+
+  /* Bỏ chặn cắt ngang để nếu vẫn tràn thì còn thấy, không bị cắt im lặng */
+  .timetable-card {
+    overflow: visible !important;
+  }
+
+  .timetable-grid,
+  .timetable-grid * {
+    font-size: 8pt !important;
+    padding: 3px 4px !important;
+  }
+
+  .timetable-grid .grid-header .day-name { font-size: 9.5pt !important; }
+  .timetable-grid .grid-header .day-sub  { font-size: 7.5pt !important; }
+
+  .timetable-grid thead {
+    display: table-header-group;
+  }
+
+  /* Không cắt ngang giữa chừng một hàng ca */
+  .timetable-grid tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
 
 
 /* ==========================================================================
