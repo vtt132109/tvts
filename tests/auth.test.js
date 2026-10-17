@@ -147,7 +147,7 @@ runTest('Khởi tạo API xác thực window.AdminAuth thành công', () => {
 
 runTest('Đăng nhập thành công với tài khoản Trưởng ban (admin / 123)', () => {
   mockSessionStorage.clear();
-  const res = AdminAuth.login('admin', '123');
+  const res = AdminAuth.login('admin', '0000');
   assert.strictEqual(res.success, true, 'Đăng nhập admin phải thành công');
   assert.strictEqual(res.user.username, 'admin');
   assert.strictEqual(res.user.role, 'Trưởng ban điều hành');
@@ -157,7 +157,7 @@ runTest('Đăng nhập thành công với tài khoản Trưởng ban (admin / 12
 
 runTest('Đăng nhập thành công với tài khoản Điều phối (diephoi / 123)', () => {
   mockSessionStorage.clear();
-  const res = AdminAuth.login('diephoi', '123');
+  const res = AdminAuth.login('diephoi', '0000');
   assert.strictEqual(res.success, true, 'Đăng nhập diephoi phải thành công');
   assert.strictEqual(res.user.username, 'diephoi');
   assert.strictEqual(res.user.role, 'Điều phối viên tuyển sinh');
@@ -200,7 +200,7 @@ runTest('Từ chối khi nhập sai Mã PIN', () => {
 });
 
 runTest('Quy trình Đăng Xuất (Logout) xóa sạch phiên và khóa hệ thống', () => {
-  AdminAuth.login('admin', '123');
+  AdminAuth.login('admin', '0000');
   assert.strictEqual(AdminAuth.isAuthenticated(), true);
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), 'true');
 

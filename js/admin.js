@@ -50,7 +50,7 @@
     {
       id: 'usr_admin',
       username: 'admin',
-      password: '123',
+      password: '0000',
       pin: '9999',
       fullName: 'Trưởng Ban Tuyển Sinh',
       role: 'Trưởng ban điều hành',
@@ -60,7 +60,7 @@
     {
       id: 'usr_diephoi',
       username: 'diephoi',
-      password: '123',
+      password: '0000',
       pin: '8888',
       fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
       role: 'Điều phối viên tuyển sinh',
