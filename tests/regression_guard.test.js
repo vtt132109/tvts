@@ -1274,6 +1274,103 @@ runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () =
   });
 });
 
+runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ thì giữ', () => {
+  // Quy tắc nghiệp vụ: mỗi tháng sinh viên đăng ký ca rảnh LẠI TỪ ĐẦU.
+  // Ca rảnh không mang chiều tháng, nên nếu giữ lại, bộ xếp ca tháng mới có
+  // thể dùng nhầm ca của tháng cũ.
+  //
+  // Hàm resetAvailabilityIfNewMonth() dùng khoá AVAILABILITY_MONTH để phân biệt:
+  //   tháng khác khoá  -> xoá (sang tháng mới)
+  //   tháng trùng khoá -> giữ (quay lại xem tháng cũ, không mất đăng ký)
+
+  const store = new Map();
+  const savedStudents = [];
+  const sandbox = {
+    console: { warn() {}, error() {}, log() {} },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
+    setItem: (k, v) => store.set(k, String(v)),
+    state: { students: [] },
+    saveStudents: () => { savedStudents.push(JSON.parse(JSON.stringify(sandbox.state.students))); },
+  };
+
+  // Nạp đúng hàm cần kiểm ra từ mã nguồn thật.
+  const src = readSrc('js/admin.js');
+  const fnStart = src.indexOf('function resetAvailabilityIfNewMonth');
+  assert.ok(fnStart > 0, 'phải tồn tại hàm resetAvailabilityIfNewMonth()');
+  // Cắt tới hết hàm bằng cách cân bằng ngoặc: dùng indexOf('\n  }\n') sẽ
+  // khớp nhầm vào dòng trống đầu tiên và sinh cú pháp hỏng.
+  let depth = 0, fnEnd = -1;
+  for (let i = fnStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) { fnEnd = i + 1; break; } }
+  }
+  assert.ok(fnEnd > fnStart, 'không cân bằng được ngoặc của hàm resetAvailabilityIfNewMonth');
+  const fnSrc = src.slice(fnStart, fnEnd);
+  const resetAvailabilityIfNewMonth = new Function(
+    'state', 'saveStudents', 'STORAGE_KEYS', 'console', 'localStorage',
+    fnSrc + '\n return resetAvailabilityIfNewMonth;'
+  )(sandbox.state, sandbox.saveStudents, { AVAILABILITY_MONTH: 'kAvail' }, sandbox.console, sandbox.localStorage);
+
+  const withShifts = (n) => Array.from({ length: n }, (_, i) => ({
+    id: `s${i}`, fullName: `SV${i}`, role: i % 2 === 0 ? 'old' : 'new',
+    availableShifts: ['T2_S', 'T3_C'],
+    monthlyAvailableShifts: { 1: ['T2_S'], 2: ['T3_C'], 3: [], 4: [] },
+  }));
+
+  // --- Lần 1: tháng 11, mọi người đã đăng ký ca ---
+  sandbox.state.students = withShifts(58);
+  store.clear();
+  const r1 = resetAvailabilityIfNewMonth(11, 2026);
+  assert.strictEqual(r1.reset, true, 'lần đầu phải coi là sang tháng mới');
+  assert.strictEqual(r1.cleared, 58, `phải xoá ca rảnh của cả 58 CTV, thực tế ${r1.cleared}`);
+  sandbox.state.students.forEach((s) => {
+    assert.deepStrictEqual(s.availableShifts, [], `${s.id}: availableShifts phải rỗng`);
+    assert.deepStrictEqual(s.monthlyAvailableShifts, { 1: [], 2: [], 3: [], 4: [] },
+      `${s.id}: monthlyAvailableShifts phải rỗng`);
+  });
+  assert.strictEqual(store.get('kAvail'), '2026-11', 'phải ghi khoá tháng của ca rảnh');
+
+  // --- Lần 2: vẫn tháng 11, đăng ký ca mới → KHÔNG xoá ---
+  sandbox.state.students = withShifts(58);
+  sandbox.state.students.forEach((s) => {
+    s.availableShifts = ['T4_S'];
+    s.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: ['T4_S'] };
+  });
+  const r2 = resetAvailabilityIfNewMonth(11, 2026);
+  assert.strictEqual(r2.reset, false, 'cùng tháng thì KHÔNG được xoá');
+  assert.strictEqual(sandbox.state.students[0].availableShifts[0], 'T4_S',
+    'đăng ký của tháng hiện tại phải được giữ nguyên');
+
+  // --- Lần 3: quay lại tháng 10 (đã có lịch) → KHÔNG xoá ---
+  const r3 = resetAvailabilityIfNewMonth(10, 2026);
+  assert.strictEqual(r3.reset, false,
+    'quay lại tháng đã đăng ký thì không được xoá — sẽ mất dữ liệu khi chỉ xem lại');
+  assert.strictEqual(sandbox.state.students[0].availableShifts[0], 'T4_S',
+    'xem lại tháng cũ không được mất ca rảnh');
+
+  // --- Lần 4: sang tháng 12 → xoá ---
+  const r4 = resetAvailabilityIfNewMonth(12, 2026);
+  assert.strictEqual(r4.reset, true, 'sang tháng 12 phải xoá');
+  assert.strictEqual(r4.cleared, 58, 'phải xoá cả 58 CTV');
+  assert.strictEqual(store.get('kAvail'), '2026-12', 'khoá phải cập nhật sang tháng mới');
+
+  // --- Lần 5: qua năm, sang 01/2027 ---
+  sandbox.state.students = withShifts(58);
+  const r5 = resetAvailabilityIfNewMonth(1, 2027);
+  assert.strictEqual(r5.reset, true, 'sang 01/2027 phải xoá');
+  assert.strictEqual(r5.monthKey, '2027-01', `tháng phải định dạng YYYY-MM, thực tế ${r5.monthKey}`);
+
+  // --- Lần 6: không có CTV nào thì không lỗi ---
+  sandbox.state.students = [];
+  const r6 = resetAvailabilityIfNewMonth(2, 2027);
+  assert.strictEqual(r6.reset, true, 'vẫn phải ghi khoá tháng dù danh sách rỗng');
+  assert.strictEqual(r6.cleared, 0, 'không có ai thì cleared = 0');
+});
+
 runTest('8.3: Mã định danh trùng được ghi nhận cảnh báo', () => {
   const global = {};
   loadScheduler(global);
