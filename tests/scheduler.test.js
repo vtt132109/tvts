@@ -13,6 +13,9 @@ const path = require('path');
 global.window = {};
 
 // 2. Nạp Module Scheduler Engine và Mock Data
+// month_calendar.js phai duoc nap TRUOC scheduler.js: scheduler.js lay
+// MonthCalendarHelper tu window va nem loi neu chua co.
+require('../js/month_calendar.js');
 require('../js/scheduler.js');
 require('../js/sample30.js');
 

@@ -36,6 +36,24 @@ const cloudJs = readSrc('js/cloud_sync.js');
 const indexHtml = readSrc('index.html');
 const adminHtml = readSrc('admin.html');
 
+const monthCalendarJs = readSrc('js/month_calendar.js');
+
+/**
+ * Nạp SchedulerEngine vào sandbox.
+ *
+ * PHẢI nạp js/month_calendar.js TRƯỚC js/scheduler.js, đúng như index.html và
+ * admin.html làm: scheduler.js lấy MonthCalendarHelper từ window, và ném lỗi
+ * nếu chưa có. Trước đây test nạp scheduler.js đứng một mình nên không bắt
+ * được lỗi phân kỳ giữa hai bản — đó là lý do bug năm 2194 lọt qua test.
+ */
+const loadScheduler = (global) => {
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', monthCalendarJs)(global, undefined);
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  return global.SchedulerEngine;
+};
+
 let passed = 0;
 let total = 0;
 let currentGroup = '';
@@ -458,7 +476,7 @@ group('GROUP 4: Payload lịch gọn & không nhân bản');
 runTest('4.1: monthSchedule nhỏ hơn đáng kể sau khi tối ưu', () => {
   const global = {};
   // eslint-disable-next-line no-new-func
-  new Function('window', 'module', readSrc('js/scheduler.js'))(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const students = Array.from({ length: 30 }, (_, i) => ({
@@ -479,7 +497,7 @@ runTest('4.1: monthSchedule nhỏ hơn đáng kể sau khi tối ưu', () => {
 runTest('4.2: week1..week4 là alias non-enumerable (không bị serialize 2 lần)', () => {
   const global = {};
   // eslint-disable-next-line no-new-func
-  new Function('window', 'module', readSrc('js/scheduler.js'))(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const students = Array.from({ length: 10 }, (_, i) => ({
@@ -501,7 +519,7 @@ runTest('4.2: week1..week4 là alias non-enumerable (không bị serialize 2 l�
 runTest('4.3: studentStats/combinedStats không nhân bản hồ sơ sinh viên', () => {
   const global = {};
   // eslint-disable-next-line no-new-func
-  new Function('window', 'module', readSrc('js/scheduler.js'))(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const students = Array.from({ length: 10 }, (_, i) => ({
@@ -519,7 +537,7 @@ runTest('4.3: studentStats/combinedStats không nhân bản hồ sơ sinh viên'
 runTest('4.4: Không phá vỡ bảo toàn tính toàn vẹn của ca trực', () => {
   const global = {};
   // eslint-disable-next-line no-new-func
-  new Function('window', 'module', readSrc('js/scheduler.js'))(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const students = Array.from({ length: 30 }, (_, i) => ({
@@ -1018,8 +1036,7 @@ group('GROUP 9: Scheduler cảnh báo dữ liệu bất thường');
 
 runTest('8.1: Role không hợp lệ/thiếu phải cảnh báo và KHÔNG tự nâng quyền', () => {
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const bad = [
@@ -1045,8 +1062,7 @@ runTest('8.1: Role không hợp lệ/thiếu phải cảnh báo và KHÔNG tự 
 
 runTest('8.1b: Role viết HOA hoặc dùng tên tiếng Việt vẫn được chuẩn hoá đúng', () => {
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const list = [
@@ -1065,8 +1081,7 @@ runTest('8.1b: Role viết HOA hoặc dùng tên tiếng Việt vẫn được c
 
 runTest('8.2: Role hợp lệ thì KHÔNG sinh cảnh báo', () => {
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const ok = [
@@ -1084,8 +1099,7 @@ runTest('9.4: Trùng ca cùng ngày phải được TRÁNH khi còn ứng viên 
   // Đo thực tế (trước khi sửa): 3 Chính Thức + 3 Tập Sự (tất cả rảnh mọi
   // ca) -> 2 ca bị trùng ngày dù hoàn toàn có thể tránh.
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
   const ALL = S.SHIFTS.map(x => x.id);
 
@@ -1120,8 +1134,7 @@ runTest('9.5: Trùng ngày KHÔNG tránh được thì phải CẢNH BÁO, khôn
   // Trước đây: 0 cảnh báo dù lịch bất khả thi (1 người trực sáng + chiều
   // T2→T6 liên tục). Nay phải nói rõ để Ban điều hành biết mà thêm CTV.
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
   const ALL = S.SHIFTS.map(x => x.id);
 
@@ -1144,8 +1157,7 @@ runTest('9.6: Cảnh báo của TỪNG TUẦN phải được gom lên warnings 
   // result.warnings của từng tuần bị bỏ rơi. Giao diện chỉ đọc
   // result.warnings -> người dùng không bao giờ thấy cảnh báo tuần.
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
   const ALL = S.SHIFTS.map(x => x.id);
 
@@ -1168,84 +1180,84 @@ runTest('9.6: Cảnh báo của TỪNG TUẦN phải được gom lên warnings 
     'warnings cấp tháng bị trùng lặp');
 });
 
-runTest('9.7: 2 bản MonthCalendarHelper phải cho KẾT QUẢ GIỐNG HỆT NHAU', () => {
-  // js/scheduler.js và js/month_calendar.js đều định nghĩa MonthCalendarHelper.
-  // Trình duyệt nạp month_calendar.js TRƯỚC scheduler.js nên bản trong
-  // scheduler.js là bản thực sự chạy; còn test/require() lấy bản
-  // month_calendar.js. Trước đây chúng đã PHÂN KỲ:
+runTest('9.7: MonthCalendarHelper chỉ có MỘT định nghĩa và luôn tính đúng', () => {
+  // Trước đây js/scheduler.js và js/month_calendar.js CÙNG định nghĩa
+  // MonthCalendarHelper. Trình duyệt nạp month_calendar.js TRƯỚC
+  // scheduler.js nên bản trong scheduler.js là bản thực sự chạy — và nó
+  // đã PHÂN KỲ khỏi bản kia:
   //   - nhãn tuần 4 tháng 12/2026: "…/2026" (sai) vs "…/2027" (đúng)
-  //   - getFirstMonday(2026) 1 tham số ra năm 2194 do default param rò vào
-  //     ô month: new Date(2026, 2025, 1)
-  // Nghĩa là test chạy trên lịch KHÁC với lịch người dùng thấy.
-  const loadBoth = (file, pick) => {
-    const g = {}; const m = { exports: {} };
-    // eslint-disable-next-line no-new-func
-    new Function('window', 'module', readSrc(file))(g, m);
-    return pick(g, m);
-  };
+  //   - getFirstMonday(2026) gọi 1 tham số ra năm 2194, do tham số mặc
+  //     định rò vào ô month: new Date(2026, 2025, 1)
+  // Nghĩa là test chạy trên lịch KHÁC với lịch người dùng thấy. Nay
+  // scheduler.js lấy bản canonical trong month_calendar.js.
+  //
+  // Test này khoá cả hai điều: (1) không còn bản sao để phân kỳ,
+  // (2) bản canonical tính đúng ở cả dạng gọi 1 và 2 tham số.
+  const schedulerSrc = readSrc('js/scheduler.js');
 
-  const A = loadBoth('js/scheduler.js', g => g.SchedulerEngine.MonthCalendarHelper);
-  const B = loadBoth('js/month_calendar.js', (g, m) => m.exports || (g.window && g.window.MonthCalendarHelper));
+  // (1) Không được còn định nghĩa object MonthCalendarHelper riêng trong
+  // scheduler.js — chỉ được tham chiếu tới bản canonical.
+  const definesOwn = /const\s+MonthCalendarHelper\s*=\s*\{/.test(schedulerSrc);
+  assert.ok(!definesOwn,
+    'scheduler.js KHÔNG được tự định nghĩa lại MonthCalendarHelper '
+    + '(phải lấy từ month_calendar.js) — bản sao đã gây phân kỳ năm 2194.');
 
-  assert.ok(A && typeof A.getMonthWeeks === 'function', 'scheduler.js phải có MonthCalendarHelper');
-  assert.ok(B && typeof B.getMonthWeeks === 'function', 'month_calendar.js phải có MonthCalendarHelper');
+  // (2) Bản canonical phải đúng ở cả hai dạng gọi.
+  // Dùng CHUNG một sandbox để load cả 2 file, đúng như trình duyệt — nếu tách
+  // riêng thì mỗi lần nạp tạo object khác nhau và so sánh tham chiếu ở (3)
+  // sẽ luôn sai dù code đúng.
+  const sandbox = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', readSrc('js/month_calendar.js'))(sandbox, { exports: {} });
+  const H = sandbox.MonthCalendarHelper;
+  assert.ok(H && typeof H.getMonthWeeks === 'function', 'month_calendar.js phải có MonthCalendarHelper');
 
   const cases = [[10, 2026], [11, 2026], [12, 2026], [1, 2027], [3, 2026], [6, 2026]];
-  const diffs = [];
   cases.forEach(([m, y]) => {
-    const wa = A.getMonthWeeks(m, y);
-    const wb = B.getMonthWeeks(m, y);
-    wa.forEach((wkA, i) => {
-      const wkB = wb[i];
-      ['label', 'startDateStr', 'endDateStr'].forEach(k => {
-        if (wkA[k] !== wkB[k]) {
-          diffs.push(`${m}/${y} tuần ${i + 1} ${k}: "${wkA[k]}" vs "${wkB[k]}"`);
-        }
-      });
-      // fullDate của từng ngày — nơi bug năm 2194 lộ ra rõ nhất.
-      ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(dk => {
-        if (wkA.days[dk].fullDate !== wkB.days[dk].fullDate) {
-          diffs.push(`${m}/${y} tuần ${i + 1} ${dk}.fullDate: "${wkA.days[dk].fullDate}" vs "${wkB.days[dk].fullDate}"`);
-        }
+    H.getMonthWeeks(m, y).forEach((wk, i) => {
+      assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(wk.days.T2.fullDate),
+        `fullDate ${m}/${y} tuần ${i + 1} phải định dạng YYYY-MM-DD, thực tế: ${wk.days.T2.fullDate}`);
+      Object.values(wk.days).forEach(d => {
+        assert.ok(d.fullDate.startsWith(String(y)) || d.fullDate.startsWith(String(y + 1)),
+          `fullDate ${d.fullDate} của tháng ${m}/${y} lệch năm so với tháng đang xếp`);
       });
     });
   });
-  assert.strictEqual(diffs.length, 0,
-    `Hai bản MonthCalendarHelper đã phân kỳ:\n      ${diffs.slice(0, 6).join('\n      ')}`);
 
-  // PHẢI kiểm CẢ HAI bản, không chỉ bản B. Trình duyệt nạp month_calendar.js
-  // TRƯỚC scheduler.js nên window.MonthCalendarHelper là bản trong
-  // scheduler.js — bản thực sự chạy. Trước đây test chỉ kiểm bản B nên
-  // bản đang chạy sai mà test vẫn xanh.
-  [['scheduler.js', A], ['month_calendar.js', B]].forEach(([ten, H]) => {
-    // getFirstMonday gọi 1 tham số phải cho đúng tháng 10 năm đó
-    const one = H.getFirstMonday(2026);
-    assert.strictEqual(one.getFullYear(), 2026,
-      `${ten}: getFirstMonday(2026) phải trả năm 2026, thực tế ${one.getFullYear()} (thường là 2194 do default param)`);
-    assert.strictEqual(one.getMonth(), 9,
-      `${ten}: getFirstMonday(2026) phải trả tháng 10, thực tế tháng ${one.getMonth() + 1}`);
+  // getFirstMonday gọi 1 tham số phải cho đúng tháng 10 năm đó
+  const one = H.getFirstMonday(2026);
+  assert.strictEqual(one.getFullYear(), 2026,
+    `getFirstMonday(2026) phải trả năm 2026, thực tế ${one.getFullYear()} (thường là 2194 do default param)`);
+  assert.strictEqual(one.getMonth(), 9,
+    `getFirstMonday(2026) phải trả tháng 10, thực tế tháng ${one.getMonth() + 1}`);
 
-    // Gọi 1 tham số vào getMonthWeeks: (2026) bị hiểu là (year) → không được
-    // biến thành tháng 2026 / năm 2194.
-    const solo = H.getMonthWeeks(2026);
-    assert.ok(!/2194/.test(solo[0].label),
-      `${ten}: getMonthWeeks(2026) 1 tham số không được ra năm 2194, thực tế: ${solo[0].label}`);
-    assert.ok(solo[0].days.T2.fullDate.startsWith('2026-'),
-      `${ten}: getMonthWeeks(2026) 1 tham số phải ra năm 2026, thực tế: ${solo[0].days.T2.fullDate}`);
+  // Gọi 1 tham số vào getMonthWeeks: (2026) bị hiểu là (year) → không được
+  // biến thành tháng 2026 / năm 2194.
+  const solo = H.getMonthWeeks(2026);
+  assert.ok(!/2194/.test(solo[0].label),
+    `getMonthWeeks(2026) 1 tham số không được ra năm 2194, thực tế: ${solo[0].label}`);
+  assert.ok(solo[0].days.T2.fullDate.startsWith('2026-'),
+    `getMonthWeeks(2026) 1 tham số phải ra năm 2026, thực tế: ${solo[0].days.T2.fullDate}`);
 
-    // Nhãn tuần cuối tháng 12/2026 phải kết thúc năm 2027
-    const dec = H.getMonthWeeks(12, 2026);
-    assert.ok(/\/2027\)?$/.test(dec[3].label),
-      `${ten}: nhãn tuần 4 tháng 12/2026 phải kết thúc bằng /2027, thực tế: ${dec[3].label}`);
-  });
+  // Nhãn tuần cuối tháng 12/2026 phải kết thúc năm 2027
+  const dec = H.getMonthWeeks(12, 2026);
+  assert.ok(/\/2027\)?$/.test(dec[3].label),
+    `Nhãn tuần 4 tháng 12/2026 phải kết thúc bằng /2027, thực tế: ${dec[3].label}`);
+
+  // scheduler.js phải dùng ĐÚNG bản canonical này, không phải bản khác.
+  // Nạp tiếp vào CÙNG sandbox trên để window.MonthCalendarHelper là H.
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'module', schedulerSrc)(sandbox, { exports: {} });
+  assert.strictEqual(sandbox.SchedulerEngine.MonthCalendarHelper, H,
+    'SchedulerEngine.MonthCalendarHelper phải là ĐÚNG object canonical '
+    + 'từ month_calendar.js');
 });
 
 runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () => {
   // Test 8.1/8.1b đã phủ; test này khẳng định ngưỡng "an toàn": role thiếu
   // hay sai đều KHÔNG bao giờ bị nâng lên Chính Thức.
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
   const ALL = S.SHIFTS.map(x => x.id);
 
@@ -1265,8 +1277,7 @@ runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () =
 
 runTest('8.3: Mã định danh trùng được ghi nhận cảnh báo', () => {
   const global = {};
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'module', schedulerJs)(global, { exports: {} });
+  loadScheduler(global);
   const S = global.SchedulerEngine;
 
   const dup = [

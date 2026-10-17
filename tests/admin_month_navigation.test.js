@@ -160,6 +160,12 @@ global.localStorage = mockLocalStorage;
 global.sessionStorage = mockSessionStorage;
 
 // Load engine scripts
+// month_calendar.js phải nạp TRƯỚC scheduler.js: file sau lấy
+// MonthCalendarHelper từ window và ném lỗi nếu chưa có. Đây cũng là thứ tự
+// admin.html dùng.
+const monthCalendarCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'month_calendar.js'), 'utf-8');
+eval(monthCalendarCode);
+
 const schedulerCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'scheduler.js'), 'utf-8');
 eval(schedulerCode);
 
