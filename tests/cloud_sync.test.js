@@ -243,7 +243,10 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
     lastFetchMethod = options.method || 'GET';
     lastFetchBody = options.body ? JSON.parse(options.body) : null;
 
-    if (lastFetchMethod === 'PUT') {
+    // Nhận cả PUT và PATCH: pushToCloud() dùng PATCH để không xoá khoá vắng mặt
+    // (xem test 7.10). Trước đây mock chỉ khớp PUT nên PATCH rơi xuống cuối,
+    // hàm trả undefined và test báo lỗi mạng.
+    if (lastFetchMethod === 'PUT' || lastFetchMethod === 'PATCH') {
       return {
         ok: true,
         status: 200,
@@ -272,8 +275,11 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
 
   // Test Push
   const pushRes = await csm.pushToCloud();
-  assert(pushRes.success === true, '4.1: pushToCloud gửi yêu cầu PUT thành công');
-  assert(lastFetchMethod === 'PUT', '4.2: Phương thức HTTP gửi đi là PUT');
+  assert(pushRes.success === true, '4.1: pushToCloud gửi yêu cầu ghi thành công');
+  // PATCH chứ không PUT: PUT ghi đè toàn bộ node nên sẽ XOÁ mọi khoá không có
+  // trong payload. Xem test 7.10 để biết hậu quả cụ thể.
+  assert(lastFetchMethod === 'PATCH',
+    `4.2: phải dùng PATCH để không xoá khoá vắng mặt. Thực tế: ${lastFetchMethod}`);
   assert(lastFetchUrl === 'https://test-cloud.firebaseio.com/test_path.json', '4.3: URL đích khớp chuẩn Firebase REST endpoint');
   assert(lastFetchBody && Array.isArray(lastFetchBody.adminUsers), '4.4: Body chứa payload hoàn chỉnh');
 
@@ -482,6 +488,26 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
     await csm.pushToCloud();
     assert(!('students' in sent[0]),
       '7.9: danh sách rỗng rõ ràng ([]) cũng không được gửi lên Cloud');
+
+    // 7.10 — PHẢI dùng PATCH, không phải PUT.
+    //
+    // Root cause: Firebase PUT tới path.json ghi đè TOÀN BỘ node — mọi khoá
+    // không có trong payload đều bị XOÁ. Payload thiếu `students` vì máy chưa
+    // nạp danh sách, nhưng chính việc thiếu đó khiến khoá bị mất. Bản sửa
+    // "không ghi danh sách rỗng" chỉ chặn được ghi RỘNG, không chặn được XOÁ.
+    // PATCH chỉ cập nhật khoá được gửi, giữ nguyên phần còn lại.
+    const methods = [];
+    const methodCapture = async (url, opts) => {
+      methods.push(opts.method);
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+    };
+    env.window.fetch = methodCapture;
+    env.sandbox.fetch = methodCapture;
+
+    env.localStorage.setItem('ts_scheduler_students', JSON.stringify([{ id: 'a' }]));
+    await csm.pushToCloud();
+    assert(methods[0] === 'PATCH',
+      `7.10: phải dùng PATCH để không xoá khoá vắng mặt. Thực tế: ${methods[0]}`);
   }
 }
 

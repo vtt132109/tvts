@@ -376,9 +376,19 @@
 
     const payload = buildPayload();
 
+    // PATCH thay vì PUT — đây là nguyên nhân gốc khiến danh sách 58 CTV bị xoá.
+    //
+    // Firebase PUT tới `path.json` GHI ĐÈ TOÀN BỘ node: mọi khoá không có trong
+    // payload đều bị XOÁ. Payload còn thiếu `students` chính vì máy này chưa
+    // nạp danh sách — nhưng chính việc "không gửi" lại khiến khoá đó bị mất.
+    //
+    // Nghĩa là bản sửa "không ghi danh sách rỗng" (commit d2169b9) chỉ chặn
+    // được việc ghi RỘNG, không chặn được việc XOÁ do khoá vắng mặt.
+    //
+    // PATCH chỉ cập nhật khoá được gửi lên, giữ nguyên phần còn lại.
     try {
       const response = await fetch(url, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
