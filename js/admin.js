@@ -497,18 +497,21 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
       if (raw) {
-        state.adminUsers = JSON.parse(raw);
-        // Tự động bổ sung các tài khoản cốt lõi nếu chưa có trong LocalStorage cũ
-        DEFAULT_ADMIN_USERS.forEach(defUser => {
-          if (!state.adminUsers.some(u => u.username.toLowerCase() === defUser.username.toLowerCase())) {
-            state.adminUsers.push(defUser);
-          }
-        });
-        localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
-      } else {
+        const list = JSON.parse(raw);
+        state.adminUsers = Array.isArray(list) ? list : [];
+      } else if (!Array.isArray(state.adminUsers) || state.adminUsers.length === 0) {
         state.adminUsers = [...DEFAULT_ADMIN_USERS];
         saveAdminUsers();
       }
+
+      // KHÔNG tự thêm tài khoản mặc định vào danh sách đã có, rồi đẩy lên Cloud.
+      //
+      // Lỗi này đã xảy ra thật: tài khoản thật (đã đổi mật khẩu) bị thêm bản mặc
+      // định trong mã nguồn vào cùng danh sách, rồi saveAdminUsers() đẩy ngược
+      // lên Firebase — ghi đè cấu hình tài khoản thật trên Cloud.
+      //
+      // Máy này thiếu tài khoản nào thì quản trị viên tự thêm trong màn
+      // "Cấp Quyền & Đổi MK" — không tự ý nhét tài khoản mặc định vào.
     } catch (err) {
       state.adminUsers = [...DEFAULT_ADMIN_USERS];
     }
