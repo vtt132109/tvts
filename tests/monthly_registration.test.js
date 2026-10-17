@@ -226,7 +226,6 @@ runTest('2.4: prepareStudentRegistration bảo toàn đầy đủ các trường
     fullName: 'Trần Thị Bích',
     phone: '0912345678',
     role: 'new',
-    registrationMonth: '2026-10',
     monthlyAvailableShifts: { 1: ['T2_S'] }
   };
   const student = MonthCalendarHelper.prepareStudentRegistration(rawStudent);
@@ -235,7 +234,10 @@ runTest('2.4: prepareStudentRegistration bảo toàn đầy đủ các trường
   assert.strictEqual(student.fullName, 'Trần Thị Bích');
   assert.strictEqual(student.phone, '0912345678');
   assert.strictEqual(student.role, 'new');
-  assert.strictEqual(student.registrationMonth, '2026-10');
+  // `monthlyAvailableShifts` là nguồn ca rảnh thật, không phải `registrationMonth`.
+  // Hàm không còn tự gán trường tháng: xem prepareStudentRegistration.
+  assert.deepStrictEqual(student.availableShifts, ['T2_S'],
+    'availableShifts phải được hợp nhất từ monthlyAvailableShifts');
 });
 
 runTest('2.5: Xử lý an toàn khi sinh viên chỉ chọn ca ở 1 hoặc 2 tuần, các tuần còn lại để trống', () => {
