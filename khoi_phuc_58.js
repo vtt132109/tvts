@@ -96,5 +96,18 @@ if (!canWrite || students.length === 0) {
   } else {
     console.log('  activeMonth hien tai:', JSON.stringify(am));
   }
+
+  // regConfig: khoi phuc mac dinh neu thieu (dong cung thoi gian mo/ dong cong).
+  const rc = await (await fetch(`${BASE}/${NODE}/regConfig.json`)).json();
+  if (!rc) {
+    await fetch(`${BASE}/${NODE}/regConfig.json`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'always_open', publishSchedule: true, startTime: '', endTime: '' }),
+    });
+    console.log('  da dat regConfig = always_open');
+  } else {
+    console.log('  regConfig hien tai:', JSON.stringify(rc));
+  }
+
   if (list.length === 58) console.log('\n  OK - 58 CTV tren Cloud.');
 })();
