@@ -1496,50 +1496,193 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       triggerAutoSchedule(true);
     });
 
+// ------------------------------------------------------------------
+    // XÁC NHẬN 2 BƯỚC cho thao tác xóa sạch dữ liệu
+    //
+    // confirm() của trình duyệt chỉ có 1 bước: bấm nhầm là mất luôn cả bảng
+    // phân công 4 tuần hoặc cả 58 CTV — mà mất thì chỉ khôi phục được từ bản
+    // sao lưu trên web, tốn công nhập lại tay. Bước 2 bắt gõ đúng từ khoá
+    // để người dùng phải đọc và xác nhận đúng ý mình.
+    //
+    // Dùng lại class CSS sẵn có (.modal-overlay + .active, .btn-danger-outline,
+    // .form-input) nên không phải thêm dòng CSS nào. Ẩn/hiện bằng CẢ thuộc
+    // tính `hidden` lẫn class `active` để không phụ thuộc giá trị display mặc
+    // định của .modal-overlay.
+    // ------------------------------------------------------------------
+    let dangerConfirmResolver = null;
+
+    const ensureDangerConfirmModal = () => {
+      const existing = document.getElementById('danger-confirm-overlay');
+      if (existing) return existing;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'danger-confirm-overlay';
+      overlay.hidden = true;
+      overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
+          <div class="modal-header">
+            <h3 class="modal-title" id="danger-confirm-title"></h3>
+          </div>
+          <div class="modal-body">
+            <p id="danger-confirm-msg" style="white-space: pre-line;"></p>
+            <ul id="danger-confirm-list" style="margin: .6rem 0 0; padding-left: 1.2rem;"></ul>
+            <label for="danger-confirm-input" id="danger-confirm-hint"
+                   style="display: block; margin: 1rem 0 .4rem; font-weight: 700;"></label>
+            <input type="text" id="danger-confirm-input" class="form-input"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="danger-confirm-cancel">Huỷ bỏ</button>
+            <button type="button" class="btn btn-danger-outline" id="danger-confirm-ok" disabled></button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      const input = overlay.querySelector('#danger-confirm-input');
+      const okBtn = overlay.querySelector('#danger-confirm-ok');
+      input.addEventListener('input', () => {
+        const want = (overlay.dataset.keyword || '').toUpperCase();
+        okBtn.disabled = input.value.trim().toUpperCase() !== want;
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !okBtn.disabled) { e.preventDefault(); closeDangerConfirm(true); }
+        if (e.key === 'Escape') { e.preventDefault(); closeDangerConfirm(false); }
+      });
+      okBtn.addEventListener('click', () => closeDangerConfirm(true));
+      overlay.querySelector('#danger-confirm-cancel').addEventListener('click', () => closeDangerConfirm(false));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDangerConfirm(false); });
+      return overlay;
+    };
+
+    function closeDangerConfirm(accepted) {
+      const resolver = dangerConfirmResolver;
+      dangerConfirmResolver = null;
+      const overlay = document.getElementById('danger-confirm-overlay');
+      if (overlay) {
+        overlay.hidden = true;
+        overlay.classList.remove('active');
+        overlay.querySelector('#danger-confirm-input').value = '';
+        overlay.querySelector('#danger-confirm-ok').disabled = true;
+      }
+      if (typeof resolver === 'function') resolver(!!accepted);
+    }
+
+    // Trả về Promise<boolean>: true = đã gõ đúng từ khoá và bấm nút xác nhận.
+    const confirmDangerAction = ({ title, message, losses = [], keyword, confirmLabel }) => {
+      // Còn một hộp thoại nào đang mở dở -> coi như huỷ, tránh mất resolver.
+      if (dangerConfirmResolver) closeDangerConfirm(false);
+
+      const overlay = ensureDangerConfirmModal();
+      overlay.dataset.keyword = keyword;
+      overlay.querySelector('#danger-confirm-title').textContent = title;
+      overlay.querySelector('#danger-confirm-msg').textContent = message;
+      overlay.querySelector('#danger-confirm-hint').textContent = `Gõ đúng "${keyword}" để xác nhận:`;
+
+      const list = overlay.querySelector('#danger-confirm-list');
+      list.innerHTML = '';
+      losses.forEach((text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        list.appendChild(li);
+      });
+
+      const okBtn = overlay.querySelector('#danger-confirm-ok');
+      okBtn.textContent = confirmLabel;
+      okBtn.disabled = true;
+      const input = overlay.querySelector('#danger-confirm-input');
+      input.value = '';
+
+      overlay.hidden = false;
+      overlay.classList.add('active');
+      setTimeout(() => input.focus(), 30);
+
+      return new Promise((resolve) => { dangerConfirmResolver = resolve; });
+    };
+
+    // Đếm tổng số lượt ca rảnh đã đăng ký của một danh sách CTV (để hiện trong cảnh báo).
+    const countRegisteredShifts = (list) => (list || []).reduce(
+      (total, s) => total + Object.values(s.monthlyAvailableShifts || {})
+        .reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+      0
+    );
+
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
-    elements.btnClearSchedule?.addEventListener('click', () => {
+    elements.btnClearSchedule?.addEventListener('click', async () => {
       if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
         showToast('Hiện tại chưa có bảng phân công nào để xóa!', 'info');
         return;
       }
-      if (confirm('Bạn có chắc chắn muốn xóa toàn bộ bảng phân công ca trực (toàn bộ 4 tuần) không?\n(Lưu ý: Danh sách sinh viên và các ca rảnh đã đăng ký vẫn được giữ nguyên)')) {
-        state.currentSchedule = null;
-        state.twoWeekSchedule = null;
-        state.monthSchedule = null;
-        localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
-        localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-        localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
-        saveSchedule();
-        renderAll();
-        if (typeof renderUteSheetPreview === 'function') {
-          renderUteSheetPreview();
-        }
-        showToast('Đã xóa sạch toàn bộ bảng phân công 4 tuần! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
+      const weeks = state.monthSchedule?.weeks?.length || 4;
+      const filled = (state.monthSchedule?.weeks || []).reduce(
+        (total, w) => total + Object.values(w.scheduleTable || {})
+          .filter((cell) => cell && cell.status === 'full').length,
+        0
+      );
+      const accepted = await confirmDangerAction({
+        title: 'Xóa toàn bộ bảng phân công ca trực',
+        message: `Bảng phân công ${weeks} tuần sẽ bị xóa sạch. `
+          + 'Muốn khôi phục thì phải xếp ca lại từ đầu — ca rảnh CTV đã đăng ký vẫn còn nguyên.',
+        losses: [
+          `${filled} ca đang có người trực sẽ trống`,
+          'Bảng phân công của cả tháng (không chỉ tuần đang xem)',
+          'Danh sách CTV và ca rảnh đã đăng ký: GIỮ NGUYÊN',
+        ],
+        keyword: 'XOA LICH',
+        confirmLabel: 'Xóa bảng phân công',
+      });
+      if (!accepted) return;
+
+      state.currentSchedule = null;
+      state.twoWeekSchedule = null;
+      state.monthSchedule = null;
+      localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+      localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
+      saveSchedule();
+      renderAll();
+      if (typeof renderUteSheetPreview === 'function') {
+        renderUteSheetPreview();
       }
+      showToast('Đã xóa sạch toàn bộ bảng phân công 4 tuần! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
     });
 
     // Xóa toàn bộ sinh viên và lịch trực
-    const handleClearAllStudents = () => {
+    const handleClearAllStudents = async () => {
       if (state.students.length === 0) {
         showToast('Danh sách sinh viên hiện đang trống!', 'info');
         return;
       }
-      if (confirm(`Bạn có chắc chắn muốn xóa toàn bộ ${state.students.length} sinh viên đã đăng ký không?\nThao tác này sẽ xóa sạch hồ sơ sinh viên và bảng phân công liên quan.`)) {
-        state.students = [];
-        state.currentSchedule = null;
-        state.twoWeekSchedule = null;
-        state.monthSchedule = null;
-        localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
-        localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-        localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
-        saveStudents();
-        saveSchedule();
-        renderAll();
-        if (typeof renderUteSheetPreview === 'function') {
-          renderUteSheetPreview();
-        }
-        showToast('Đã xóa toàn bộ danh sách sinh viên và làm trống hệ thống!', 'info');
+      const totalShifts = countRegisteredShifts(state.students);
+      const accepted = await confirmDangerAction({
+        title: 'Xóa toàn bộ danh sách CTV',
+        message: `Toàn bộ ${state.students.length} CTV sẽ bị xóa khỏi hệ thống. `
+          + 'Sau khi xóa, không ai đăng nhập được vào Cổng Đăng Ký nữa.',
+        losses: [
+          `${state.students.length} hồ sơ CTV (cả Chính Thức lẫn Tập Sự)`,
+          `${totalShifts} lượt ca rảnh đã đăng ký`,
+          'Toàn bộ bảng phân công ca trực',
+          'Các đề xuất đổi ca đang chờ duyệt',
+        ],
+        keyword: 'XOA SV',
+        confirmLabel: `Xóa ${state.students.length} CTV`,
+      });
+      if (!accepted) return;
+
+      state.students = [];
+      state.currentSchedule = null;
+      state.twoWeekSchedule = null;
+      state.monthSchedule = null;
+      localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+      localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
+      saveStudents();
+      saveSchedule();
+      renderAll();
+      if (typeof renderUteSheetPreview === 'function') {
+        renderUteSheetPreview();
       }
+      showToast('Đã xóa toàn bộ danh sách sinh viên và làm trống hệ thống!', 'info');
     };
 
     elements.btnClearStudents?.addEventListener('click', handleClearAllStudents);
