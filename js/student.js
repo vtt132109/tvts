@@ -2428,6 +2428,30 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     copyDutyScheduleText();
   };
 
+  // API nội bộ cho bộ kiểm thử tự động (không dùng trong giao diện).
+  // processStudentRegistration chỉ được gọi qua sự kiện submit của form,
+  // nên không có cách nào test trực tiếp mà không chạy cả giao diện.
+  window.studentTestHelper = {
+    register: (studentId, monthlyShifts) => {
+      if (studentId !== undefined && elements.inputStudentId) {
+        elements.inputStudentId.value = studentId;
+      }
+      if (monthlyShifts) {
+        monthlyAvailableShifts = {
+          1: [...(monthlyShifts[1] || [])],
+          2: [...(monthlyShifts[2] || [])],
+          3: [...(monthlyShifts[3] || [])],
+          4: [...(monthlyShifts[4] || [])]
+        };
+      }
+      return processStudentRegistration();
+    },
+    getMonthlyShifts: () => monthlyAvailableShifts,
+    loadAllStudents,
+    switchRegWeek,
+    renderMonthOverview
+  };
+
   window.studentOpenSwapModal = (shiftId = null, weekNum = null, specificMssv = null) => {
     openSwapModal(shiftId, weekNum, specificMssv);
   };
