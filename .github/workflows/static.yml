@@ -60,12 +60,26 @@ jobs:
           cp index.html admin.html _site/
           cp css/style.css _site/css/
 
-          # Chỉ 5 file JS thực sự được nạp bởi trang
-          for f in cloud_sync month_calendar scheduler sample30; do
+          # Chỉ những file JS thực sự được nạp bởi trang.
+          # roster thay cho sample30: danh sách 58 CTV nạp từ CSV, không nhúng
+          # danh sách mẫu trong mã nguồn.
+          for f in cloud_sync month_calendar scheduler roster a11y_modal; do
             cp "js/$f.js" _site/js/
           done
           cp js/admin.js   _site/js/
           cp js/student.js _site/js/
+
+          # Chốt danh sách file đã publish: mọi <script src="js/..."> trong
+          # index.html và admin.html phải tồn tại, nếu không trang sẽ hỏng âm
+          # thầm và deploy vẫn báo thành công.
+          for html in index.html admin.html; do
+            grep -o 'src="js/[a-z0-9_]*\.js' "_site/$html" | sed 's/src="//' | while read -r f; do
+              if [ ! -f "_site/$f" ]; then
+                echo "::error::$html tham chieu $f nhung file khong co trong _site"
+                exit 1
+              fi
+            done
+          done
 
           # .nojekyll: tắt Jekyll để các file/thư mục bị bỏ qua (vd .antigravity)
           # không bị GitHub Pages lọc bằng cách khác nhau giữa local và Pages
