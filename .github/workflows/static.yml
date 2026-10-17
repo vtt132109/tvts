@@ -1,10 +1,26 @@
 name: Deploy static content to Pages
 
-# ⚠️ QUAN TRỌNG: Chỉ deploy các file CẦN THIẾT cho web.
-# Trước đây dùng `path: '.'` khiến TOÀN BỘ repo (kể cả data/, tests/,
-# tasks/, scripts/, .antigravity/) được publish công khai — trong đó có file
-# chứa thông tin cá nhân (PII) và cấu trúc tài khoản. Cách này vừa chậm
-# vừa là rò rỉ thông tin.
+# ⚠️ QUAN TRỌNG — ĐỌC FILE NÀY TRƯỚC KHI SỬA
+#
+# Mục đích: chỉ publish index.html, admin.html, css/, js/ — KHÔNG publish
+# data/, tests/, tasks/, scripts/ (chứa PII và chi tiết kiểm thử nội bộ).
+# Trước đây dùng `path: '.'` khiến TOÀN BỘ repo bị publish công khai.
+#
+# ─────────────────────────────────────────────────────────────────────
+# ⚠️⚠️ CẦN LÀM MỘT LẦN TRONG GIAO DIỆN GITHUB (workflow này không tự làm được)
+# ─────────────────────────────────────────────────────────────────────
+# Settings > Pages > Build and deployment > Source:
+#     ĐỔI TỪ  "Deploy from a branch"  SANG  "GitHub Actions"
+#
+# Vì sao? Nếu Source là "Deploy from a branch", GitHub chạy THÊM workflow
+# "pages build and deployment" song song với workflow này, và workflow đó
+# phục vụ TOÀN BỘ repo bằng Jekyll. Hai bản deploy sẽ tranh nhau ghi đè
+# lẫn nhau, nên lúc nào cũng có lúc data/ và tests/ xuất hiện công khai.
+# Đã xác minh hiện tượng này: probe liên tiếp cho thấy /data/admin_accounts.json
+# trả 200 rồi 404 rồi 200 — đúng dấu hiệu hai nguồn phục vụ luân phiên.
+#
+# Sau khi đổi, chỉ còn workflow này chạy và bản phục vụ luôn sạch.
+# ─────────────────────────────────────────────────────────────────────
 on:
   push:
     branches: ["main"]
@@ -66,20 +82,33 @@ jobs:
           set -euo pipefail
           fail=0
           # Không được có file chứa PII / tài khoản / tài liệu nội bộ
-          for bad in csv xlsx xls; do
+          for bad in csv xlsx xls tsv; do
             if find _site -name "*.$bad" | grep -q .; then
               echo "::error::Phát hiện file .$bad trong thư mục deploy (chứa PII)"
               fail=1
             fi
           done
-          for dir in tests tasks scripts .antigravity data .git .github; do
+          # File sao lưu chứa dữ liệu toàn bộ danh sách + mật khẩu
+          if find _site \( -name '*sao-luu*' -o -name 'backup-*' -o -name '*accounts*' \) | grep -q .; then
+            echo "::error::Phát hiện file sao lưu / tài khoản trong thư mục deploy"
+            fail=1
+          fi
+          for dir in tests tasks scripts .antigravity data .git .github _site; do
             if [ -e "_site/$dir" ]; then
               echo "::error::Thư mục nội bộ '$dir' bị deploy công khai"
               fail=1
             fi
           done
-          # Không được hardcode id tài khoản thật trong JS được publish
-          if grep -rnE "usr_[0-9]{10,}" _site/ ; then
+          # Không được hardcode THÔNG TIN ĐĂNG NHẬP trong JS được publish.
+          # LƯU Ý: js/sample30.js cố tình chứa danh sách 30 CTV thật
+          # (họ tên + MSSV) — đó là dữ liệu nghiệp vụ mà cổng Sinh Viên cần
+          # để xác thực MSSV, KHÔNG phải rò rỉ. Chỉ kiểm tra thông tin
+          # ĐĂNG NHẬP (mật khẩu / PIN / id tài khoản).
+          if grep -rnE '"pin"[[:space:]]*:[[:space:]]*"[0-9]{4,6}"' _site/js/ ; then
+            echo "::error::Phát hiện PIN tài khoản hardcode trong JS được publish"
+            fail=1
+          fi
+          if grep -rnE 'usr_[0-9]{10,}' _site/ ; then
             echo "::error::Phát hiện id tài khoản dạng usr_<timestamp> trong bản deploy"
             fail=1
           fi
