@@ -543,11 +543,16 @@
         }
       } else if (typeof arg1 === 'number') {
         if (arg1 > 100) {
+          // Thứ tự (year, month) — như getFirstMonday(year, month).
+          // PHẢI kiểm tra `undefined` chứ không dựng truthy/default:
+          // nếu không, khi gọi 1 tham số (getFirstMonday(2026)) thì
+          // arg2 nhận giá trị mặc định 2026 và rơi vào ô `month`,
+          // biến new Date(2026, 2025, 1) => tháng 6 năm 2194.
           year = arg1;
-          month = typeof arg2 === 'number' ? arg2 : 10;
+          month = (typeof arg2 === 'number' && arg2 >= 1 && arg2 <= 12) ? arg2 : 10;
         } else {
           month = arg1;
-          year = typeof arg2 === 'number' && arg2 > 100 ? arg2 : 2026;
+          year = (typeof arg2 === 'number' && arg2 > 100) ? arg2 : 2026;
         }
       }
       return { month, year };
