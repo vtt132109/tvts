@@ -438,6 +438,51 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
     '7.5: pushToCloud cũng phải phát hiện {"error":...} dù HTTP 200');
   assert(/Permission denied/.test(push.error || ''),
     `7.6: Lỗi push phải nêu rõ nguyên nhân. Thực tế: ${push.error}`);
+
+  // 7.9 — KHÔNG được ghi danh sách rỗng lên Cloud.
+  //
+  // Lỗi đã xảy ra thật trên production: máy mới đăng nhập, localStorage chưa
+  // có danh sách, pushToCloud() gửi students: [] và Firebase PUT toàn payload —
+  // xoá mất 58 CTV trên Cloud, mọi máy sau đó kéo về 0 người.
+  //
+  // Danh sách rỗng ở máy = "chưa nạp", KHÔNG phải "xoá hết". Phải bỏ hẳn khoá
+  // khỏi payload để Firebase giữ nguyên dữ liệu cũ.
+  {
+    const sent = [];
+    const capture = async (url, opts) => {
+      sent.push(JSON.parse(opts.body));
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+    };
+    env.window.fetch = capture;
+    env.sandbox.fetch = capture;
+
+    // Máy mới: KHÔNG có khoá students trong localStorage.
+    env.localStorage.removeItem('ts_scheduler_students');
+    sent.length = 0;
+    await csm.pushToCloud();
+    assert(sent.length === 1, `7.9: phải có 1 lần ghi. Thực tế: ${sent.length}`);
+    assert(!('students' in sent[0]),
+      '7.9: máy chưa có danh sách thì KHÔNG được gửi khoá students lên Cloud '
+      + '(sẽ xoá danh sách đang có trên Firebase)');
+
+    // Máy ĐÃ có danh sách → phải gửi lên để đồng bộ.
+    env.localStorage.setItem('ts_scheduler_students', JSON.stringify([
+      { id: 'a', studentId: '1', role: 'old' },
+      { id: 'b', studentId: '2', role: 'new' }
+    ]));
+    sent.length = 0;
+    await csm.pushToCloud();
+    assert('students' in sent[0], '7.9: máy ĐÃ có danh sách thì phải gửi lên Cloud');
+    assert(sent[0].students.length === 2,
+      `7.9: phải gửi đúng 2 người. Thực tế: ${sent[0].students.length}`);
+
+    // Danh sách rỗng rõ ràng ([]) cũng không được gửi — cùng nguy cơ xoá.
+    env.localStorage.setItem('ts_scheduler_students', '[]');
+    sent.length = 0;
+    await csm.pushToCloud();
+    assert(!('students' in sent[0]),
+      '7.9: danh sách rỗng rõ ràng ([]) cũng không được gửi lên Cloud');
+  }
 }
 
 {
@@ -477,6 +522,7 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
   assert(pull.success === false && /500/.test(pull.error || ''),
     `7.8: Lỗi HTTP 500 vẫn phải bị bắt. Thực tế: ${pull.error}`);
 }
+
 
 // -----------------------------------------------------------------------------
 // TỔNG KẾT

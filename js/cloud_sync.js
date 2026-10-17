@@ -190,9 +190,21 @@
       localAdmins = FALLBACK_ADMIN_USERS;
     }
 
+    // KHÔNG được đẩy danh sách rỗng lên Cloud.
+    //
+    // Lỗi này đã xảy ra thật: máy mới đăng nhập, localStorage chưa có danh sách,
+    // pushToCloud() gửi students: [] và Firebase PUT toàn bộ payload — XOÁ mất
+    // 58 CTV trên Cloud. Mọi máy sau đó kéo về 0 người.
+    //
+    // Danh sách rỗng ở máy có nghĩa là "chưa nạp", KHÔNG phải "xoá hết". Nên bỏ
+    // hẳn khoá khỏi payload: Firebase giữ nguyên giá trị cũ thay vì ghi đè.
+    const localStudents = readKey(STORAGE_KEYS.STUDENTS, null);
+    const studentsToPush = Array.isArray(localStudents) && localStudents.length > 0
+      ? localStudents
+      : undefined;
+
     const payload = {
       adminUsers: localAdmins,
-      students: readKey(STORAGE_KEYS.STUDENTS, []),
       scheduleResult: readKey(STORAGE_KEYS.SCHEDULE, null),
       twoWeekSchedule: readKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, null),
       monthSchedule: readKey(STORAGE_KEYS.MONTH_SCHEDULE, null),
@@ -207,8 +219,13 @@
       activeMonth: normalizeActiveMonth(readKey(STORAGE_KEYS.ACTIVE_MONTH, null)),
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
-      version: '1.1'
     };
+    // Chỉ gán khi máy này THẬT SỰ có danh sách. Bỏ khoá khỏi JSON.stringify()
+    // khiến Firebase giữ nguyên dữ liệu cũ (không ghi đè bằng rỗng).
+    if (studentsToPush !== undefined) {
+      payload.students = studentsToPush;
+    }
+    payload.version = '1.1';
 
     return payload;
   }
