@@ -209,7 +209,58 @@
     return null;
   }
 
-  /** Đọc lịch tuần (bản cũ 1-tuần) nếu có. */
+  /**
+ * Tô trạng thái "ca đã xếp / còn trống" lên các ô tick.
+ *
+ * Quy trình: sinh viên đăng ký ca rảnh TRƯỚC, Ban Điều Hành xếp ca SAU. Nên
+ * thường thì cả 10 ô đều còn trống — nhưng khi Ban Đã chốt lịch, sinh viên
+ * cần thấy ngay ca nào đã có người, ca nào còn trống.
+ *
+ * Gắn class vào `<td>` chứa ô (CSS đã có sẵn .sv-slot-taken / .sv-slot-free).
+ * Chỉ đổi class, không đụng tới logic tick — nên việc đăng ký không đổi.
+ */
+function paintSlotAvailability() {
+  let scheduleTable = null;
+  try {
+    const weekIdx = Math.min(Math.max(1, currentRegWeek || 1), 4) - 1;
+    const month = readMonthScheduleStore();
+    const wk = month?.weeks?.[weekIdx];
+    if (wk) scheduleTable = wk.scheduleTable;
+  } catch (e) {
+    scheduleTable = null;
+  }
+
+  document.querySelectorAll('.slot-checkbox').forEach((cb) => {
+    const td = cb.closest('td');
+    if (!td) return;
+    const text = document.getElementById(`slot-text-${cb.value}`);
+    const slot = scheduleTable ? scheduleTable[cb.value] : null;
+
+    if (!slot) {
+      // Chưa có lịch tháng, hoặc ca này chưa ai nhận → còn trống.
+      td.classList.add('sv-slot-free');
+      td.classList.remove('sv-slot-taken');
+      if (text) text.textContent = 'Còn trống';
+      return;
+    }
+
+    const full = slot.status === 'full';
+    const names = [slot.oldMember?.fullName, slot.newMember?.fullName]
+      .filter(Boolean)
+      .map((n) => String(n).split(' ').slice(-2).join(' '));
+
+    td.classList.toggle('sv-slot-taken', full);
+    td.classList.toggle('sv-slot-free', !full);
+
+    if (text) {
+      // Nêu rõ AI đã nhận để sinh viên biết mình còn cạnh tranh với ai. Ô đang
+      // tick của chính mình vẫn bình thường — đây chỉ là thông tin lịch đã xếp.
+      text.textContent = full && names.length ? `Đã xếp: ${names.join(', ')}` : 'Còn trống';
+    }
+  });
+}
+
+/** Đọc lịch tuần (bản cũ 1-tuần) nếu có. */
   function readWeekScheduleStore() {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
@@ -479,6 +530,7 @@
     updateSelectedCount();
     updateMatrixGateState();
     renderCommonSchedule();
+    paintSlotAvailability();
 
     // Cập nhật trạng thái đếm ngược thời gian mở cổng mỗi 30 giây
     setInterval(evaluateRegistrationWindow, 30000);
@@ -494,6 +546,7 @@
         || e.key === STORAGE_KEYS.STUDENTS) {
         syncMonthLabelsUI();
         renderCommonSchedule();
+        paintSlotAvailability();
         if (currentLookupStudent) {
           handleLookupMySchedule();
         }
@@ -1327,6 +1380,11 @@
             slotTextC.textContent = `Chiều (${weekCfg.days[dayKey].dateStr})`;
           }
         });
+
+        // Nhãn vừa ghi đè ở trên là "Sáng (05/10)" — không nói được ca đó đã
+        // xếp hay còn trống. Vẽ lại trạng thái từ lịch tháng sau khi cập nhật
+        // nhãn ngày.
+        paintSlotAvailability();
       }
 
       syncCheckboxesWithActiveWeek();
