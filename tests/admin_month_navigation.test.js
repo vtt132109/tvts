@@ -169,7 +169,7 @@ eval(monthCalendarCode);
 const schedulerCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'scheduler.js'), 'utf-8');
 eval(schedulerCode);
 
-const sampleCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'sample30.js'), 'utf-8');
+const sampleCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'roster.js'), 'utf-8');
 eval(sampleCode);
 
 const cloudSyncCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'cloud_sync.js'), 'utf-8');

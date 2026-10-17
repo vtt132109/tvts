@@ -576,7 +576,7 @@ runTest('5.1: Mọi getElementById trong JS đều có trong HTML hoặc tạo �
     for (const m of h.matchAll(/\sid\s*=\s*["']([^"']+)["']/g)) htmlIds.add(m[1]);
   });
   const dynamic = new Set();
-  [adminJs, studentJs, readSrc('js/sample30.js')].forEach(src => {
+  [adminJs, studentJs, readSrc('js/roster.js')].forEach(src => {
     for (const m of src.matchAll(/\bid\s*=\s*["'`]([^"'`$]+)["'`]/g)) dynamic.add(m[1]);
   });
 
