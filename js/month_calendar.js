@@ -12,6 +12,9 @@
   'use strict';
 
   const MonthCalendarHelper = {
+    /** Khoá thứ T2..T6, phải khớp với scheduler.js để 2 bản không phân kỳ */
+    DAY_KEYS: ['T2', 'T3', 'T4', 'T5', 'T6'],
+
     /**
      * Tìm ngày Thứ 2 đầu tiên của một tháng hành chính
      * @param {number} year - Năm (vd: 2026)
@@ -82,11 +85,16 @@
         }
       } else if (typeof arg1 === 'number') {
         if (arg1 > 100) {
+          // Thứ tự (year, month) — như getFirstMonday(year, month).
+          // PHẢI kiểm tra `undefined` chứ không dùng truthy/default:
+          // nếu không, khi gọi 1 tham số (getFirstMonday(2026)) thì
+          // arg2 nhận giá trị mặc định 2026 và rò vào ô month,
+          // biến new Date(2026, 2025, 1) => tháng 6 năm 2194.
           year = arg1;
-          month = typeof arg2 === 'number' ? arg2 : 10;
+          month = (typeof arg2 === 'number' && arg2 >= 1 && arg2 <= 12) ? arg2 : 10;
         } else {
           month = arg1;
-          year = typeof arg2 === 'number' && arg2 > 100 ? arg2 : 2026;
+          year = (typeof arg2 === 'number' && arg2 > 100) ? arg2 : 2026;
         }
       }
       return { month, year };
@@ -126,7 +134,11 @@
         const endMonth = pad(weekFriday.getMonth() + 1);
         const endDateStr = `${endDay}/${endMonth}`;
 
-        const label = `Tuần ${w} (${startDateStr} - ${endDateStr}/${year})`;
+        // ⚠️ Phải lấy NĂM của ngày thứ Sáu thực tế, KHÔNG dùng `year` của tháng
+// được yêu cầu. Tuần 4 của tháng 12/2026 kết thúc 01/01/2027: dùng `year`
+// sẽ in ra "01/01/2026" — nhãn sai, lệch 1 năm so với bản trong
+// scheduler.js (vốn đã đúng).
+const label = `Tuần ${w} (${startDateStr} - ${endDateStr}/${weekFriday.getFullYear()})`;
 
         const days = {};
         dayKeys.forEach((key, idx) => {
