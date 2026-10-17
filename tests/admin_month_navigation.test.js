@@ -284,7 +284,7 @@ runTest('2.1: Các hàm điều hướng tháng được xuất khẩu đầy đ
 
 runTest('2.2: Tự động sao lưu Tháng 10 khi chuyển sang Tháng 11', async () => {
   // Đăng nhập admin
-  window.AdminAuth.login('admin', '123');
+  window.AdminAuth.login('admin', '0000');
 
   // Đặt dữ liệu lịch Tháng 10
   const students = window.getSample30Students ? window.getSample30Students() : [];
