@@ -631,9 +631,22 @@
       updateMatrixGateState();
       handleMssvAutoDetect();
     });
+    // Sự kiện 'input' đã gọi handleMssvAutoDetect() khi gõ. Nếu 'blur' gọi lại
+    // thì lần thứ hai populateStudentData() nạp đè monthlyAvailableShifts từ hồ sơ
+    // đã lưu — XOÁ MẤT các ca sinh viên vừa tick.
+    //
+    // Lỗi này rất dễ gặp: tick xong bấm bất kỳ nút nào (Gửi Đăng Ký, chuyển tuần)
+    // → ô MSSV blur → các ô tick bị nạp lại thành ca cũ.
+    //
+    // Nay chỉ chạy lại khi MSSV thật sự KHÁC với sinh viên đang nhận diện — tức là
+    // người dùng sửa xong rồi mới blur. Không có gì đổi thì giữ nguyên lựa chọn.
     elements.inputStudentId?.addEventListener('blur', () => {
       updateMatrixGateState();
-      handleMssvAutoDetect();
+      const current = String(elements.inputStudentId?.value || '').trim();
+      const detected = String(detectedStudent?.studentId || '').trim();
+      if (current && current !== detected) {
+        handleMssvAutoDetect();
+      }
     });
 
     // Nút Xóa Ca Tuần Này (Task 3)

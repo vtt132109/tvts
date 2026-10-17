@@ -756,12 +756,22 @@ runTest('6.6: Thang z-index có token, không dùng số rời rạc', () => {
     `z-toast (${token('z-toast')}) phải > z-sticky-hero (${token('z-sticky-hero')})`);
 });
 
-runTest('6.2: Có cảnh báo bắt buộc đổi mật khẩu mặc định', () => {
-  assert.ok(/WEAK_DEFAULT_PASSWORDS/.test(adminJs), 'Thiếu danh sách mật khẩu yếu');
-  assert.ok(/function warnIfWeakCredentials\s*\(/.test(adminJs), 'Thiếu hàm cảnh báo mật khẩu yếu');
-  assert.ok(adminJs.includes('pulse-security-warning'), 'Chưa áp dụng class cảnh báo');
-  assert.ok(readSrc('css/style.css').includes('securityWarningPulse'),
-    'Thiếu CSS animation cảnh báo bảo mật');
+runTest('6.2: Cảnh báo mật khẩu mặc định đã được gỡ theo yêu cầu', () => {
+  // Cảnh báo bị gỡ (2026-10-17): mật khẩu nằm trong mã nguồn công khai nên cảnh
+  // báo bật mãi, chỉ gây mời mắt sau vài lần. Test trước đây bảo vệ TÍNH NĂNG
+  // này — nay bảo vệ việc nó ĐÃ BỎ, để không ai vô tình bật lại.
+  assert.ok(!/WEAK_DEFAULT_PASSWORDS\s*=/.test(adminJs),
+    'Đã gỡ WEAK_DEFAULT_PASSWORDS — không được dùng lại danh sách mật khẩu yếu');
+  assert.ok(!adminJs.includes('pulse-security-warning'),
+    'Không còn áp dụng class pulse-security-warning');
+  assert.ok(!adminJs.includes('CẢNH BÁO BẢO MẬT'),
+    'Không còn toast cảnh báo bảo mật');
+
+  // Việc đổi mật khẩu phải còn nguyên — gỡ cảnh báo không được gỡ luôn chức năng.
+  assert.ok(/function handleChangePassword|changePassword|doiMatKhau|đổi.*mật khẩu/i.test(adminJs),
+    'Phải giữ chức năng đổi mật khẩu');
+  assert.ok(adminJs.includes('btnOpenUserMgmt') || /Cấp Quyền & Đổi MK/.test(adminJs),
+    'Phải còn lối vào màn hình đổi mật khẩu');
 });
 
 runTest('6.3: .gitignore chặn file chứa PII', () => {
