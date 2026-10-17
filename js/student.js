@@ -227,14 +227,11 @@
         if (Array.isArray(list)) return list;
       }
     } catch (e) {}
-    try {
-      const sample = (typeof window.getSample30Students === 'function')
-        ? window.getSample30Students()
-        : (window.SAMPLE_30_STUDENTS || []);
-      return Array.isArray(sample) ? sample : [];
-    } catch (e) {
-      return [];
-    }
+    // Máy chưa có danh sách -> trả mảng rỗng. KHÔNG tự sinh danh sách ở phía
+    // sinh viên: danh sách 58 CTV đến từ Cloud hoặc từ CSV của quản trị viên.
+    // Trước đây chỗ này rơi về 30 CTV mẫu rồi đẩy lên Cloud, ghi đè danh sách
+    // thật. Đã bỏ hoàn toàn.
+    return [];
   }
 
   // State
@@ -403,26 +400,16 @@
       return students;
     }
 
-    // Chỉ khi hoàn toàn chưa có sinh viên nào trong máy mới nạp mẫu ban đầu
-    const sample = (window.SAMPLE_HCM_UTE_STUDENTS && window.SAMPLE_HCM_UTE_STUDENTS.length > 0)
-      ? window.SAMPLE_HCM_UTE_STUDENTS
-      : ((window.SampleDataManager && typeof window.SampleDataManager.getSample30Students === 'function')
-        ? window.SampleDataManager.getSample30Students()
-        : []);
-
-    if (sample && sample.length > 0) {
-      students = JSON.parse(JSON.stringify(sample));
-      try {
-        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-        if (window.CloudSyncManager) {
-          if (typeof window.CloudSyncManager.pushToCloud === 'function') {
-            window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
-          } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-            window.CloudSyncManager.triggerAutoPush();
-          }
-        }
-      } catch (err) {}
-    }
+    // KHÔNG còn danh sách mẫu trong mã nguồn (js/roster.js = rỗng): danh sách 58
+    // CTV thật do quản trị viên nạp từ CSV và lưu trên Cloud.
+    //
+    // Trước đây chỗ này tự nạp 30 CTV mẫu rồi ĐẨY LÊN CLOUD. Hậu quả đã xảy ra
+    // thật: người mở Cổng Sinh Viên trên máy chưa có danh sách sẽ ghi đè 58 CTV
+    // trên Firebase bằng 30 người mẫu — và danh sách mẫu còn mang ca rảnh nạp
+    // sẵn, nên còn tệ hơn nữa.
+    //
+    // Nay: máy trống thì để trống. Danh sách phải đến từ Cloud hoặc từ CSV của
+    // quản trị viên — không có đường tự sinh ra danh sách nào ở phía sinh viên.
     return students;
   }
 
