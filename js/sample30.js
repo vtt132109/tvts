@@ -24,7 +24,6 @@
     "bankName": "BIDV",
     "bankAccount": "8860146471",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -75,7 +74,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1040490656",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -126,7 +124,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1039544983",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -177,7 +174,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1040490803",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -228,7 +224,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1018913810",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -279,7 +274,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1040683002",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -330,7 +324,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050241295",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T3_S",
@@ -381,7 +374,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1032428059",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -432,7 +424,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050250151",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -483,7 +474,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050243609",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -534,7 +524,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050247175",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -585,7 +574,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050243143",
     "role": "old",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -636,7 +624,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050241154",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -687,7 +674,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1050248669",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -738,7 +724,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060422679",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -789,7 +774,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060422808",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -840,7 +824,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1042506731",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T3_S",
@@ -891,7 +874,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060423565",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -942,7 +924,6 @@
     "bankName": "BIDV",
     "bankAccount": "8846439132",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -993,7 +974,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060421463",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1044,7 +1024,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060421498",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1095,7 +1074,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060425834",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -1146,7 +1124,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060425917",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1197,7 +1174,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060425930",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1248,7 +1224,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1049482488",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -1299,7 +1274,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060426130",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1350,7 +1324,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060421841",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T3_S",
@@ -1401,7 +1374,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060426549",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",
@@ -1452,7 +1424,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060426614",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_C",
@@ -1503,7 +1474,6 @@
     "bankName": "Vietcombank",
     "bankAccount": "1060421882",
     "role": "new",
-    "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
       "1": [
         "T2_S",

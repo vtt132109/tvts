@@ -247,10 +247,12 @@ const label = `Tuần ${w} (${startDateStr} - ${endDateStr}/${weekFriday.getFull
         student.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
       }
 
-      if (!student.registrationMonth) {
-        student.registrationMonth = '2026-10';
-      }
-
+      // KHÔNG gán `registrationMonth` ở đây. Trước đây có:
+      //   if (!student.registrationMonth) student.registrationMonth = '2026-10';
+      // nhưng không nơi nào trong toàn hệ thống ĐỌC trường đó — nó chỉ được
+      // ghi rồi bị bỏ qua, và giá trị cứng '2026-10' khiến dữ liệu trông như
+      // là đã đăng ký cho tháng 10 dù đang xếp tháng khác. Xoá hẳn để dữ liệu
+      // không mang thông tin sai; `monthlyAvailableShifts` là nguồn sự thật.
       return student;
     }
   };
