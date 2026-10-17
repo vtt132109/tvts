@@ -604,7 +604,9 @@ runTest('6.1b: fullName của tài khoản là CHỨC DANH, không phải tên c
   const blocks = [
     adminJs.match(/const DEFAULT_ADMIN_USERS\s*=\s*\[[\s\S]*?\];/),
     cloudJs.match(/const FALLBACK_ADMIN_USERS\s*=\s*\[[\s\S]*?\];/),
-    readSrc('data/admin_accounts.json')
+    // data/admin_accounts.json đã bị xoá: không mã nào đọc, và nó chứa
+    // thông tin tài khoản trong khi trước đây bị deploy công khai.
+    (() => { try { return readSrc('data/admin_accounts.json'); } catch (e) { return null; } })()
   ].filter(Boolean).map(m => m[0]);
 
   assert.ok(blocks.length > 0, 'Không tìm thấy khối tài khoản nào để kiểm tra');
@@ -720,18 +722,58 @@ runTest('6.3: .gitignore chặn file chứa PII', () => {
   });
 });
 
+runTest('6.9: KHÔNG file JSON nào trong data/ chứa thông tin tài khoản', () => {
+  // data/admin_accounts.json từng được commit và bị deploy công khai
+  // (admin/123, PIN 9999). Không một dòng mã nào đọc nó -> đã xoá.
+  // data/default_students.json là danh sách CTV công khai HCM-UTE, hợp lệ.
+  const SENSITIVE_KEYS = ['"pin"', '"password"', '"username"', 'mustChangePassword'];
+
+  if (fs.existsSync(path.join(ROOT, 'data'))) {
+    fs.readdirSync(path.join(ROOT, 'data'))
+      .filter(f => f.endsWith('.json'))
+      .forEach(f => {
+        const full = path.join(ROOT, 'data', f);
+        const content = fs.readFileSync(full, 'utf8');
+        const hits = SENSITIVE_KEYS.filter(k => content.includes(k));
+        assert.strictEqual(hits.length, 0,
+          `data/${f} chứa trường tài khoản (${hits.join(', ')}) — không được commit vào kho công khai`);
+      });
+  }
+
+  // Và phải được .gitignore chặn
+  const gi = readSrc('.gitignore');
+  assert.ok(/data\/admin_accounts\.json/.test(gi),
+    '.gitignore phải chặn data/admin_accounts.json để không bị commit lại');
+});
+
+runTest('6.10: data/admin_accounts.json phải KHÔNG còn trong git index', () => {
+  let tracked = [];
+  try {
+    tracked = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
+      .split('\n').map(s => s.trim()).filter(Boolean);
+  } catch (e) {
+    return; // không có git trong môi trường này
+  }
+  assert.ok(!tracked.includes('data/admin_accounts.json'),
+    'data/admin_accounts.json vẫn còn được git track — sẽ tiếp tục bị deploy công khai');
+  assert.ok(!tracked.some(f => /\.(csv|xlsx|xls)$/i.test(f)),
+    'Không được track file bảng tính (chứa PII)');
+});
+
 runTest('6.4: File PII không còn được git track', () => {
   let tracked = [];
   try {
     tracked = require('child_process')
-      .execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
+      .execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
       .split(/\r?\n/)
-      .filter(f => /\.(csv|xlsx|xls)$/i.test(f));
+      .map(s => s.trim())
+      .filter(Boolean);
   } catch (e) {
     return; // Không có git (VD: CI artifact) -> bỏ qua
   }
-  assert.strictEqual(tracked.length, 0,
-    `Còn file PII được track trong git: ${tracked.join(', ')}`);
+  const pii = tracked.filter(f => /\.(csv|xlsx|xls)$/i.test(f));
+  assert.strictEqual(pii.length, 0,
+    `Còn file PII được track trong git: ${pii.join(', ')}`);
 });
 
 // -----------------------------------------------------------------------------
