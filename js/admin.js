@@ -1581,7 +1581,9 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
     overlay.hidden = false;
     overlay.classList.add('active');
-    setTimeout(() => input.focus(), 30);
+    // KHÔNG dùng biến `input` ở đây: nó khai báo bên trong khối try nên không
+    // có phạm vi ở ngoài -> ReferenceError. Truy lại qua overlay cho chắc.
+    setTimeout(() => overlay.querySelector('#danger-confirm-input')?.focus(), 30);
 
     return new Promise((resolve) => { dangerConfirmResolver = resolve; });
   };
