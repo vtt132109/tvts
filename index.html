@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/style.css?v=20261016_1755">
+  <link rel="stylesheet" href="css/style.css?v=20261017_sv1">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme Styles (Guarantees zero unstyled flash) -->
@@ -174,35 +174,42 @@
       <div class="card student-reg-card" style="max-width: 1040px; margin: 0 auto; box-shadow: var(--shadow-lg);">
         
         <!-- Header Khối Tập Trung -->
-        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <!-- Bộ đếm #selected-shift-count đã chuyển từ đầu card xuống THANH TÓM TẮT
+             dính ngay dưới ma trận (#sv-summary) để sinh viên thấy số ca đang chọn
+             ngay sau khi vừa tick. GIỮ NGUYÊN id để updateSelectedCount() của
+             js/student.js cập nhật tiếp như cũ. -->
+        <div class="card-header sv-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
             <h2 class="card-title" id="reg-month-title">📝 Đăng Ký Ca Rảnh Trọn Tháng</h2>
-            <p class="card-desc">Nhập MSSV của bạn để chọn ca rảnh Thứ 2 - Thứ 6 phù hợp thời khóa biểu học tập</p>
+            <p class="card-desc">Nhập MSSV của bạn để chọn ca rảnh Thứ 2 – Thứ 6 phù hợp thời khóa biểu học tập</p>
           </div>
-          <div class="selected-counter" id="selected-shift-count">
-            <span class="counter-total">0 ca đã chọn</span>
-            <span class="counter-breakdown">T1: 0 • T2: 0 • T3: 0 • T4: 0</span>
-          </div>
+          <ul class="sv-header-steps">
+            <li class="sv-header-step"><span class="sv-header-step-num">1</span> Nhập MSSV</li>
+            <li class="sv-header-step"><span class="sv-header-step-num">2</span> Tick ca rảnh</li>
+            <li class="sv-header-step"><span class="sv-header-step-num">3</span> Gửi đăng ký</li>
+          </ul>
         </div>
 
-        <div class="card-body" style="padding: 1.5rem;">
+        <div class="card-body sv-card-body" style="padding: 1.5rem;">
           
           <form id="student-reg-form" onsubmit="return false;">
             <!-- Khối Nhập Duy Nhất: Mã Số Sinh Viên (MSSV) To Rõ Ở Trung Tâm -->
-            <div class="student-id-input-section" style="max-width: 600px; margin: 0 auto 1.5rem; text-align: center;">
+            <div class="student-id-input-section sv-mssv-block" style="max-width: 600px; margin: 0 auto 1.25rem; text-align: center;">
               <label class="form-label" for="input-studentid" style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.6rem; display: block; color: var(--text-main);">
                 🆔 Mã Số Sinh Viên (MSSV) Của Bạn <span class="required">*</span>
                 <span id="mssv-live-tag" style="margin-left: 0.5rem; display: none;"></span>
               </label>
               <div style="position: relative;">
-                <input type="text" id="input-studentid" class="form-input" 
-                       inputmode="numeric" pattern="[0-9]*" 
-                       placeholder="Nhập Mã Số Sinh Viên (MSSV) của bạn để chọn ca…" 
-                       autocomplete="off" required aria-label="Mã Số Sinh Viên (MSSV)"
+                <input type="text" id="input-studentid" class="form-input sv-mssv-input" 
+                       inputmode="numeric" pattern="[0-9]*" maxlength="12" enterkeyhint="done"
+                       autocapitalize="off" autocorrect="off" spellcheck="false"
+                       placeholder="VD: 22133044 — 8 chữ số trong tên miếng sinh viên" 
+                       autocomplete="off" required aria-label="Mã Số Sinh Viên (MSSV), gồm 8 chữ số"
+                       aria-describedby="mssv-input-hint"
                        style="font-size: 1.15rem; padding: 0.9rem 1.25rem; text-align: center; font-weight: 700; letter-spacing: 0.5px; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 48px;">
               </div>
-              <div class="form-hint" id="mssv-input-hint" style="margin-top: 0.45rem; font-size: 0.84rem;">
-                💡 Nhập Mã Số Sinh Viên (MSSV) của bạn để mở khóa bảng chọn ca rảnh.
+              <div class="form-hint sv-mssv-hint" id="mssv-input-hint" style="margin-top: 0.5rem; font-size: 0.84rem;">
+                💡 Nhập đúng <strong>8 chữ số</strong> MSSV đã đăng ký với Ban Tuyển Sinh (ví dụ <strong>22133044</strong>) để mở khóa bảng chọn ca rảnh.
               </div>
               <input type="hidden" id="input-fullname" name="fullName">
               <input type="hidden" id="input-phone" name="phone">
@@ -256,14 +263,54 @@
             <!-- Vùng Bảng Chọn Ca Rảnh (Mờ nhẹ khi chưa nhập MSSV) -->
             <div id="student-matrix-area" class="matrix-locked-state">
               
+              <!-- ==========================================================
+                   BỘ CHỌN TUẦN (thay thanh 5 tab bị cắt ở 375px)
+                   ------------------------------------------------------------
+                   Trước đây 5 tab xếp ngang, mỗi tab rộng 120px => tổng 648px,
+                   vượt quá bề rộng 275px của khung ma trận ở điện thoại, phải
+                   cuộn ngang mà KHÔNG có dấu hiệu nào cho biết (bị cắt âm thầm).
+                   Nay dùng thanh điều hướng ‹ › luôn hiện tuần đang chọn, kèm
+                   4 tuần + "Cả tháng" dạng chip gọn vừa đủ bề rộng 375px.
+
+                   - #current-week-label: GIỮ NGUYÊN id, js/student.js vẫn ghi
+                     innerHTML "Đang chọn ca cho: Tuần N (dd/mm/yyyy - dd/mm/yyyy)".
+                   - #reg-week-tabs + 5 .month-week-tab: GIỮ NGUYÊN id, class,
+                     data-week, role/aria/tabindex để switchRegWeek() và
+                     querySelectorAll('#reg-week-tabs .month-week-tab') của
+                     js/student.js không đổi chút nào.
+                   - 2 nút ‹ › là UI MỚI (class sv-*). Chúng chỉ đọc tuần đang
+                     chọn từ class .active của #reg-week-tabs rồi gọi hàm công khai
+                     ĐÃ CÓ SẴN window.studentSwitchToWeek(1..4) của js/student.js
+                     (hàm này gọi switchRegWeek() + syncCheckboxesWithActiveWeek()).
+                     KHÔNG sửa js/student.js, KHÔNG thêm window.* mới (để không
+                     vi phạm test hồi quy 7.4). Xem báo cáo để biết cách gọn hơn:
+                     expose switchRegWeek ra window.
+                   ========================================================== -->
+              <div class="sv-week-nav" role="group" aria-label="Điều hướng nhanh giữa các tuần">
+                <button type="button" class="sv-week-arrow" id="sv-week-prev"
+                        onclick="window.studentSwitchToWeek((function(){var t=document.querySelector('#reg-week-tabs .month-week-tab.active');var r=t?t.getAttribute('data-week'):'1';var w=(r==='all')?4:(parseInt(r,10)||1)-1;return Math.min(Math.max(w,1),4);})())"
+                        aria-label="Xem tuần trước" title="Tuần trước">
+                  <span aria-hidden="true">‹</span>
+                </button>
+
+                <div class="sv-week-nav-center">
+                  <span class="matrix-toolbar-indicator sv-week-indicator" id="current-week-label">
+                    📍 Đang chọn ca cho: <strong>Tuần 1 (05/10/2026 - 09/10/2026)</strong>
+                  </span>
+                </div>
+
+                <button type="button" class="sv-week-arrow" id="sv-week-next"
+                        onclick="window.studentSwitchToWeek((function(){var t=document.querySelector('#reg-week-tabs .month-week-tab.active');var r=t?t.getAttribute('data-week'):'1';var w=(r==='all')?1:(parseInt(r,10)||1)+1;return Math.min(Math.max(w,1),4);})())"
+                        aria-label="Xem tuần sau" title="Tuần sau">
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
+
               <!-- Thanh chuyển Tab chọn 4 tuần & Xem Cả Tháng -->
               <!-- Với role="tablist", MỖI tab bắt buộc có id + aria-controls trỏ tới
                    vùng nội dung của nó, và vùng nội dung phải có role="tabpanel"
-                   + aria-labelledby trỏ ngược lại. Trước đây có 5 tab nhưng 0
-                   tabpanel và không id nào -> trình đọc màn hình không liên kết
-                   được tab với nội dung, người dùng bàn phím cũng không có
-                   phím mũi tên để chuyển tab. -->
-              <div class="month-week-tabs" id="reg-week-tabs" role="tablist" aria-label="Chọn tuần đăng ký ca rảnh">
+                   + aria-labelledby trỏ ngược lại. -->
+              <div class="month-week-tabs sv-week-tabs" id="reg-week-tabs" role="tablist" aria-label="Chọn tuần đăng ký ca rảnh">
                 <button type="button" class="month-week-tab active" id="reg-tab-week-1" data-week="1" role="tab" aria-selected="true" aria-controls="shift-matrix-container" tabindex="0">
                   <span class="tab-week-title">Tuần 1</span>
                   <span class="tab-week-dates">05/10 - 09/10</span>
@@ -285,25 +332,25 @@
                   <span class="tab-week-count" id="badge-week-count-4">0 ca</span>
                 </button>
                 <button type="button" class="month-week-tab tab-view-all" id="reg-tab-all" data-week="all" role="tab" aria-selected="false" aria-controls="month-overview-container" tabindex="-1">
-                  <span class="tab-week-title">📊 Xem Cả Tháng</span>
+                  <span class="tab-week-title">📊 Cả Tháng</span>
                   <span class="tab-week-dates">Toàn bộ 4 tuần</span>
                   <span class="tab-week-count" id="badge-week-count-all">0 ca</span>
                 </button>
               </div>
 
-              <!-- Quick Toolbar -->
-              <div class="matrix-toolbar" id="matrix-quick-toolbar">
-                <div class="matrix-toolbar-header">
-                  <span class="matrix-toolbar-indicator" id="current-week-label">
-                    📍 Đang chọn ca cho: <strong>Tuần 1 (05/10/2026 - 09/10/2026)</strong>
-                  </span>
-                </div>
-                <div class="matrix-quick-btns">
-                  <button type="button" class="btn-chip btn-chip-copy" id="btn-quick-copy-all" title="Sao chép ca đã chọn của tuần hiện tại cho các tuần còn lại trong tháng">
-                    <span>⚡ Áp dụng tuần này cho các tuần còn lại</span>
-                  </button>
+              <!-- Quick Toolbar: chọn nhanh + BỎ CHỌN (nút bỏ chọn đã có sẵn
+                   handler trong js/student.js: #btn-clear-current-week ->
+                   clearCurrentWeekShifts(), #btn-quick-clear ->
+                   handleQuickClearAllMonth(). Trước đây nút bỏ chọn nằm lẫn
+                   trong 4 nút chọn nên rất dễ bấm nhầm.) -->
+              <div class="matrix-toolbar sv-quick-toolbar" id="matrix-quick-toolbar">
+                <div class="matrix-quick-btns sv-quick-btns">
+                  <div class="sv-quick-group-title">Chọn nhanh</div>
                   <button type="button" class="btn-chip" id="btn-quick-all" title="Chọn toàn bộ 10 ca (Sáng & Chiều) của tuần đang xem">
                     <span>✅ Chọn cả tuần</span>
+                  </button>
+                  <button type="button" class="btn-chip btn-chip-copy" id="btn-quick-copy-all" title="Sao chép ca đã chọn của tuần hiện tại cho các tuần còn lại trong tháng">
+                    <span>⚡ Áp dụng cho các tuần còn lại</span>
                   </button>
                   <button type="button" class="btn-chip" id="btn-quick-morning" title="Đăng ký tất cả ca Sáng (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
                     <span>☀️ Tất cả ca Sáng cả tháng</span>
@@ -311,38 +358,45 @@
                   <button type="button" class="btn-chip" id="btn-quick-afternoon" title="Đăng ký tất cả ca Chiều (Thứ 2 - Thứ 6) cho cả 4 tuần trong tháng">
                     <span>⛅ Tất cả ca Chiều cả tháng</span>
                   </button>
-                  <button type="button" class="btn-chip btn-chip-clear" id="btn-clear-current-week" title="Xóa các ca rảnh đã chọn của tuần hiện tại">
-                    <span>🗑️ Xóa ca tuần này</span>
+                  <div class="sv-quick-group-title sv-quick-group-title--clear">Bỏ chọn</div>
+                  <button type="button" class="btn-chip btn-chip-clear" id="btn-clear-current-week" title="Bỏ chọn toàn bộ ca rảnh của tuần đang xem (10 ô)">
+                    <span>⬜ Bỏ chọn tất cả · tuần này</span>
                   </button>
-                  <button type="button" class="btn-chip btn-chip-clear" id="btn-quick-clear" title="Xóa toàn bộ ca rảnh đã chọn trong tháng">
-                    <span>🔄 Xóa hết</span>
+                  <button type="button" class="btn-chip btn-chip-clear" id="btn-quick-clear" title="Bỏ chọn toàn bộ ca rảnh đã chọn trong cả tháng (4 tuần)">
+                    <span>🧹 Bỏ chọn tất cả · cả tháng</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Matrix Table (Tuần 1 -> Tuần 4) -->
-              <div class="matrix-wrapper" id="shift-matrix-container" role="tabpanel" aria-labelledby="reg-tab-week-1" tabindex="0">
-                <table class="matrix-table" aria-label="Bảng chọn ca rảnh">
+              <!-- Ma trận chọn ca (Tuần đang xem) -->
+              <!-- Trên desktop giữ nguyên bảng 6 cột (Ca/Giờ + T2..T6).
+                   Trên điện thoại, class .sv-matrix biến bảng thành LƯỚI 5 CỘT
+                   DỌC theo ngày (Thứ 2 → Thứ 6), mỗi ngày 2 ca Sáng/Chiều xếp
+                   cạnh nhau => thấy đủ 10 ô mà KHÔNG phải cuộn ngang.
+                   DOM và mọi id (cb-*, slot-text-*, col-header-*, date-badge-*)
+                   giữ nguyên 100% nên cơ chế tick của js/student.js không đổi. -->
+              <div class="matrix-wrapper sv-matrix-wrapper" id="shift-matrix-container" role="tabpanel" aria-labelledby="reg-tab-week-1" tabindex="0">
+                <table class="matrix-table sv-matrix" aria-label="Bảng chọn ca rảnh">
                   <thead>
                     <tr>
                       <th class="period-header">Ca / Giờ</th>
-                      <th id="col-header-T2">
+                      <th id="col-header-T2" scope="col">
                         <div class="matrix-col-day">Thứ Hai</div>
                         <div class="matrix-col-date" id="date-badge-T2">05/10</div>
                       </th>
-                      <th id="col-header-T3">
+                      <th id="col-header-T3" scope="col">
                         <div class="matrix-col-day">Thứ Ba</div>
                         <div class="matrix-col-date" id="date-badge-T3">06/10</div>
                       </th>
-                      <th id="col-header-T4">
+                      <th id="col-header-T4" scope="col">
                         <div class="matrix-col-day">Thứ Tư</div>
                         <div class="matrix-col-date" id="date-badge-T4">07/10</div>
                       </th>
-                      <th id="col-header-T5">
+                      <th id="col-header-T5" scope="col">
                         <div class="matrix-col-day">Thứ Năm</div>
                         <div class="matrix-col-date" id="date-badge-T5">08/10</div>
                       </th>
-                      <th id="col-header-T6">
+                      <th id="col-header-T6" scope="col">
                         <div class="matrix-col-day">Thứ Sáu</div>
                         <div class="matrix-col-date" id="date-badge-T6">09/10</div>
                       </th>
@@ -438,14 +492,43 @@
                 </table>
               </div>
 
-              <!-- Khung Tổng Quan 4 Tuần (Hiển thị khi chọn Tab [Xem Cả Tháng]) -->
+              <!-- Chú giải ca: chỉ hiện trên điện thoại, nơi nhãn Ca/Giờ bên trái
+                   bị ẩn để ô được rộng ra (thay cho cột "Ca / Giờ" của bảng) -->
+              <div class="sv-matrix-legend">
+                <span class="sv-legend-item"><b>☀️ Sáng</b> 07:30 – 11:30</span>
+                <span class="sv-legend-item"><b>🌤️ Chiều</b> 13:00 – 16:30</span>
+                <span class="sv-legend-hint">Chạm vào ô để tick ⇄ bỏ tick</span>
+              </div>
+
+              <!-- ==========================================================
+                   THANH TÓM TẮT DÍNH NGAY DƯỚI MA TRẬN
+                   ------------------------------------------------------------
+                   Trước đây số ca đã chọn nằm ở ĐẦU card, cách xa ma trận,
+                   và kết quả chỉ hiện qua toast bay ở góc trên màn hình.
+                   Nay #selected-shift-count (giữ nguyên id => updateSelectedCount()
+                   của js/student.js vẫn cập nhật tức thì) đặt ngay dưới
+                   ma trận, luôn nằm trong tầm mắt ngay sau khi vừa tick.
+                   aria-live="polite" để trình đọc màn hình cũng đọc được số mới.
+                   ========================================================== -->
+              <div class="sv-summary" aria-live="polite" aria-atomic="true">
+                <div class="selected-counter" id="selected-shift-count">
+                  <span class="counter-total">0 ca đã chọn</span>
+                  <span class="counter-breakdown">T1: 0 • T2: 0 • T3: 0 • T4: 0</span>
+                </div>
+                <div class="sv-summary-note">
+                  <span class="sv-summary-note-title">✔ Số ca đã chọn cập nhật ngay khi bạn tick</span>
+                  <span class="sv-summary-note-hint">Bạn có thể chọn bất kỳ số ca nào — không giới hạn. Ca rảnh được tính lại từ đầu mỗi tháng.</span>
+                </div>
+              </div>
+
+              <!-- Khung Tổng Quan 4 Tuần (Hiển Thị khi chọn Tab [Cả Tháng]) -->
               <div id="month-overview-container" class="month-overview-wrapper" role="tabpanel" aria-labelledby="reg-tab-all" tabindex="0" style="display: none;">
                 <!-- Nội dung sẽ được render động bởi js/student.js -->
               </div>
 
-              <!-- Thanh Hành Động Gửi Đăng Ký & Xóa Toàn Bộ Ca (Task 3) -->
-              <div class="student-action-bar" style="margin-top: 1.5rem; padding-bottom: env(safe-area-inset-bottom, 0px); display: flex; gap: 0.85rem; justify-content: center; align-items: center; flex-wrap: wrap;">
-                <button type="button" class="btn btn-danger-outline" id="btn-clear-all-shifts" style="border-color: #fca5a5; color: #dc2626; min-height: 48px; padding: 0.75rem 1.25rem; font-weight: 700;">
+              <!-- Thanh Hành Động Gửi Đăng Ký & Xóa Toàn Bộ Ca -->
+              <div class="student-action-bar sv-action-bar" style="margin-top: 1.25rem; padding-bottom: env(safe-area-inset-bottom, 0px); display: flex; gap: 0.85rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="btn btn-danger-outline" id="btn-clear-all-shifts" title="Xóa toàn bộ ca rảnh đã đăng ký với Ban Điều Hành (có xác nhận)">
                   <span>🗑️ Hủy Đăng Ký / Xóa Hết Ca</span>
                 </button>
                 <button type="button" class="btn btn-primary" id="btn-submit-reg" style="font-size: 1rem; padding: 0.85rem 2rem; font-weight: 700; min-height: 48px; flex: 1; max-width: 380px;">
@@ -481,10 +564,10 @@
       </div>
       <div class="card-body">
         <label for="input-lookup-mssv" class="sr-only">Mã Số Sinh Viên (MSSV) tra cứu ca trực</label>
-        <div style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
-          <input type="text" id="input-lookup-mssv" class="form-input" inputmode="numeric" pattern="[0-9]*" style="flex: 1; min-width: 220px; min-height: 48px;" placeholder="Nhập MSSV của bạn (Ví dụ: 2102001)" aria-label="Nhập MSSV của bạn để tra cứu ca trực">
-          <button type="button" id="btn-lookup" class="btn btn-primary" style="min-height: 48px; padding: 0.75rem 1.5rem;">
-            <span>Tra Cứu</span>
+        <div class="sv-lookup-row" style="display: flex; gap: 0.75rem; max-width: 500px; flex-wrap: wrap;">
+          <input type="text" id="input-lookup-mssv" class="form-input sv-lookup-input" inputmode="numeric" pattern="[0-9]*" style="flex: 1; min-width: 220px; min-height: 48px;" placeholder="Nhập MSSV của bạn (VD: 22133044)" aria-label="Nhập MSSV của bạn để tra cứu ca trực" autocomplete="off" enterkeyhint="search">
+          <button type="button" id="btn-lookup" class="btn btn-primary sv-lookup-btn" style="min-height: 48px; padding: 0.75rem 1.5rem;">
+            <span>🔍 Tra Cứu</span>
           </button>
         </div>
         <div id="lookup-result" style="margin-top: 1rem; display: none;"></div>

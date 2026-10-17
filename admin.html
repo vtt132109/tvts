@@ -13,7 +13,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/style.css?v=20261016_1755">
+  <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
+  <link rel="stylesheet" href="css/style.css?v=20261017_adminux1">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -347,11 +348,19 @@
         <div class="value" id="count-new-students">0</div>
       </div>
     </div>
-    <div class="summary-card">
+    <!-- Thẻ thứ 4. #count-filled-shifts do js/admin.js renderSummary() (dòng ~1811) ghi
+         textContent nên không đổi được ở đây. Thay vào đó ta thêm:
+           - .summary-note  : giải thích cách tính (luôn đúng, không phụ thuộc trạng thái)
+           - #summary-state-not-scheduled : chỉ hiện khi CHƯA có ca nào được xếp,
+             điều kiện hoá bằng CSS :has() trong css/style.css. Nhờ vậy "0/10 ca"
+             không còn trông như lỗi hệ thống mà là trạng thái "chưa xếp". -->
+    <div class="summary-card summary-card--coverage" id="summary-card-shift-coverage">
       <div class="summary-icon success">🎯</div>
       <div class="summary-info">
         <div class="label">Ca trực đã lấp đầy</div>
         <div class="value" id="count-filled-shifts">0/10 ca</div>
+        <p class="summary-note">Một ca tính là <strong>đủ</strong> khi có <strong>1 Chính Thức + 1 Tập Sự</strong> cùng ca.</p>
+        <span class="summary-state" id="summary-state-not-scheduled">⏳ Chưa xếp ca — bấm ⚡ Tự động phân bổ lịch</span>
       </div>
     </div>
   </section>
@@ -370,26 +379,140 @@
           <h2>⚡ Điều Phối & Phân Bổ Lịch Trực</h2>
           <p>Tự động ghép 1 Chính Thức + 1 Tập Sự mỗi ca, đảm bảo công bằng.</p>
         </div>
+        <!--
+          10 nút cũ nằm chung một hàng không nhóm nên không biết nút nào chính,
+          nút nào nguy hiểm. Tách rõ 3 nhóm có nhãn:
+            1. Hành động chính  — quyết định vòng đời lịch (nút chính 1 nút duy nhất)
+            2. Xuất & Chia sẻ   — chỉ đọc dữ liệu, không thay đổi gì
+            3. Nguy hiểm        — Xóa Lịch / Xóa SV, tách riêng + cảnh báo
+          Mọi id / onclick của từng nút được giữ nguyên 100% cho js/admin.js.
+        -->
         <div class="hero-right-actions">
-          <button class="btn btn-primary" id="btn-admin-auto-schedule" style="font-weight: 700; padding: 0.75rem 1.5rem;">
-            <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH</span>
-          </button>
-          <button class="btn btn-success" id="btn-hero-sync-cloud" onclick="window.adminForceSyncCloud && window.adminForceSyncCloud()" style="font-weight: 700; background: #059669; color: #fff; border-color: #059669; padding: 0.75rem 1.25rem;" title="Lưu và đồng bộ toàn bộ dữ liệu lên Cloud Firebase ngay lập tức">
-            <span>☁️ LƯU LÊN CLOUD</span>
-          </button>
-          <div class="action-group">
-            <button class="btn btn-secondary" id="btn-open-excel-modal"><span>📊 Xuất Excel UTE</span></button>
-            <button class="btn btn-secondary" id="btn-hero-view-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()"><span>📋 Bảng Chấm Công</span></button>
-            <button class="btn btn-secondary" id="btn-toggle-publish-schedule"><span id="btn-publish-schedule-icon">📢</span> <span id="btn-publish-schedule-text">Công Bố Lịch</span></button>
-            <button class="btn btn-secondary" id="btn-quick-copy-sheet"><span>📋 Copy (Ctrl+V)</span></button>
-          </div>
-          <div class="action-group">
-            <button class="btn btn-secondary btn-sm" id="btn-export-csv"><span>📥 CSV</span></button>
-            <button class="btn btn-secondary btn-sm" id="btn-print-schedule"><span>🖨️ In Lịch</span></button>
-            <button class="btn btn-danger-outline btn-sm" id="btn-clear-schedule"><span>🗑️ Xóa Lịch</span></button>
-            <button class="btn btn-danger-outline btn-sm" id="btn-clear-students"><span>👥 Xóa SV</span></button>
-          </div>
+
+          <!-- NHÓM 1 · HÀNH ĐỘNG CHÍNH -->
+          <section class="hero-cluster hero-cluster--primary" aria-labelledby="hero-cluster-primary-label">
+            <h3 class="hero-cluster-label" id="hero-cluster-primary-label">
+              <span class="hero-cluster-dot" aria-hidden="true"></span>Hành động chính
+            </h3>
+            <div class="action-group action-group--primary">
+              <button class="btn btn-primary btn-hero-primary" id="btn-admin-auto-schedule" style="font-weight: 700;">
+                <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH</span>
+              </button>
+              <button class="btn btn-success" id="btn-hero-sync-cloud" onclick="window.adminForceSyncCloud && window.adminForceSyncCloud()" style="font-weight: 700; background: #059669; color: #fff; border-color: #059669;" title="Lưu và đồng bộ toàn bộ dữ liệu lên Cloud Firebase ngay lập tức">
+                <span>☁️ LƯU LÊN CLOUD</span>
+              </button>
+            </div>
+            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự ghép 1 Chính Thức + 1 Tập Sự mỗi ca.</p>
+          </section>
+
+          <!-- NHÓM 2 · XUẤT & CHIA SẺ -->
+          <section class="hero-cluster hero-cluster--export" aria-labelledby="hero-cluster-export-label">
+            <h3 class="hero-cluster-label" id="hero-cluster-export-label">
+              <span class="hero-cluster-dot" aria-hidden="true"></span>Xuất &amp; Chia sẻ
+              <span class="hero-cluster-note">không thay đổi dữ liệu</span>
+            </h3>
+            <div class="action-group">
+              <button class="btn btn-secondary" id="btn-open-excel-modal"><span>📊 Xuất Excel UTE</span></button>
+              <button class="btn btn-secondary" id="btn-hero-view-payroll" onclick="window.adminViewCurrentMonthPayroll && window.adminViewCurrentMonthPayroll()"><span>📋 Bảng Chấm Công</span></button>
+              <button class="btn btn-secondary" id="btn-toggle-publish-schedule"><span id="btn-publish-schedule-icon">📢</span> <span id="btn-publish-schedule-text">Công Bố Lịch Cho SV</span></button>
+              <button class="btn btn-secondary" id="btn-quick-copy-sheet"><span>📋 Copy (Ctrl+V)</span></button>
+              <button class="btn btn-secondary btn-sm" id="btn-export-csv"><span>📥 CSV</span></button>
+              <button class="btn btn-secondary btn-sm" id="btn-print-schedule"><span>🖨️ In Lịch</span></button>
+            </div>
+          </section>
+
+          <!-- NHÓM 3 · NGUY HIỂM -->
+          <section class="hero-cluster hero-cluster--danger" aria-labelledby="hero-cluster-danger-label">
+            <h3 class="hero-cluster-label" id="hero-cluster-danger-label">
+              <span class="hero-cluster-dot" aria-hidden="true"></span>Nguy hiểm · Xóa dữ liệu
+            </h3>
+            <div class="action-group">
+              <button class="btn btn-danger-outline btn-sm" id="btn-clear-schedule"><span>🗑️ Xóa Lịch</span></button>
+              <button class="btn btn-danger-outline btn-sm" id="btn-clear-students"><span>👥 Xóa SV</span></button>
+            </div>
+            <p class="hero-cluster-hint hero-cluster-hint--danger">⚠️ Xóa không hoàn tác được. Chỉ bấm khi đã sao lưu lên Cloud và kết thúc nhập liệu.</p>
+          </section>
+
         </div>
+      </section>
+
+      <!-- ====================================================================
+           KHỐI "CẦN XỬ LÝ" — 3 VIỆC BAN XẾP CA PHẢI DỨT ĐIỂM
+           Trước đây app KHÔNG có khối này: ban xếp ca phải tự dò từng bảng.
+           Ghi chú kỹ thuật:
+             - Đây là SHELL tĩnh (chỉ HTML/CSS), cố tình KHÔNG viết JS ở đây.
+             - 3 ô số liệu sống có id #need-count-no-shift / #need-count-swap-pending /
+               #need-reg-deadline-text đang để trống + `hidden`.
+               js/admin.js render vào 3 id này khi nối dữ liệu thật:
+                 * #need-count-no-shift      ← state.students
+                                             (renderStudentTable() dòng ~1901)
+                                             đếm s.availableShifts.length === 0
+                 * #need-count-swap-pending  ← updateSwapCountBadges() dòng ~3254,
+                                             đọc localStorage[STORAGE_KEYS.SWAP_REQUESTS]
+                                             lọc status === 'pending'
+                 * #need-reg-deadline-text   ← state.regConfig
+                                             {mode, startTime, endTime}
+                                             + updateRegLiveStatus() dòng ~5794
+             - Bỏ thuộc tính `hidden` khỏi ô tương ứng khi JS bắt đầu điền số.
+           ==================================================================== -->
+      <section class="needs-action-panel" id="admin-needs-action-panel" aria-labelledby="needs-action-title">
+        <div class="needs-action-head">
+          <h2 class="needs-action-title" id="needs-action-title">
+            <span class="needs-action-bell" aria-hidden="true">🔔</span>
+            Cần Xử Lý
+          </h2>
+          <p class="needs-action-sub">Ba việc phải dứt điểm trước khi công bố lịch cho sinh viên.</p>
+        </div>
+
+        <ol class="needs-action-grid">
+          <!-- 1 · Ai chưa đăng ký ca -->
+          <li class="needs-action-item" id="need-item-no-shift">
+            <span class="needs-action-icon" aria-hidden="true">🕳️</span>
+            <div class="needs-action-body">
+              <p class="needs-action-q">1. Ai chưa đăng ký ca rảnh?</p>
+              <p class="needs-action-where">
+                Mở tab <strong>👥 Quản Lý Sinh Viên</strong> → cột
+                <em>Ca Rảnh Đã Đăng Ký</em>. Dòng ghi <strong>“Rảnh 0 ca”</strong>
+                là người chưa đăng ký ca nào — họ sẽ không bao giờ được xếp vào lịch.
+              </p>
+              <p class="needs-action-count" id="need-count-no-shift" hidden></p>
+            </div>
+          </li>
+
+          <!-- 2 · Đề xuất đổi ca chờ duyệt -->
+          <li class="needs-action-item" id="need-item-swap-pending">
+            <span class="needs-action-icon" aria-hidden="true">🔄</span>
+            <div class="needs-action-body">
+              <p class="needs-action-q">2. Đề xuất đổi ca nào đang chờ duyệt?</p>
+              <p class="needs-action-where">
+                Bấm nút <strong>🔄 Đổi Ca</strong> trên thanh trên cùng (hoặc trên thanh
+                dính khi cuộn xuống). Con số nhỏ cạnh nút là số yêu cầu
+                <strong>đang chờ ban phê duyệt</strong> — duyệt hết rồi mới công bố lịch.
+              </p>
+              <p class="needs-action-count" id="need-count-swap-pending" hidden></p>
+            </div>
+          </li>
+
+          <!-- 3 · Cổng đăng ký đóng lúc nào -->
+          <li class="needs-action-item" id="need-item-reg-deadline">
+            <span class="needs-action-icon" aria-hidden="true">⏰</span>
+            <div class="needs-action-body">
+              <p class="needs-action-q">3. Cổng đăng ký đóng lúc nào?</p>
+              <p class="needs-action-where">
+                Xem khối <strong>⏰ Cấu Hình Thời Gian Mở Cổng Đăng Ký Ca Trực</strong>
+                ngay dưới đây: chọn <em>Mở theo khoảng thời gian</em> và đặt
+                <em>Hạn Chót Đóng Cổng</em> để SV tự biết mình có bao lâu để đăng ký.
+              </p>
+              <p class="needs-action-count" id="need-reg-deadline-text" hidden></p>
+            </div>
+          </li>
+        </ol>
+
+        <p class="needs-action-foot">
+          💡 Đây là checklist dẫn đường — số liệu đếm tự động chưa được nối, vì vậy
+          ban xếp ca hãy kiểm tra trực tiếp 3 nơi nêu trên trước khi bấm
+          <strong>⚡ Tự động phân bổ lịch</strong>.
+        </p>
       </section>
 
       <!-- ====================================================================
@@ -725,19 +848,26 @@
             </div>
           </div>
 
-          <!-- Bảng quản lý sinh viên -->
+          <!-- Bảng quản lý sinh viên.
+               Ô "Ca Rảnh Đã Đăng Ký" giờ là 1 dải chip ngang có thể cuộn ngang
+               (thay vì xếp dọc làm hàng cao ~180px), xem .shift-tag-list trong
+               css/style.css. Cột "Số Ca Trực" hiện "—" thay cho số 0 vô nghĩa khi
+               chưa có ca nào được xếp (điều kiện hoá bằng CSS :has()). -->
+          <div class="student-table-hint">
+            <span>💡 Ô <strong>Ca Rảnh Đã Đăng Ký</strong> là dải chip cuộn ngang — dùng lăn chuột hoặc vuốt ngang để xem đủ ca của một người.</span>
+          </div>
           <div class="data-table-container">
             <table class="data-table" id="table-students">
               <thead>
                 <tr>
-                  <th style="width: 44px; text-align: center;"><input type="checkbox" id="cb-student-select-all" title="Chọn tất cả"></th>
-                  <th style="width: 50px;">STT</th>
+                  <th style="width: 40px; text-align: center;"><input type="checkbox" id="cb-student-select-all" title="Chọn tất cả"></th>
+                  <th style="width: 46px;">STT</th>
                   <th>Họ và Tên</th>
                   <th>MSSV</th>
                   <th>Phân Loại</th>
                   <th>Ca Rảnh Đã Đăng Ký</th>
                   <th>Số Ca Trực</th>
-                  <th style="width: 175px;">Hành Động</th>
+                  <th class="col-actions">Thao Tác</th>
                 </tr>
               </thead>
               <tbody id="admin-student-table-body">
