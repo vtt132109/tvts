@@ -1773,6 +1773,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
   function renderAll() {
     renderSummary();
     renderStudentTable();
+    renderNeedsAction();
     updateMonthNavigatorUI();
     if (state.viewMode === 'master') {
       renderMasterMonthGrid();
@@ -1830,7 +1831,77 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     }
   }
 
-  function renderStudentTable() {
+  /**
+ * Khối "Cần xử lý": số liệu SỐNG thay vì checklist tĩnh.
+ *
+ * Trước đây khối này chỉ là hướng dẫn liên kết tới 3 chỗ khác. Người xếp ca
+ * phải tự đi tìm xem ai chưa đăng ký, có bao nhiêu đề xuất đổi ca, cổng đóng
+ * lúc nào — mỗi thứ một chỗ. Nay đếm thẳng ở đây.
+ *
+ * Ô nào không có gì để làm thì ẩn hẳn, không hiện số 0.
+ */
+function renderNeedsAction() {
+  const setItem = (id, text) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!text) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    el.hidden = false;
+    el.textContent = text;
+  };
+
+  // 1. CTV chưa đăng ký ca rảnh nào — không xếp được ca cho họ.
+  const total = state.students.length;
+  const noShift = state.students.filter((s) => {
+    const weekly = s.monthlyAvailableShifts
+      && Object.values(s.monthlyAvailableShifts).some((arr) => Array.isArray(arr) && arr.length > 0);
+    const flat = Array.isArray(s.availableShifts) && s.availableShifts.length > 0;
+    return !weekly && !flat;
+  }).length;
+  if (total === 0) {
+    setItem('need-count-no-shift', '');
+  } else {
+    setItem('need-count-no-shift', noShift > 0
+      ? `${noShift}/${total} CTV chưa đăng ký ca rảnh nào`
+      : `Tất cả ${total} CTV đã đăng ký ca rảnh`);
+  }
+
+  // 2. Đề xuất đổi ca chờ duyệt — đọc cùng nguồn với updateSwapCountBadges().
+  let pending = 0;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) pending = list.filter((r) => r.status === 'pending').length;
+    }
+  } catch (e) { pending = 0; }
+  setItem('need-count-swap-pending', pending > 0 ? `${pending} đề xuất đổi ca chờ duyệt` : '');
+
+  // 3. Cổng đăng ký đóng lúc nào.
+  const cfg = state.regConfig || {};
+  if (cfg.mode === 'always_open') {
+    setItem('need-reg-deadline-text', 'Cổng đăng ký đang mở tự do');
+  } else if (cfg.mode === 'always_closed') {
+    setItem('need-reg-deadline-text', 'Cổng đăng ký đang đóng');
+  } else {
+    const fmt = (v) => {
+      if (!v) return '';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return String(v);
+      return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+    const open = fmt(cfg.startTime);
+    const close = fmt(cfg.endTime);
+    if (open && close) setItem('need-reg-deadline-text', `Cổng mở ${open} · đóng ${close}`);
+    else if (close) setItem('need-reg-deadline-text', `Cổng đóng lúc ${close}`);
+    else setItem('need-reg-deadline-text', 'Cổng đăng ký theo khung giờ đã đặt');
+  }
+}
+
+function renderStudentTable() {
     if (!elements.studentTableBody) return;
 
     let filtered = [...state.students];

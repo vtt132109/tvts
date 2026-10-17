@@ -441,14 +441,12 @@
            Trước đây app KHÔNG có khối này: ban xếp ca phải tự dò từng bảng.
            Ghi chú kỹ thuật:
              - Đây là SHELL tĩnh (chỉ HTML/CSS), cố tình KHÔNG viết JS ở đây.
-             - 3 ô số liệu sống có id #need-count-no-shift / #need-count-swap-pending /
-               #need-reg-deadline-text đang để trống + `hidden`.
-               js/admin.js render vào 3 id này khi nối dữ liệu thật:
-                 * #need-count-no-shift      ← state.students
-                                             (renderStudentTable() dòng ~1901)
-                                             đếm s.availableShifts.length === 0
-                 * #need-count-swap-pending  ← updateSwapCountBadges() dòng ~3254,
-                                             đọc localStorage[STORAGE_KEYS.SWAP_REQUESTS]
+             - 3 ô số liệu #need-count-no-shift / #need-count-swap-pending /
+               #need-reg-deadline-text được renderNeedsAction() trong js/admin.js
+               (gọi từ renderAll()). Ô không có gì để làm thì bị ẩn hẳn — không
+               hiện số 0.
+                 * #need-count-no-shift      ← state.students, đếm CTV chưa có ca rảnh
+                 * #need-count-swap-pending  ← localStorage[STORAGE_KEYS.SWAP_REQUESTS]
                                              lọc status === 'pending'
                  * #need-reg-deadline-text   ← state.regConfig
                                              {mode, startTime, endTime}
@@ -509,9 +507,8 @@
         </ol>
 
         <p class="needs-action-foot">
-          💡 Đây là checklist dẫn đường — số liệu đếm tự động chưa được nối, vì vậy
-          ban xếp ca hãy kiểm tra trực tiếp 3 nơi nêu trên trước khi bấm
-          <strong>⚡ Tự động phân bổ lịch</strong>.
+          💡 Số liệu ở trên được đếm tự động. Ô không hiện nghĩa là không có việc
+          nào cần làm — không phải lỗi.
         </p>
       </section>
 
