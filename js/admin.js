@@ -30,7 +30,16 @@
     // Trước đây runFullSchedule() dựng lại lịch từ đầu ở mọi thao tác
     // (đổi vai trò hàng loạt, nhập danh sách, thêm/xoá SV) nên mọi chỉnh
     // sửa tay biến mất không một dòng cảnh báo.
-    MANUAL_SLOTS: 'ts_scheduler_manual_slots'
+    MANUAL_SLOTS: 'ts_scheduler_manual_slots',
+    // Tháng mà `monthlyAvailableShifts` đang thuộc về, định dạng 'YYYY-MM'.
+    // Quy tắc nghiệp vụ: mỗi tháng sinh viên đăng ký ca rảnh LẠI TỪ ĐẦU.
+    // Khoá này cho biết ca rảnh hiện có là của tháng nào. Khi tháng đang mở
+    // khác với khoá này, toàn bộ ca rảnh cũ bị xoá — đúng như mong muốn.
+    //
+    // Nhờ so KHÓA chứ không so vị trí, quay lại xem tháng cũ KHÔNG làm mất
+    // đăng ký: lịch tháng cũ được khôi phục từ kho lịch (ALL_MONTHS) và không
+    // đụng vào ca rảnh.
+    AVAILABILITY_MONTH: 'ts_scheduler_availability_month_v1'
   };
 
   // Danh sách tài khoản cán bộ mặc định.
@@ -915,6 +924,15 @@
       } catch (e) {
         state.events = [];
       }
+
+      // Ca rảnh phải thuộc đúng tháng đang mở. Nếu khoá tháng lưu khác tháng
+      // này (máy mới mở lại, tháng vừa được đổi từ máy khác), ca rảnh cũ
+      // không còn ý nghĩa → xoá để mọi CTV đăng ký lại từ đầu.
+      try {
+        resetAvailabilityIfNewMonth(state.currentMonth, state.currentYear);
+      } catch (e) {
+        console.warn('[Admin] Không kiểm tra được tháng của ca rảnh:', e);
+      }
     } catch (err) {
       console.error(err);
       state.students = [];
@@ -1242,6 +1260,73 @@ function trimMonthArchive(archive, keepKey) {
   return result;
 }
 
+/**
+ * Xoá toàn bộ ca rảnh khi sang tháng mới.
+ *
+ * Quy tắc nghiệp vụ: mỗi tháng sinh viên đăng ký ca rảnh LẠI TỪ ĐẦU. Ca rảnh
+ * của tháng trước không mang ý nghĩa với tháng sau, và giữ lại chỉ gây nhầm lẫn
+ * — bộ xếp ca có thể dùng nhầm ca của tháng cũ.
+ *
+ * Dùng khoá `AVAILABILITY_MONTH` để biết ca rảnh hiện có thuộc tháng nào:
+ *   - Tháng mới HƠN khoá  → xoá hết, ghi khoá tháng mới.      (sang tháng mới)
+ *   - Tháng BẰNG khoá      → giữ nguyên.                     (vẫn tháng này)
+ *   - Tháng CŨ HƠN khoá    → giữ nguyên, KHÔNG ghi khoá.     (quay lại xem
+ *                                                                tháng cũ — không
+ *                                                                được mất ca)
+ *
+ * So sánh theo giá trị số 'YYYYMM' để xử lý đúng ranh giới năm/tháng
+ * (12/2026 → 01/2027). Đây là điểm dễ sai: nếu chỉ so "khác khoá", quay lại
+ * tháng trước cũng bị xoá — tức là chỉ muốn xem lại cũng mất đăng ký.
+ *
+ * @param {number} month - Tháng đang mở (1-12)
+ * @param {number} year  - Năm đang mở
+ * @returns {{reset: boolean, cleared: number, monthKey: string}} Kết quả để ghi log/toast
+ */
+function resetAvailabilityIfNewMonth(month, year) {
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const monthKey = `${year}-${pad2(month)}`;
+  const monthNum = (year * 100) + month;
+
+  let storedMonth = null;
+  try {
+    storedMonth = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH) || null;
+  } catch (e) {
+    storedMonth = null;
+  }
+
+  if (storedMonth) {
+    const m = /^(\d{4})-(\d{2})$/.exec(storedMonth);
+    if (m) {
+      const storedNum = (parseInt(m[1], 10) * 100) + parseInt(m[2], 10);
+      // Cùng tháng, hoặc đang xem lại tháng đã qua → giữ nguyên ca rảnh.
+      if (monthNum <= storedNum) {
+        return { reset: false, cleared: 0, monthKey };
+      }
+    }
+  }
+
+  // Xoá ca rảnh của mọi CTV. `availableShifts` là dạng đã gộp 4 tuần, nên
+  // phải xoá cả hai để không còn sót ở đường đọc nào.
+  let cleared = 0;
+  (state.students || []).forEach((s) => {
+    const hadAny = (Array.isArray(s.availableShifts) && s.availableShifts.length > 0)
+      || (s.monthlyAvailableShifts
+          && Object.values(s.monthlyAvailableShifts).some(v => Array.isArray(v) && v.length > 0));
+    if (hadAny) cleared += 1;
+    s.availableShifts = [];
+    s.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, monthKey);
+  } catch (e) {
+    console.warn('[Admin] Không lưu được tháng của ca rảnh:', e);
+  }
+
+  if (cleared > 0) saveStudents(true);
+  return { reset: true, cleared, monthKey };
+}
+
 async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     targetMonth = parseInt(targetMonth, 10);
     targetYear = parseInt(targetYear, 10);
@@ -1311,6 +1396,10 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       console.warn('[Admin] Không lưu được tháng đang áp dụng:', e);
     }
 
+    // 2b. Sang tháng mới → xoá ca rảnh cũ, mọi CTV đăng ký lại từ đầu.
+    // Quay lại xem tháng đã có lịch thì KHÔNG xoá (khoá tháng khớp).
+    const availabilityReset = resetAvailabilityIfNewMonth(targetMonth, targetYear);
+
     // 3. Khôi phục lịch tháng mới nếu đã lưu trước đó, hoặc tự động phân bổ lịch cho tháng mới
     const targetKey = `${targetYear}-${pad2(targetMonth)}`;
     if (allMonths[targetKey]) {
@@ -1324,6 +1413,16 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     }
 
     // 4. Cập nhật giao diện
+    const monthLabelForReset = `${pad2(targetMonth)}/${targetYear}`;
+    if (availabilityReset.reset && availabilityReset.cleared > 0) {
+      // Xoá ca rảnh phải nói rõ: người dùng cần biết vì sao mọi đăng ký biến mất.
+      showToast(
+        `🔄 Đã mở đăng ký ca rảnh cho tháng ${monthLabelForReset}: xoá ca rảnh cũ của ${availabilityReset.cleared} CTV. `
+        + 'Các bạn cần tick lại ca rảnh cho tháng này.',
+        'info', 6000
+      );
+    }
+
     updateMonthNavigatorUI();
     renderAll();
 
