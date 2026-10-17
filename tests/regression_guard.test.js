@@ -23,7 +23,11 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+// CHUẨN HOÁ line ending về \n.
+// File nguồn trong repo dùng CRLF (Windows), nên regex có dạng `;\n  }` sẽ
+// KHÔNG khớp vì thực tế là `;\r\n  }`. Đây là nguyên nhân khiến nhiều test
+// "không tìm thấy hàm" một cách rất khó chẩn đoán.
+const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
 const adminJs = readSrc('js/admin.js');
 const studentJs = readSrc('js/student.js');
@@ -308,6 +312,101 @@ runTest('3.9: handleConfirmRestore phải khôi phục đủ state + dùng ts:da
     'Restore phải nạp lại kỳ đang áp dụng, nếu không lịch sẽ hiện sai tháng');
   assert.ok(/!/.test(fn[0]) && /ts:data-changed/.test(fn[0]),
     'Restore phải phát ts:data-changed để cổng sinh viên cập nhật');
+});
+
+runTest('3.10: runFullSchedule() KHÔNG được xoá phân công đã chỉnh tay', () => {
+  // Bug thật: mọi thao tác gọi runFullSchedule() (đổi vai trò hàng loạt,
+  // nhập CSV, thêm/xoá SV, duyệt đổi ca) đều dựng lại lịch từ đầu, khiến
+  // mọi đổi nhân sự tay đã được phê duyệt biến mất không một dòng cảnh báo.
+  assert.ok(/MANUAL_SLOTS:\s*'/.test(adminJs),
+    'Thiếu khoá lưu các ô ca đã chỉnh tay');
+  assert.ok(/function recordManualSlot\s*\(/.test(adminJs), 'Thiếu hàm ghi ô ca chỉnh tay');
+  assert.ok(/function reapplyManualSlots\s*\(/.test(adminJs), 'Thiếu hàm áp lại ô ca chỉnh tay');
+  assert.ok(/function clearManualSlots\s*\(/.test(adminJs), 'Thiếu hàm xoá ô ca chỉnh tay');
+
+  const rs = adminJs.match(/function runFullSchedule\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(rs, 'Không tìm thấy runFullSchedule');
+  assert.ok(/reapplyManualSlots\s*\(/.test(rs[0]),
+    'runFullSchedule phải gọi reapplyManualSlots sau khi xếp tự động, nếu không mọi chỉnh sửa tay sẽ mất');
+
+  // Cả 2 đường chỉnh tay đều phải ghi nhận
+  const manual = adminJs.match(/function saveManualReassignment\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(manual && /recordManualSlot\s*\(/.test(manual[0]),
+    'saveManualReassignment phải ghi nhận ô đã chỉnh');
+  const approve = adminJs.match(/function handleApproveSwap\([^)]*\) \{[\s\S]*?\n  \}/);
+  assert.ok(approve && /recordManualSlot\s*\(/.test(approve[0]),
+    'handleApproveSwap phải ghi nhận ô đã chỉnh');
+});
+
+runTest('3.11: Ô chỉnh tay được kiểm tra lại khi áp dụng lại (không tạo lịch sai)', () => {
+  // Nếu áp lại mù quáng, CTV đã bị xoá hoặc không còn rảnh ca sẽ bị gán
+  // vào lịch -> lịch không hợp lệ lại quay về.
+  const fn = adminJs.match(/function reapplyManualSlots\(monthSchedule\) \{[\s\S]*?\n  return result;\n\}/);
+  assert.ok(fn, 'Không tìm thấy reapplyManualSlots');
+  const body = fn[0];
+  assert.ok(/không còn trong danh sách/.test(body),
+    'Phải bỏ qua ô tham chiếu CTV không còn tồn tại');
+  assert.ok(/không còn rảnh ca này/.test(body),
+    'Phải bỏ qua ô tham chiếu ca CTV không còn rảnh');
+  assert.ok(/role !== 'old'/.test(body) && /role !== 'new'/.test(body),
+    'Phải bỏ qua ô gán sai vai trò (Chính Thức / Tập Sự)');
+  assert.ok(/oldM\.id === newM\.id/.test(body),
+    'Phải chặn gán cùng một người cho cả hai vị trí trong một ca');
+  assert.ok(/result\.skipped\.push/.test(body) && /showToast/.test(adminJs),
+    'Ô bị bỏ qua phải được báo cho người dùng, không im lặng');
+});
+
+runTest('3.12: Bảng chấm công phải LỌC sự kiện theo đúng kỳ đang xem', () => {
+  // calculateMonthlyPayroll hỗ trợ tham số monthKey để chỉ tính công sự
+  // kiện trong tháng. Trước đây cả 3 call site đều KHÔNG truyền ->
+  // công của mọi tháng cộng chung vào bảng "Tháng X/YYYY" đang xem, tổng
+  // công bị thổi phồng theo thời gian.
+  const calls = [...adminJs.matchAll(/calculateMonthlyPayroll\(/g)];
+  const bareCalls = [...adminJs.matchAll(/calculateMonthlyPayroll\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)/g)];
+  assert.strictEqual(bareCalls.length, 0,
+    `Còn ${bareCalls.length} chỗ gọi calculateMonthlyPayroll không truyền monthKey — sẽ cộng công mọi tháng vào kỳ đang xem`);
+
+  // Bản sao lưu phải mang monthKey để xem lại được đúng kỳ
+  const exp = adminJs.match(/function createWebBackup\([\s\S]*?const backupPayload = \{[\s\S]*?\};/);
+  assert.ok(exp, 'Không tìm thấy backupPayload trong createWebBackup');
+  assert.ok(/\bmonthKey\b/.test(exp[0]),
+    'Bản sao lưu phải lưu monthKey để lọc công sự kiện đúng kỳ khi xem lại');
+});
+
+runTest('3.13: handleStartNewMonth / restore KHÔNG được nuốt lỗi localStorage', () => {
+  // catch (e) {} khiến QuotaExceededError biến mất: người dùng thấy
+  // "Đã chuyển sang Tháng X" trong khi lịch tháng cũ đã mất vĩnh viễn.
+  const rs = adminJs.match(/async function switchAdminMonth\([\s\S]*?\n  \}/);
+  assert.ok(rs, 'Không tìm thấy switchAdminMonth');
+
+  // PHẢI bỏ comment trước khi quét — nếu không, dòng comment giải thích
+  // "trước đây catch (e) {}" sẽ bị đếm nhầm là code còn sót.
+  const codeOnly = rs[0]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map(l => l.replace(/(^|[^:])\/\/.*$/, '$1'))
+    .join('\n');
+
+  const silent = [...codeOnly.matchAll(/catch\s*\([^)]*\)\s*\{\s*\}/g)];
+  assert.strictEqual(silent.length, 0,
+    `switchAdminMonth còn ${silent.length} catch rỗng nuốt lỗi (ghi kho lịch tháng)`);
+  assert.ok(/showToast/.test(codeOnly) && /trimMonthArchive/.test(codeOnly),
+    'Phải cảnh báo người dùng khi không lưu được kho lịch, và có cắt bớt để tránh vượt quota');
+  assert.ok(/const MAX_MONTH_ARCHIVE = \d+/.test(adminJs),
+    'Phải có giới hạn số tháng lưu trong kho lịch');
+});
+
+runTest('3.14: saveManualReassignment phải kiểm tra ca rảnh + vai trò + trùng ngày', () => {
+  const fn = adminJs.match(/function saveManualReassignment\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(fn, 'Không tìm thấy saveManualReassignment');
+  const body = fn[0];
+  assert.ok(/KHÔNG đăng ký rảnh ca/.test(body),
+    'Phải chặn gán ca ngoài ca SV đã đăng ký rảnh');
+  assert.ok(/role !== 'old'/.test(body) && /role !== 'new'/.test(body),
+    'Phải chặn gán sai vai trò');
+  assert.ok(/cùng ngày/.test(body), 'Phải chặn trùng ca trong cùng ngày');
+  assert.ok(/recomputeWeekStats/.test(body),
+    'Phải tính lại summary/combinedStats — nếu không số "X/40 ca" và thanh công bằng bị sai');
 });
 
 runTest('3.5: pullFromCloud phát hiện xung đột dữ liệu', () => {
