@@ -148,16 +148,27 @@ const { WebBackupManager } = global.window;
 let passedTests = 0;
 let totalTests = 0;
 
+let testChain = Promise.resolve();
 function runTest(testName, fn) {
   totalTests++;
-  try {
-    fn();
-    console.log(`  ✓ [PASS] ${testName}`);
-    passedTests++;
-  } catch (err) {
-    console.error(`  ✗ [FAIL] ${testName}: ${err.message}`);
-    console.error(err.stack);
-  }
+  const report = (err) => {
+    if (!err) {
+      console.log(`  ✓ [PASS] ${testName}`);
+      passedTests++;
+    } else {
+      console.error(`  ✗ [FAIL] ${testName}: ${err.message}`);
+      console.error(err.stack);
+    }
+  };
+  // XEP HANG: khong chay ngay, ma noi vao chuoi. Cac test chia se
+  // mockLocalStorage nen bat buoc phai xong test nay moi den test sau.
+  testChain = testChain.then(() => {
+    try {
+      return Promise.resolve(fn()).then(() => report(null), report);
+    } catch (err) {
+      report(err);
+    }
+  });
 }
 
 console.log('================================================================');
@@ -295,7 +306,7 @@ runTest('Giới hạn tối đa 6 bản ghi (MAX_WEB_BACKUPS = 6): Tự động 
   assert.strictEqual(finalBackups.some(b => b.id === 'wbk_test_2'), false, 'Bản số 2 cũ thứ hai phải bị cắt tỉa');
 });
 
-runTest('Khôi phục nhanh 1-Click (Restore): Đồng bộ toàn vẹn dữ liệu từ bản sao lưu vào LocalStorage & State', () => {
+runTest('Khôi phục nhanh 1-Click (Restore): Đồng bộ toàn vẹn dữ liệu từ bản sao lưu vào LocalStorage & State', async () => {
   mockLocalStorage.clear();
 
   // Tạo một bản sao lưu chứa dữ liệu hoàn chỉnh
@@ -330,7 +341,7 @@ runTest('Khôi phục nhanh 1-Click (Restore): Đồng bộ toàn vẹn dữ li�
   global.window.confirm = () => true;
 
   // Thực hiện khôi phục
-  WebBackupManager.restoreFromWebBackup(targetBackupId);
+  await WebBackupManager.restoreFromWebBackup(targetBackupId);
 
   // Kiểm tra dữ liệu sau khi khôi phục trong LocalStorage
   const restoredStudents = JSON.parse(mockLocalStorage.getItem('ts_scheduler_students'));
@@ -347,7 +358,7 @@ runTest('Khôi phục nhanh 1-Click (Restore): Đồng bộ toàn vẹn dữ li�
   assert.strictEqual(restoredSwaps[0].id, 'sw1');
 });
 
-runTest('Xóa bản sao lưu (Delete): Xóa đúng mục chỉ định và bảo toàn các mục khác', () => {
+runTest('Xóa bản sao lưu (Delete): Xóa đúng mục chỉ định và bảo toàn các mục khác', async () => {
   mockLocalStorage.clear();
   const b1 = { id: 'wbk_del_1', name: 'Bản 1', createdAt: Date.now(), expiresAt: Date.now() + 1000, payload: {} };
   const b2 = { id: 'wbk_del_2', name: 'Bản 2', createdAt: Date.now() - 1000, expiresAt: Date.now() + 1000, payload: {} };
@@ -355,14 +366,14 @@ runTest('Xóa bản sao lưu (Delete): Xóa đúng mục chỉ định và bảo
 
   global.window.confirm = () => true;
 
-  WebBackupManager.deleteWebBackup('wbk_del_1');
+  await WebBackupManager.deleteWebBackup('wbk_del_1');
 
   const remaining = WebBackupManager.getWebBackups();
   assert.strictEqual(remaining.length, 1);
   assert.strictEqual(remaining[0].id, 'wbk_del_2');
 });
 
-runTest('Tích hợp Khởi tạo Tháng Mới: Tự động tạo snapshot sao lưu trước khi làm sạch lịch', () => {
+runTest('Tích hợp Khởi tạo Tháng Mới: Tự động tạo snapshot sao lưu trước khi làm sạch lịch', async () => {
   mockLocalStorage.clear();
 
   // Giả lập dữ liệu tháng cũ
@@ -394,7 +405,7 @@ runTest('Tích hợp Khởi tạo Tháng Mới: Tự động tạo snapshot sao 
 
   // Thực thi hàm adminStartNewMonth đã được export trên window
   assert.strictEqual(typeof global.window.adminStartNewMonth, 'function', 'adminStartNewMonth phải được export');
-  global.window.adminStartNewMonth();
+  await global.window.adminStartNewMonth();
 
   // Kiểm tra danh sách web backups phải có thêm 1 bản snapshot tự động
   const backups = WebBackupManager.getWebBackups();
@@ -406,6 +417,8 @@ runTest('Tích hợp Khởi tạo Tháng Mới: Tự động tạo snapshot sao 
   assert.strictEqual(backups[0].payload.students[0].studentId, '2001111', 'Snapshot phải lưu giữ đúng danh sách sinh viên cũ');
 });
 
+// Cho het cac test async truoc khi in tong ket
+testChain.then(() => {
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');
@@ -415,3 +428,5 @@ if (passedTests !== totalTests) {
 } else {
   process.exit(0);
 }
+
+});
