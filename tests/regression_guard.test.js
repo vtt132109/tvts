@@ -340,7 +340,6 @@ runTest('3.10: runFullSchedule() KHÔNG được xoá phân công đã chỉnh t
     'Thiếu khoá lưu các ô ca đã chỉnh tay');
   assert.ok(/function recordManualSlot\s*\(/.test(adminJs), 'Thiếu hàm ghi ô ca chỉnh tay');
   assert.ok(/function reapplyManualSlots\s*\(/.test(adminJs), 'Thiếu hàm áp lại ô ca chỉnh tay');
-  assert.ok(/function clearManualSlots\s*\(/.test(adminJs), 'Thiếu hàm xoá ô ca chỉnh tay');
 
   const rs = adminJs.match(/function runFullSchedule\(\) \{[\s\S]*?\n  \}/);
   assert.ok(rs, 'Không tìm thấy runFullSchedule');

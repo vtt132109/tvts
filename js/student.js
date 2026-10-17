@@ -1125,18 +1125,6 @@
     updateSubmitButtonState();
   }
 
-  function clearStudentForm() {
-    if (elements.inputFullName) elements.inputFullName.value = '';
-    if (elements.inputStudentId) elements.inputStudentId.value = '';
-    if (elements.inputPhone) elements.inputPhone.value = '';
-
-    monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
-    switchRegWeek(1);
-    updateSelectedCount();
-    clearDetectedStudentState(true);
-    updateMatrixGateState();
-  }
-
   /**
    * Xóa các ca rảnh đã chọn của tuần hiện tại (Task 3)
    */
@@ -1475,16 +1463,6 @@
       if (cb.checked) selected.push(cb.value);
     });
     return selected;
-  }
-
-  function getSelectedShifts() {
-    const union = new Set([
-      ...(monthlyAvailableShifts[1] || []),
-      ...(monthlyAvailableShifts[2] || []),
-      ...(monthlyAvailableShifts[3] || []),
-      ...(monthlyAvailableShifts[4] || [])
-    ]);
-    return Array.from(union);
   }
 
   /**

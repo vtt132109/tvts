@@ -1015,24 +1015,6 @@ function recordManualSlot(weekNumber, shiftId, slot) {
   }
 }
 
-/** Xoá nhận ký chỉnh tay của một tuần (dùng khi quản trị viên muốn xếp lại). */
-function clearManualSlots(weekNumber) {
-  try {
-    let map = {};
-    try {
-      map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
-    } catch (e) { map = {}; }
-    if (weekNumber === undefined) {
-      map = {};
-    } else {
-      delete map[String(weekNumber)];
-    }
-    localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(map));
-  } catch (e) {
-    console.warn('[Admin] Không xoá được ô ca chỉnh tay:', e);
-  }
-}
-
 /**
  * Áp lại các ô đã được chỉnh tay sau khi xếp lịch tự động.
  *
@@ -4897,11 +4879,6 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         </tr>
       `;
     }).join('');
-  }
-
-  function closeMonthlyPayrollModal() {
-    const modal = document.getElementById('modal-monthly-payroll');
-    if (modal) modal.style.display = 'none';
   }
 
   /**
