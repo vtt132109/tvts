@@ -69,8 +69,7 @@
     }
   ];
 
-  // Mật khẩu mặc định còn tồn tại trong mã nguồn -> hiển thị cảnh báo bắt buộc đổi
-  const WEAK_DEFAULT_PASSWORDS = ['123', '1234', '12345', '123456', '0000', 'admin', 'password'];
+  // Đã gỡ WEAK_DEFAULT_PASSWORDS cùng cảnh báo bảo mật — xem warnIfWeakCredentials.
 
   const state = {
     students: [],
@@ -652,34 +651,17 @@
     unlockAdminDashboard();
     showToast(`Xin chào ${user.fullName}! Đăng nhập quản trị thành công.`, 'success');
 
-    // Bảo mật: mật khẩu mặc định nằm trong mã nguồn công khai -> buộc đổi ngay.
-    warnIfWeakCredentials(user);
+    // Đã bỏ cảnh báo mật khẩu yếu: nó hiện mỗi lần đăng nhập vì mật khẩu nằm
+    // trong mã nguồn công khai, nên cảnh báo luôn bật và chỉ gây mời mắt sau vài
+    // lần. Việc đổi mật khẩu vẫn làm được qua nút "🔑 Cấp Quyền & Đổi MK".
   }
 
   /**
-   * Hiển thị cảnh báo bảo mật khi tài khoản vẫn dùng mật khẩu/PIN mặc định.
-   * Mật khẩu chỉ tồn tại ở phía trình duyệt nên đây là biện pháp giảm nhẹ rủi ro,
-   * không thay thế việc dùng Firebase Rules / backend xác thực thật sự.
+   * Cảnh báo mật khẩu yếu — ĐÃ BỎ theo yêu cầu chủ dự án (2026-10-17).
+   * @deprecated Không còn được gọi. Giữ lại để tham chiếu lịch sử.
    */
-  function warnIfWeakCredentials(user) {
-    if (!user) return;
-    const weakPwd = WEAK_DEFAULT_PASSWORDS.includes(String(user.password || ''));
-    const weakPin = ['1234', '12345', '123456', '0000', '1111', '9999', '8888']
-      .includes(String(user.pin || ''));
-
-    if (weakPwd || weakPin) {
-      setTimeout(() => {
-        showToast(
-          '⚠️ CẢNH BÁO BẢO MẬT: Bạn đang dùng mật khẩu/PIN mặc định có trong mã nguồn công khai. '
-          + 'Vui lòng đổi NGAY qua nút "🔑 Cấp Quyền & Đổi MK".',
-          'error', 9000
-        );
-        if (elements.btnOpenUserMgmt) {
-          elements.btnOpenUserMgmt.classList.add('pulse-security-warning');
-          setTimeout(() => elements.btnOpenUserMgmt.classList.remove('pulse-security-warning'), 12000);
-        }
-      }, 800);
-    }
+  function warnIfWeakCredentials() {
+    return;
   }
 
   function showAuthError(msg) {
