@@ -2941,8 +2941,49 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       if (colIdx.fullName === -1) colIdx.fullName = 0;
       if (colIdx.studentId === -1) colIdx.studentId = 1;
       if (colIdx.phone === -1) colIdx.phone = 2;
-      if (colIdx.role === -1) colIdx.role = 3;
-      if (colIdx.shifts === -1) colIdx.shifts = 4;
+      if (colIdx.role === -1) colIdx.role = -1;
+      if (colIdx.shifts === -1) colIdx.shifts = -1;
+    }
+
+    // ⚠️ NẾU TIÊU ĐỀ CỘT VAI TRÒ TRỐNG, PHẢI ĐOÁN THEO NỘI DUNG CHỨ KHÔNG
+    // ĐOÁN THEO VỊ TRÍ.
+    //
+    // File CSV thật của Ban: "STT,Họ và tên,MSSV,Email," — cột thứ 5 KHÔNG
+    // CÓ tên tiêu đề, chỉ chứa giá trị "CTV cũ" / "CTV mới".
+    // Trước đây khi không tìm thấy cột vai trò theo tiêu đề, code đoán cứng
+    // là cột index 3 — cột đó trong file này là EMAIL. Kết quả đo thật:
+    //   58/58 người bị nhận thành Tập Sự (0 Chính Thức)
+    // vì địa chỉ email không chứa từ khoá "cũ", và luật 1 Chính Thức +
+    // 1 Tập Sự vì thế không thể xếp ca nào.
+    if (colIdx.role === -1) {
+      // Quét các dòng dữ liệu, tìm cột có giá trị trông như vai trò
+      const deGiaiDau = [];
+      for (let r = startIndex; r < lines.length && deGiaiDau.length < 12; r++) {
+        const ln = lines[r].trim();
+        if (!ln) continue;
+        deGiaiDau.push(parseCsvRow(ln));
+      }
+
+      const laVaiTro = (v) => {
+        const s = String(v || '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        if (!s) return false;
+        return /^(ctv\s*)?(cu|moi|chinh thuc|tap su|tap su|old|new|nguoi cu|nguoi moi)$/
+          .test(s.replace(/\s+/g, ' '));
+      };
+
+      const soCot = Math.max(...deGiaiDau.map(r => r.length), 0);
+      for (let c = 0; c < soCot; c++) {
+        // Bỏ qua cột đã gán cho tên/MSSV/SĐT và cột có dạng email
+        if (c === colIdx.fullName || c === colIdx.studentId || c === colIdx.phone) continue;
+        const gia = deGiaiDau.map(r => r[c]);
+        const khop = gia.filter(laVaiTro).length;
+        // Cần phần lớn các dòng khớp mới coi là cột vai trò
+        if (khop >= Math.max(2, Math.ceil(gia.length * 0.6))) {
+          colIdx.role = c;
+          break;
+        }
+      }
     }
 
     for (let i = startIndex; i < lines.length; i++) {
@@ -2964,7 +3005,12 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
       if (!fullName || !studentId) continue;
 
-      const isOld = roleRaw.includes('cu') || roleRaw.includes('chinh thuc') || roleRaw.includes('old') || roleRaw.includes('kinh nghiem');
+      // So khớp CẢ GIÁ TRỊ, không dùng includes() rời.
+      // Trước đây `roleRaw.includes('cu')` khớp trúng bất kỳ chuỗi nào có
+      // chữ "cu" — ví dụ email "nguyencuong@..." hoặc tên "Đặng Thị Cúc"
+      // sẽ bị nhận nhầm là Chính Thức.
+      const roleText = roleRaw.replace(/\s+/g, ' ');
+      const isOld = /^(ctv\s*)?(cu|nguoi cu|chinh thuc|old|kinh nghiem|vet|ct)$/.test(roleText);
       const role = isOld ? 'old' : 'new';
 
       const availableShifts = [];
