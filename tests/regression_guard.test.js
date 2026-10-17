@@ -1094,6 +1094,58 @@ runTest('9.6: Cảnh báo của TỪNG TUẦN phải được gom lên warnings 
     'warnings cấp tháng bị trùng lặp');
 });
 
+runTest('9.7: 2 bản MonthCalendarHelper phải cho KẾT QUẢ GIỐNG HỆT NHAU', () => {
+  // js/scheduler.js và js/month_calendar.js đều định nghĩa MonthCalendarHelper.
+  // Trình duyệt nạp month_calendar.js TRƯỚC scheduler.js nên bản trong
+  // scheduler.js là bản thực sự chạy; còn test/require() lấy bản
+  // month_calendar.js. Trước đây chúng đã PHÂN KỲ:
+  //   - nhãn tuần 4 tháng 12/2026: "…/2026" (sai) vs "…/2027" (đúng)
+  //   - getFirstMonday(2026) 1 tham số ra năm 2194 do default param rò vào
+  //     ô month: new Date(2026, 2025, 1)
+  // Nghĩa là test chạy trên lịch KHÁC với lịch người dùng thấy.
+  const loadBoth = (file, pick) => {
+    const g = {}; const m = { exports: {} };
+    // eslint-disable-next-line no-new-func
+    new Function('window', 'module', readSrc(file))(g, m);
+    return pick(g, m);
+  };
+
+  const A = loadBoth('js/scheduler.js', g => g.SchedulerEngine.MonthCalendarHelper);
+  const B = loadBoth('js/month_calendar.js', (g, m) => m.exports || (g.window && g.window.MonthCalendarHelper));
+
+  assert.ok(A && typeof A.getMonthWeeks === 'function', 'scheduler.js phải có MonthCalendarHelper');
+  assert.ok(B && typeof B.getMonthWeeks === 'function', 'month_calendar.js phải có MonthCalendarHelper');
+
+  const cases = [[10, 2026], [11, 2026], [12, 2026], [1, 2027], [3, 2026], [6, 2026]];
+  const diffs = [];
+  cases.forEach(([m, y]) => {
+    const wa = A.getMonthWeeks(m, y);
+    const wb = B.getMonthWeeks(m, y);
+    wa.forEach((wkA, i) => {
+      const wkB = wb[i];
+      ['label', 'startDateStr', 'endDateStr'].forEach(k => {
+        if (wkA[k] !== wkB[k]) {
+          diffs.push(`${m}/${y} tuần ${i + 1} ${k}: "${wkA[k]}" vs "${wkB[k]}"`);
+        }
+      });
+    });
+  });
+  assert.strictEqual(diffs.length, 0,
+    `Hai bản MonthCalendarHelper đã phân kỳ:\n      ${diffs.slice(0, 6).join('\n      ')}`);
+
+  // getFirstMonday gọi 1 tham số phải cho đúng tháng 10 năm đó
+  const one = B.getFirstMonday(2026);
+  assert.strictEqual(one.getFullYear(), 2026,
+    `getFirstMonday(2026) phải trả năm 2026, thực tế ${one.getFullYear()} (thường là 2194 do default param)`);
+  assert.strictEqual(one.getMonth(), 9,
+    `getFirstMonday(2026) phải trả tháng 10, thực tế tháng ${one.getMonth() + 1}`);
+
+  // Nhãn tuần cuối tháng 12/2026 phải kết thúc năm 2027
+  const dec = B.getMonthWeeks(12, 2026);
+  assert.ok(/\/2027\)?$/.test(dec[3].label),
+    `Nhãn tuần 4 tháng 12/2026 phải kết thúc bằng /2027, thực tế: ${dec[3].label}`);
+});
+
 runTest('9.5b: Role không hợp lệ phải được chuẩn hoá đúng', () => {
   // Test 8.1/8.1b đã phủ; test này khẳng định ngưỡng "an toàn": role thiếu
   // hay sai đều KHÔNG bao giờ bị nâng lên Chính Thức.
