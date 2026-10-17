@@ -25,12 +25,14 @@ global.window = global.window || {};
 // 2. Nạp module MonthCalendarHelper, SchedulerEngine và Mock Data 30 CTV
 require('../js/month_calendar.js');
 require('../js/scheduler.js');
-require('../js/sample30.js');
+require('../js/roster.js');
 
 const MonthCalendarHelper = window.MonthCalendarHelper || require('../js/month_calendar.js');
 const SchedulerEngine = window.SchedulerEngine || require('../js/scheduler.js');
 const { solveMultiWeekSchedule, runMonthSchedule, SHIFTS, SHIFT_MAP } = SchedulerEngine;
-const sampleStudents = window.SAMPLE_30_STUDENTS || require('../js/sample30.js').SAMPLE_30_STUDENTS;
+// Dữ liệu kiểm thử lấy từ fixture riêng trong tests/, KHÔNG dùng danh sách CTV
+// thuộc sản phẩm (nay rỗng — danh sách thật 58 người nạp từ CSV).
+const { TEST_STUDENTS: sampleStudents } = require('./fixtures/test_students.js');
 
 console.log('================================================================');
 console.log('🚀 BẮT ĐẦU CHẠY BỘ KIỂM THỬ: ĐĂNG KÝ CA RẢNH TRỌN THÁNG (MONTHLY REG)');

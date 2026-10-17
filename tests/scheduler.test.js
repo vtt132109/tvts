@@ -17,7 +17,10 @@ global.window = {};
 // MonthCalendarHelper tu window va nem loi neu chua co.
 require('../js/month_calendar.js');
 require('../js/scheduler.js');
-require('../js/sample30.js');
+require('../js/roster.js');
+// Du lieu kiem thu: dung fixture rieng trong tests/, KHONG dung danh sach
+// CTV thuoc san pham (nay rong - danh sach that nap tu CSV).
+const { TEST_STUDENTS: sampleStudents } = require('./fixtures/test_students.js');
 
 const {
   SHIFTS,
@@ -27,7 +30,6 @@ const {
   runMonthSchedule
 } = window.SchedulerEngine;
 
-const sampleStudents = window.SAMPLE_30_STUDENTS;
 
 console.log('================================================================');
 console.log('🚀 BẮT ĐẦU CHẠY BỘ KIỂM THỬ TỰ ĐỘNG - HỆ THỐNG BAN TUYỂN SINH');

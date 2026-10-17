@@ -3,7 +3,8 @@
  * ADMIN PORTAL LOGIC (Bảng Điều Hành Quản Trị & Xếp Lịch)
  * ==========================================================================
  * Đóng gói trong IIFE để tránh xung đột biến toàn cục.
- * Hỗ trợ demo 30 sinh viên và luân phiên 2 tuần (Tuần 1 & Tuần 2)
+ * Danh sách CTV nạp từ file CSV của Ban Tư Vấn — không nhúng sẵn trong mã.
+ * Hỗ trợ luân phiên ca theo tuần (Tuần 1 & Tuần 2).
  */
 
 (() => {
@@ -61,22 +62,6 @@
 
   // Mật khẩu mặc định còn tồn tại trong mã nguồn -> hiển thị cảnh báo bắt buộc đổi
   const WEAK_DEFAULT_PASSWORDS = ['123', '1234', '12345', '123456', '0000', 'admin', 'password'];
-
-  // Dữ liệu mẫu ban đầu (12 SV) và 30 SV
-  const SAMPLE_12_STUDENTS = [
-    { id: 's_old_1', fullName: 'Nguyễn Văn An', studentId: '2102001', phone: '0912345678', role: 'old', availableShifts: ['T2_S', 'T2_C', 'T3_S', 'T4_S', 'T5_C', 'T6_S'], createdAt: Date.now() - 100000 },
-    { id: 's_old_2', fullName: 'Trần Thị Bích', studentId: '2102002', phone: '0923456789', role: 'old', availableShifts: ['T2_C', 'T3_S', 'T3_C', 'T4_C', 'T5_S', 'T6_C'], createdAt: Date.now() - 90000 },
-    { id: 's_old_3', fullName: 'Lê Hoàng Cường', studentId: '2102003', phone: '0934567890', role: 'old', availableShifts: ['T2_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 80000 },
-    { id: 's_old_4', fullName: 'Phạm Minh Đức', studentId: '2102004', phone: '0945678901', role: 'old', availableShifts: ['T2_S', 'T3_S', 'T4_C', 'T5_C', 'T6_S', 'T6_C'], createdAt: Date.now() - 70000 },
-    { id: 's_old_5', fullName: 'Vũ Thị Hồng', studentId: '2102005', phone: '0956789012', role: 'old', availableShifts: ['T2_C', 'T3_C', 'T4_S', 'T5_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 60000 },
-    { id: 's_new_1', fullName: 'Hoàng Lan Anh', studentId: '2302001', phone: '0967890123', role: 'new', availableShifts: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], createdAt: Date.now() - 50000 },
-    { id: 's_new_2', fullName: 'Ngô Gia Bảo', studentId: '2302002', phone: '0978901234', role: 'new', availableShifts: ['T2_C', 'T3_C', 'T4_C', 'T5_C', 'T6_C'], createdAt: Date.now() - 40000 },
-    { id: 's_new_3', fullName: 'Bùi Khánh Linh', studentId: '2302003', phone: '0989012345', role: 'new', availableShifts: ['T2_S', 'T2_C', 'T3_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 30000 },
-    { id: 's_new_4', fullName: 'Đỗ Tuấn Kiệt', studentId: '2302004', phone: '0990123456', role: 'new', availableShifts: ['T3_S', 'T3_C', 'T4_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 20000 },
-    { id: 's_new_5', fullName: 'Lý Thu Trang', studentId: '2302005', phone: '0901234567', role: 'new', availableShifts: ['T2_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T6_S'], createdAt: Date.now() - 15000 },
-    { id: 's_new_6', fullName: 'Dương Minh Trí', studentId: '2302006', phone: '0911223344', role: 'new', availableShifts: ['T2_C', 'T3_S', 'T4_S', 'T5_C', 'T6_C'], createdAt: Date.now() - 10000 },
-    { id: 's_new_7', fullName: 'Mai Phương Thảo', studentId: '2302007', phone: '0922334455', role: 'new', availableShifts: ['T2_S', 'T3_C', 'T5_S', 'T5_C', 'T6_S'], createdAt: Date.now() - 5000 }
-  ];
 
   const state = {
     students: [],
@@ -1676,7 +1661,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
   function triggerAutoSchedule(animate = true) {
     if (state.students.length === 0) {
-      showToast('Chưa có sinh viên nào. Vui lòng thêm sinh viên hoặc nạp dữ liệu mẫu!', 'warning');
+      showToast('Chưa có CTV nào trong danh sách. Hãy nhập file CSV danh sách trước khi xếp ca.', 'warning');
       return;
     }
 
@@ -1778,13 +1763,31 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     }
 
     if (filtered.length === 0) {
-      elements.studentTableBody.innerHTML = `
+      // Phân biệt 2 nguyên nhân rất khác nhau:
+      //  - Chưa nạp danh sách: cần import CSV. Đây là trạng thái bình thường
+      //    sau khi gỡ danh sách mẫu 30 người.
+      //  - Đã có danh sách nhưng bộ lọc không khớp.
+      const rosterEmpty = !state.students || state.students.length === 0;
+      elements.studentTableBody.innerHTML = rosterEmpty
+        ? `
         <tr>
           <td colspan="8">
             <div class="empty-state">
-              <div class="empty-state-icon">📋</div>
-              <h3>Không tìm thấy sinh viên nào</h3>
-              <p>Bấm "+ Thêm Sinh Viên Mới" hoặc chờ sinh viên đăng ký từ Cổng Sinh Viên để bắt đầu.</p>
+              <div class="empty-state-icon">📥</div>
+              <h3>Danh sách CTV chưa được nạp</h3>
+              <p>Danh sách 58 CTV không nằm sẵn trong mã nguồn. Hãy nhập file CSV danh sách một lần — dữ liệu được lưu trong máy và đồng bộ đám mây.</p>
+              <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted)">Định dạng CSV: <code>STT, Họ tên, MSSV, Email, Vai trò</code></p>
+            </div>
+          </td>
+        </tr>
+      `
+        : `
+        <tr>
+          <td colspan="8">
+            <div class="empty-state">
+              <div class="empty-state-icon">🔍</div>
+              <h3>Không tìm thấy CTV nào khớp bộ lọc</h3>
+              <p>Danh sách có ${state.students.length} người nhưng không có ai khớp điều kiện lọc. Xoá bộ lọc hoặc thử từ khoá khác.</p>
             </div>
           </td>
         </tr>
@@ -5897,7 +5900,9 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
   function loadUtePresetStudents() {
     const uteList = window.SAMPLE_HCM_UTE_STUDENTS || [];
     if (uteList.length === 0) {
-      showToast('Không tìm thấy danh sách mẫu HCM-UTE!', 'error');
+      // Danh sách mẫu đã được gỡ (js/roster.js). Nạp danh sách 30 người cũ ở
+      // đây sẽ XOÁ danh sách thật đã nạp từ CSV.
+      showToast('Đã gỡ danh sách mẫu. Hãy dùng nút "Nhập CSV" để nạp danh sách CTV thật.', 'warning');
       return;
     }
 

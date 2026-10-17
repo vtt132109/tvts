@@ -143,7 +143,7 @@ global.document = {
 // MonthCalendarHelper tu window va nem loi neu chua co.
 require('../js/month_calendar.js');
 require('../js/scheduler.js');
-require('../js/sample30.js');
+require('../js/roster.js');
 
 // 3. Nạp admin.js để kích hoạt các module quản trị sẵn có
 const adminJsPath = path.resolve(__dirname, '../js/admin.js');

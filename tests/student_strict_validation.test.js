@@ -172,7 +172,7 @@ function bootStudentPortal(initialStudents) {
   vm.createContext(sandbox);
 
   // Nạp các module phụ thuộc trước (cùng thứ tự với index.html).
-  ['js/month_calendar.js', 'js/scheduler.js', 'js/sample30.js'].forEach(rel => {
+  ['js/month_calendar.js', 'js/scheduler.js', 'js/roster.js'].forEach(rel => {
     const p = path.resolve(__dirname, '..', rel);
     if (fs.existsSync(p)) {
       vm.runInContext(fs.readFileSync(p, 'utf8'), sandbox, { filename: rel });
