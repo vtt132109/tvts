@@ -5987,11 +5987,15 @@ input[type="checkbox"]:checked {
   min-height: 56px;
 }
 
-/* --- Hook cho mục "phân biệt ca còn trống / đã đầy" (cần js/student.js) ---
-   js/student.js chưa báo cho giao diện biết ca nào đã có người được xếp, nên
-   2 class dưới đây chưa được gắn vào đâu cả. Khi bổ sung logic, chỉ cần thêm
-   class vào ô <td> (ví dụ <td class="sv-slot-taken">) là giao diện hiển thị
-   ngay, không cần sửa CSS. */
+/* --- Trạng thái "ca còn trống / đã có người xếp" (js/student.js gắn class) ---
+   paintSlotAvailability() trong js/student.js đọc lịch tháng và gắn
+   sv-slot-free / sv-slot-taken vào ô <td>.
+
+   QUAN TRỌNG: ô "đã xếp" KHÔNG bị khoá. Nhiều CTV có thể cùng đăng ký rảnh một
+   ca — bộ xếp mới chọn 1 Chính Thức + 1 Tập Sự cho ca đó. Nên ô đã xếp vẫn
+   tick/bỏ tick bình thường; chỉ làm mờ + gạch ngang nhãn để nhìn ra là ca đã
+   có người. Không được thêm pointer-events: none hay cursor: not-allowed ở
+   đây — sẽ chặn đăng ký của những người còn lại. */
 .sv-matrix td.sv-slot-free .slot-toggle {
   border-style: solid;
   border-color: var(--success);
@@ -6000,11 +6004,10 @@ input[type="checkbox"]:checked {
 }
 
 .sv-matrix td.sv-slot-taken .slot-toggle:not(:has(input[type="checkbox"]:checked)) {
-  opacity: 0.55;
+  opacity: 0.62;
   border-style: solid;
   border-color: var(--border-color);
   background: var(--bg-card-hover);
-  cursor: not-allowed;
 }
 
 .sv-matrix td.sv-slot-taken .slot-state-text {
