@@ -1331,11 +1331,30 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
     monthlyAvailableShifts: { 1: ['T2_S'], 2: ['T3_C'], 3: [], 4: [] },
   }));
 
-  // --- Lần 1: tháng 11, mọi người đã đăng ký ca ---
+  // --- Lần 0: MÁY MỚI, chưa có khoá tháng nào → PHẢI GIỮ NGUYÊN ---
+  //
+  // Không có khoá thì không biết ca rảnh đang thuộc tháng nào. Xoá nhầm thì mất
+  // đăng ký thật — đã tái hiện bằng dữ liệu Firebase thật: mở trang quản trị
+  // trên một máy mới là 10 lượt ca rảnh của 2 CTV bị xoá về 0, rồi đẩy lên
+  // Cloud. Bỏ sót thì chỉ cần bấm "Khởi tạo lịch tháng mới" là xong.
+  // Thiệt hại không cân bằng nên mặc định GIỮ.
   sandbox.state.students = withShifts(58);
   store.clear();
+  const r0 = resetAvailabilityIfNewMonth(11, 2026);
+  assert.strictEqual(r0.reset, false, 'máy mới (chưa có khoá tháng) không được xoá ca rảnh');
+  assert.strictEqual(r0.cleared, 0, 'không được xoá ai');
+  assert.deepStrictEqual(sandbox.state.students[0].availableShifts, ['T2_S', 'T3_C'],
+    'máy mới phải giữ nguyên ca rảnh đang có');
+  assert.strictEqual(store.get('kAvail'), '2026-11', 'vẫn ghi khoá tháng cho máy này dùng tiếp');
+
+  // --- Lần 1: máy đã có khoá tháng 10, sang tháng 11 → xoá ---
+  // Khoá tháng đến từ localStorage máy này, hoặc từ Cloud do applyPayload khôi
+  // phục (xem test 9.9). Hai đường đều dẫn tới cùng một giá trị trong localStorage.
+  sandbox.state.students = withShifts(58);
+  store.clear();
+  store.set('kAvail', '2026-10');
   const r1 = resetAvailabilityIfNewMonth(11, 2026);
-  assert.strictEqual(r1.reset, true, 'lần đầu phải coi là sang tháng mới');
+  assert.strictEqual(r1.reset, true, 'tháng vượt khoá tháng phải coi là sang tháng mới');
   assert.strictEqual(r1.cleared, 58, `phải xoá ca rảnh của cả 58 CTV, thực tế ${r1.cleared}`);
   sandbox.state.students.forEach((s) => {
     assert.deepStrictEqual(s.availableShifts, [], `${s.id}: availableShifts phải rỗng`);
@@ -1379,6 +1398,46 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
   const r6 = resetAvailabilityIfNewMonth(2, 2027);
   assert.strictEqual(r6.reset, true, 'vẫn phải ghi khoá tháng dù danh sách rỗng');
   assert.strictEqual(r6.cleared, 0, 'không có ai thì cleared = 0');
+});
+
+runTest('9.9: Khoá tháng ca rảnh phải đi kèm Cloud, không chỉ nằm ở localStorage', () => {
+  // Nếu khoá tháng chỉ nằm trong localStorage thì mọi máy mới đều coi là
+  // "chưa đăng ký" và tự xoá ca rảnh thật. Test 9.8 Lần 0 chỉ chặn được hậu quả
+  // khi localStorage rỗng; nguyên nhân gốc là khoá tháng không đồng bộ.
+  const admin = readSrc('js/admin.js');
+  const cloud = readSrc('js/cloud_sync.js');
+
+  const KEY = 'ts_scheduler_availability_month_v1';
+
+  // admin.js: khoá dùng chung một tên
+  assert.ok(admin.includes(KEY),
+    `admin.js phải dùng khoá localStorage "${KEY}"`);
+
+  // cloud_sync.js: khai báo khoá
+  assert.ok(/AVAILABILITY_MONTH\s*:\s*'ts_scheduler_availability_month_v1'/.test(cloud),
+    'cloud_sync.js phải khai báo STORAGE_KEYS.AVAILABILITY_MONTH với đúng tên khoá');
+
+  // cloud_sync.js: đẩy lên Cloud
+  assert.ok(/availabilityMonth\s*:\s*readKey\(STORAGE_KEYS\.AVAILABILITY_MONTH/.test(cloud),
+    'buildPayload() phải gửi availabilityMonth lên Cloud');
+
+  // cloud_sync.js: kéo về từ Cloud (bắt buộc, nếu thiếu thì máy mới vẫn không có khoá)
+  assert.ok(/payload\.availabilityMonth/.test(cloud),
+    'applyPayload() phải đọc availabilityMonth từ Cloud');
+  assert.ok(/writeKey\(STORAGE_KEYS\.AVAILABILITY_MONTH,\s*payload\.availabilityMonth\)/.test(cloud),
+    'applyPayload() phải ghi availabilityMonth vào localStorage khi máy mới chưa có');
+
+  // Nguyên tắc an toàn: không được xoá khi chưa có khoá
+  const resetSrc = admin.slice(
+    admin.indexOf('function resetAvailabilityIfNewMonth'),
+    admin.indexOf('function switchAdminMonth')
+  );
+  const idxNoKey = resetSrc.indexOf('if (!storedMonth) {');
+  const idxClear = resetSrc.indexOf('s.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] }');
+  assert.ok(idxNoKey > 0 && idxClear > idxNoKey,
+    'nhánh "chưa có khoá tháng" phải nằm TRƯỚC chỗ xoá ca rảnh để chặn xoá nhầm');
+  assert.ok(/reset:\s*false/.test(resetSrc.slice(idxNoKey, idxClear)),
+    'nhánh "chưa có khoá tháng" phải trả reset:false, không được xoá');
 });
 
 runTest('8.3: Mã định danh trùng được ghi nhận cảnh báo', () => {

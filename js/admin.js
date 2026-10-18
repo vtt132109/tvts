@@ -1279,6 +1279,30 @@ function resetAvailabilityIfNewMonth(month, year) {
     storedMonth = null;
   }
 
+    // Khoá tháng có thể đến từ 2 nơi:
+    //   - localStorage của chính máy này (đã dùng nhiều lần trước)
+    //   - Cloud: applyPayload() khôi phục vào localStorage khi máy mới mở lần đầu
+    // Đọc ở đây đã bao gồm cả hai. Nếu Cloud chưa kịp tải về, storedMonth vẫn
+    // null và nhánh dưới GIỮ NGUYÊN dữ liệu — an toàn hơn xoá nhầm.
+  if (!storedMonth) {
+    // MÁY MỚI (hoặc localStorage đã bị xoá): KHÔNG có khoá tháng nào để so sánh.
+    //
+    // Trước đây chỗ này rơi xuống dưới và xoá sạch ca rảnh của MỌI CTV, rồi
+    // saveStudents(true) đẩy lên cloud — tức là mở trang quản trị lần đầu
+    // trên một máy khác là mất sạch ca rảnh thật. Đã tái hiện được:
+    //   58 CTV / 10 lượt ca rảnh thật  ->  0 lượt, khoá tháng tự sinh là 2026-11
+    //
+    // Vì không biết dữ liệu ca rảnh đang thuộc tháng nào, mà xoá nhầm thì mất
+    // thật còn bỏ sót thì chỉ cần bấm "Khởi tạo lịch tháng mới" là xong —
+    // thiệt hại không cân bằng nên mặc định KHÔNG xoá.
+    try {
+      localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, monthKey);
+    } catch (e) {
+      console.warn('[Admin] Không lưu được tháng của ca rảnh:', e);
+    }
+    return { reset: false, cleared: 0, monthKey, reason: 'khong-co-khoa-thang-giu-nguyen' };
+  }
+
   if (storedMonth) {
     const m = /^(\d{4})-(\d{2})$/.exec(storedMonth);
     if (m) {
