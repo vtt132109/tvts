@@ -5899,6 +5899,24 @@ input[type="checkbox"]:checked {
     width: 100% !important;
   }
 
+  /* Layout "toàn cảnh 4 tuần" trên màn hình là HÀNG NGANG cuộn ngang:
+     .master-month-container.layout-horizontal > .master-week-section có
+     flex: 0 0 1180px — nên phải ghi đè cả `flex`, vì đặt `width` không có tác
+     dụng với flex-basis. Khi in thì xếp 4 tuần DỌC xuống, mỗi tuần một khối
+     chiếm đúng bề ngang trang A4, không tràn sang cột bên phải. */
+  .master-month-container.layout-horizontal {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .master-month-container.layout-horizontal .master-week-section {
+    flex: 0 0 auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+
   /* Dọn đồ điều khiển — trên giấy không ai bấm được nút, chỉ làm bản in rối.
      GIỮ LẠI: chú giải Chính Thức / Tập Sự (người đọc cần để hiểu màu). */
   #admin-view-mode-toggle,      /* nút "Từng Tuần" / "Toàn Cảnh 1 Tháng" */
