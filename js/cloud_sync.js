@@ -22,6 +22,7 @@
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
     EVENTS: 'ts_scheduler_events_v1',
     ALL_MONTHS: 'ts_scheduler_all_months_v1',
+    AVAILABILITY_MONTH: 'ts_scheduler_availability_month_v1',
     ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
@@ -217,6 +218,9 @@
       // Luôn xuất activeMonth dưới dạng object {month, year} cho nhất quán
       // với applyPayload (chấp nhận được cả chuỗi cũ).
       activeMonth: normalizeActiveMonth(readKey(STORAGE_KEYS.ACTIVE_MONTH, null)),
+      // Khoá tháng ca rảnh: gửi lên Cloud để máy mới biết ca rảnh hiện tại thuộc
+      // tháng nào, thay vì tự đoán "chưa đăng ký" rồi xoá nhầm ca rảnh thật.
+      availabilityMonth: readKey(STORAGE_KEYS.AVAILABILITY_MONTH, null),
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
     };
@@ -310,6 +314,18 @@
       // 4. Đồng bộ cấu hình cổng tuyển sinh
       if (payload.regConfig && typeof payload.regConfig === 'object') {
         writeKey(STORAGE_KEYS.REG_CONFIG, payload.regConfig);
+      }
+
+      // 4b. Khoá tháng ca rảnh — máy mới CẦN CÓ để không xoá nhầm ca rảnh thật.
+      if (typeof payload.availabilityMonth === 'string' && payload.availabilityMonth) {
+        let currentLocal = null;
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
+          if (raw) currentLocal = JSON.parse(raw);
+        } catch (e) {}
+        if (!currentLocal) {
+          writeKey(STORAGE_KEYS.AVAILABILITY_MONTH, payload.availabilityMonth);
+        }
       }
 
       // 5. Đồng bộ sự kiện & sao lưu
