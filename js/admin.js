@@ -1741,7 +1741,27 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     elements.btnResetData?.addEventListener('click', handleClearAllStudents);
 
     elements.btnExportCsv?.addEventListener('click', exportScheduleToCsv);
-    elements.btnPrintSchedule?.addEventListener('click', () => window.print());
+    // In lịch — chụp bản sao lưu trước, chuyển sang toàn cảnh 4 tuần, rồi mới in.
+    //
+    // Trước đây nút này gọi thẳng window.print() nên chỉ in đúng tuần đang xem.
+    // Nhưng 2 nút chuyển chế độ xem lại bị @media print ẩn đi, nên người dùng
+    // không còn cách bấm "Toàn Cảnh 1 Tháng" rồi in — chỉ còn cách in 1 tuần.
+    // Vì vậy chuyển chế độ phải nằm TRƯỚC khi in, ở đây.
+    elements.btnPrintSchedule?.addEventListener('click', async () => {
+      try {
+        await createWebBackup('Trước khi in lịch');
+      } catch (e) {
+        console.warn('[Admin] Không chụp được bản sao lưu trước khi in:', e);
+      }
+
+      const masterBtn = elements.btnViewMasterMonth;
+      if (masterBtn && !masterBtn.classList.contains('active')) {
+        masterBtn.click();
+        await new Promise((r) => setTimeout(r, 450));   // chờ render xong bảng 4 tuần
+      }
+
+      window.print();
+    });
 
     // Mở modal xuất Excel / Google Sheets
     elements.btnOpenExcelModal?.addEventListener('click', () => {
