@@ -5891,6 +5891,15 @@ input[type="checkbox"]:checked {
     overflow: visible !important;
   }
 
+  /* Dọn đồ điều khiển — trên giấy không ai bấm được nút, chỉ làm bản in rối.
+     GIỮ LẠI: chú giải Chính Thức / Tập Sự (người đọc cần để hiểu màu). */
+  #admin-view-mode-toggle,      /* nút "Từng Tuần" / "Toàn Cảnh 1 Tháng" */
+  #admin-single-week-controls,  /* bộ chọn Tuần 1-4 + nhãn "Tuần:" */
+  .timetable-card .card-desc,   /* dòng "Nhấn nút 🔄 trong từng thẻ nhân sự..." */
+  .timetable-card button {
+    display: none !important;
+  }
+
   .timetable-grid,
   .timetable-grid * {
     font-size: 8pt !important;
