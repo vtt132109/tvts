@@ -1106,7 +1106,6 @@ function runFullSchedule() {
     if (monthResult) {
       const reapplied = reapplyManualSlots(monthResult);
       if (reapplied.applied > 0) {
-        console.log(`[Admin] Đã giữ lại ${reapplied.applied} phân công chỉnh tay qua lần xếp lại.`);
       }
       if (reapplied.skipped.length > 0) {
         console.warn('[Admin] Bỏ qua phân công chỉnh tay không còn hợp lệ:', reapplied.skipped);
