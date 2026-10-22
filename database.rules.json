@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "tvts_production_data": {
+      ".read": "auth != null && root.child('staff').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('staff').child(auth.uid).exists()"
+    },
+    "staff": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

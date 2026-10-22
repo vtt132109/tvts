@@ -197,8 +197,8 @@
         </form>
 
         <div style="text-align: center; margin-top: 1rem; border-top: 1px dashed var(--border-color, #e2e8f0); padding-top: 0.75rem;">
-          <button type="button" id="btn-auth-quick-cloud-pull" style="background: none; border: none; color: #0284c7; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;" onclick="window.adminTriggerAuthCloudPull && window.adminTriggerAuthCloudPull()" title="Kéo danh sách tài khoản & mã PIN mới nhất từ Đám mây về máy này">
-            <span>☁️</span> <span>Kéo Mã PIN / Tài Khoản Mới Nhất Từ Cloud</span>
+          <button type="button" id="btn-auth-quick-cloud-pull" style="background: none; border: none; color: #0284c7; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;" onclick="window.adminTriggerAuthCloudPull && window.adminTriggerAuthCloudPull()" title="Kéo hồ sơ cán bộ (họ tên, vai trò) cùng dữ liệu mới nhất từ Đám mây. Mật khẩu/PIN KHÔNG được đồng bộ vì lý do bảo mật.">
+            <span>☁️</span> <span>Kéo Dữ Liệu Mới Nhất Từ Cloud</span>
           </button>
           <div id="auth-cloud-sync-status" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; display: none;"></div>
         </div>
@@ -1793,7 +1793,7 @@
             <span>☁️</span> <span>Trung Tâm Đồng Bộ Đám Mây (Firebase Cloud Sync)</span>
           </h2>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
-            Đồng bộ tài khoản, mã PIN, danh sách CTV và lịch trực tức thì giữa mọi máy tính, điện thoại và Tab Ẩn danh.
+            Đồng bộ danh sách CTV, lịch trực và hồ sơ cán bộ (họ tên, vai trò) giữa mọi máy tính, điện thoại. <strong>Mật khẩu và mã PIN không được đồng bộ</strong> — mỗi máy đăng nhập bằng tài khoản của máy đó.
           </p>
         </div>
         <button type="button" class="modal-close" onclick="window.adminCloseCloudSyncModal && window.adminCloseCloudSyncModal()" aria-label="Đóng">&times;</button>

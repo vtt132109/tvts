@@ -263,6 +263,53 @@ runTest('Bảo mật mã PIN: Phân quyền chính xác và lưu phiên an toàn
 });
 
 // ============================================================================
+// TEST GROUP: CHỐNG DÒ MẬT KHẨU / PIN & HẾT HẠN PHIÊN
+// ============================================================================
+runTest('Chống dò PIN: khoá 60 giây sau 5 lần nhập sai đúng định dạng', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  for (let i = 0; i < 5; i++) {
+    const res = AdminAuth.loginPin('0001');
+    assert.strictEqual(res.success, false, `Lần sai #${i + 1} phải thất bại`);
+  }
+
+  const locked = AdminAuth.loginPin('9999');
+  assert.strictEqual(locked.success, false,
+    'Đang bị khoá thì nhập PIN ĐÚNG cũng phải bị từ chối');
+
+  mockLocalStorage.removeItem('ts_admin_login_guard');
+  const unlocked = AdminAuth.loginPin('9999');
+  assert.strictEqual(unlocked.success, true, 'Hết thời gian khoá thì PIN đúng phải đăng nhập được');
+  AdminAuth.logout();
+});
+
+runTest('Chống dò PIN: nhập sai ĐỊNH DẠNG không bị tính là dò', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  ['', '   ', 'abc', '12', '999999999999'].forEach(pin => AdminAuth.loginPin(pin));
+
+  const res = AdminAuth.loginPin('9999');
+  assert.strictEqual(res.success, true, 'Gõ nhầm/rỗng không được làm khoá tài khoản');
+  AdminAuth.logout();
+});
+
+runTest('Phiên đăng nhập hết hạn sau 12 giờ', () => {
+  mockSessionStorage.clear();
+
+  mockSessionStorage.setItem('ts_admin_session_started', String(Date.now() - 13 * 60 * 60 * 1000));
+  assert.strictEqual(AdminAuth.isSessionExpired(), true, 'Phiên 13 giờ phải coi là hết hạn');
+
+  mockSessionStorage.setItem('ts_admin_session_started', String(Date.now()));
+  assert.strictEqual(AdminAuth.isSessionExpired(), false, 'Phiên vừa tạo không được coi là hết hạn');
+
+  mockSessionStorage.clear();
+});
+
+// ============================================================================
 // TEST GROUP: LÀM SẠCH DỮ LIỆU & PHÒNG CHỐNG XSS (ESCAPEHTML SANITIZATION)
 // ============================================================================
 // Trích xuất hàm escapeHtml từ admin.js và student.js để kiểm thử bảo mật

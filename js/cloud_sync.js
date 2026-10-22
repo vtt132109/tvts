@@ -61,6 +61,19 @@
     }
   ];
 
+  // Hồ sơ cán bộ được phép đồng bộ qua Cloud. TUYỆT ĐỐI không có password/pin:
+  // database từng cho đọc công khai (xem SECURITY.md), nên chỉ trường hiển thị
+  // mới được rời khỏi máy.
+  function publicAdminProfile(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role
+    };
+  }
+
   // Khởi tạo Device ID duy nhất cho mỗi máy/tab
   function getOrCreateDeviceId() {
     let devId = '';
@@ -205,7 +218,12 @@
       : undefined;
 
     const payload = {
-      adminUsers: localAdmins,
+      // Chỉ đẩy HỒ SƠ (id/username/fullName/role). Mật khẩu & PIN ở lại máy.
+      //
+      // Trước đây mảng adminUsers nguyên bản (kèm password + pin plaintext) được
+      // PATCH lên Firebase — nơi ai có URL cũng đọc được. Đó là lý do phát hiện
+      // CRITICAL ngày 2026-10-22: 4 tài khoản cán bộ bị lộ mật khẩu/PIN.
+      adminUsers: localAdmins.map(publicAdminProfile).filter(Boolean),
       scheduleResult: readKey(STORAGE_KEYS.SCHEDULE, null),
       twoWeekSchedule: readKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, null),
       monthSchedule: readKey(STORAGE_KEYS.MONTH_SCHEDULE, null),
@@ -280,7 +298,14 @@
     }
 
     try {
-      // 1. Đồng bộ danh sách tài khoản cán bộ & Mã PIN mới nhất
+      // 1. Đồng bộ HỒ SƠ cán bộ (chỉ fullName/role). KHÔNG ghi đè credential và
+      //    KHÔNG tạo tài khoản mới từ Cloud.
+      //
+      // Hai rủi ro bị chặn tại đây:
+      //  a) Bản ghi trên Cloud có chứa password/pin (dữ liệu cũ, hoặc do kẻ tấn
+      //     công ghi vào) thì cũng không thể thay thế credential trên máy.
+      //  b) Không tạo tài khoản mới từ Cloud — nếu không, ai ghi được node
+      //     adminUsers là cài được tài khoản admin của mình vào mọi máy.
       if (Array.isArray(payload.adminUsers) && payload.adminUsers.length > 0) {
         let currentLocal = [];
         try {
@@ -288,11 +313,27 @@
           if (raw) currentLocal = JSON.parse(raw) || [];
         } catch (e) {}
 
-        const mergedMap = new Map();
-        currentLocal.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
-        payload.adminUsers.forEach(u => u.username && mergedMap.set(u.username.toLowerCase(), u));
+        const byUsername = new Map();
+        currentLocal.forEach(u => {
+          if (u && u.username) byUsername.set(String(u.username).toLowerCase(), u);
+        });
 
-        writeKey(STORAGE_KEYS.ADMIN_USERS, Array.from(mergedMap.values()));
+        let profileChanged = false;
+        payload.adminUsers.forEach(remote => {
+          if (!remote || !remote.username) return;
+          const local = byUsername.get(String(remote.username).toLowerCase());
+          if (!local) return; // không tạo tài khoản mới từ Cloud
+          ['fullName', 'role'].forEach(field => {
+            if (remote[field] && remote[field] !== local[field]) {
+              local[field] = remote[field];
+              profileChanged = true;
+            }
+          });
+        });
+
+        if (profileChanged) {
+          writeKey(STORAGE_KEYS.ADMIN_USERS, currentLocal);
+        }
       }
 
       // 2. Đồng bộ danh sách sinh viên đăng ký

@@ -365,8 +365,14 @@
     // chỉ chạy 1 lần. Gọi ở cả hai nơi sẽ khiến mỗi nút có 2 listener:
     // 1 cú bấm -> 2 bản sao lưu, 2 confirm, 2 file tải xuống.
 
-    // Kiểm tra phiên đăng nhập quản trị trong sessionStorage
-    const isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
+    // Kiểm tra phiên đăng nhập quản trị trong sessionStorage.
+    // Phiên quá 12 giờ bị huỷ: máy dùng chung ở văn phòng không nên giữ quyền
+    // admin qua nhiều ngày chỉ vì tab chưa đóng.
+    let isAuth = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) === 'true';
+    if (isAuth && isSessionExpired()) {
+      clearAdminSession();
+      isAuth = false;
+    }
     if (isAuth) {
       state.isAuthenticated = true;
       try {
@@ -524,6 +530,102 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // CHỐNG DÒ MẬT KHẨU / PIN
+  // ---------------------------------------------------------------------------
+  // PIN chỉ 4 chữ số = 10.000 tổ hợp. Không giới hạn số lần thử thì một người
+  // đứng cạnh máy cũng dò ra trong vài phút. Sau 5 lần sai (định dạng hợp lệ)
+  // liên tiếp, khoá đăng nhập 60 giây.
+  //
+  // Chỉ đếm các lần nhập ĐÚNG ĐỊNH DẠNG: gõ rỗng / chữ cái là lỗi nhập liệu,
+  // không phải hành vi dò, nên không khoá (và cũng không làm phiền người dùng).
+  const LOGIN_GUARD = {
+    KEY: 'ts_admin_login_guard',
+    MAX_ATTEMPTS: 5,
+    LOCK_MS: 60 * 1000,
+    SESSION_MAX_MS: 12 * 60 * 60 * 1000,
+    SESSION_STARTED_KEY: 'ts_admin_session_started'
+  };
+
+  function readLoginGuard() {
+    try {
+      return JSON.parse(localStorage.getItem(LOGIN_GUARD.KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeLoginGuard(guard) {
+    try {
+      localStorage.setItem(LOGIN_GUARD.KEY, JSON.stringify(guard));
+    } catch (e) {
+      // Storage bị chặn: bỏ qua, không chặn đăng nhập của người dùng thật.
+    }
+  }
+
+  /** Số mili-giây còn bị khoá (0 = không khoá). */
+  function getLoginLockRemaining() {
+    const guard = readLoginGuard();
+    const until = Number(guard.lockedUntil) || 0;
+    return until > Date.now() ? until - Date.now() : 0;
+  }
+
+  function registerLoginFailure() {
+    const guard = readLoginGuard();
+    const fails = (Number(guard.fails) || 0) + 1;
+    if (fails >= LOGIN_GUARD.MAX_ATTEMPTS) {
+      writeLoginGuard({ fails: 0, lockedUntil: Date.now() + LOGIN_GUARD.LOCK_MS });
+    } else {
+      writeLoginGuard({ fails });
+    }
+  }
+
+  function resetLoginFailures() {
+    writeLoginGuard({ fails: 0 });
+  }
+
+  /** Phiên đăng nhập đã quá hạn chưa (mặc định 12 giờ). */
+  function isSessionExpired() {
+    try {
+      const started = Number(sessionStorage.getItem(LOGIN_GUARD.SESSION_STARTED_KEY)) || 0;
+      // Phiên tạo trước khi có tính năng này (không có mốc) -> không ép đăng xuất.
+      if (!started) return false;
+      return Date.now() - started > LOGIN_GUARD.SESSION_MAX_MS;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Xoá sạch dấu vết phiên đăng nhập (token, hồ sơ, mốc thời gian). */
+  function clearAdminSession() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+      sessionStorage.removeItem(LOGIN_GUARD.SESSION_STARTED_KEY);
+    } catch (e) {
+      // Storage bị chặn: không có gì để xoá.
+    }
+  }
+
+  /** true nếu đã bị khoá; đồng thời hiển thị thông báo chờ. */
+  function rejectIfLoginLocked() {    const remain = getLoginLockRemaining();
+    if (!remain) return false;
+    showAuthError(
+      `Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(remain / 1000)} giây.`
+    );
+    return true;
+  }
+
+  /** PIN hợp lệ về định dạng (4–8 chữ số) — dùng để quyết định có tính là 1 lần thử. */
+  function looksLikePin(value) {
+    return typeof value === 'string' && /^\d{4,8}$/.test(value.trim());
+  }
+
+  /** Mật khẩu hợp lệ về định dạng — không đếm lần bấm nhầm ô trống. */
+  function looksLikePassword(value) {
+    return typeof value === 'string' && value.trim().length >= 3;
+  }
+
   function bindAuthEvents() {
     // Chuyển tab Đăng nhập: Mật khẩu vs Mã PIN
     elements.tabAuthPwd?.addEventListener('click', () => {
@@ -548,6 +650,8 @@
       const username = elements.inputAuthUsername ? elements.inputAuthUsername.value.trim().toLowerCase() : '';
       const password = elements.inputAuthPassword ? elements.inputAuthPassword.value : '';
 
+      if (rejectIfLoginLocked()) return;
+
       let matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
       
       // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
@@ -564,6 +668,7 @@
       if (matched) {
         authenticateSuccess(matched);
       } else {
+        if (looksLikePassword(password)) registerLoginFailure();
         showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
       }
     });
@@ -572,6 +677,7 @@
     elements.formAuthPin?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const pin = elements.inputAuthPin ? elements.inputAuthPin.value.trim() : '';
+      if (rejectIfLoginLocked()) return;
       let matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pin);
 
       // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
@@ -588,6 +694,7 @@
       if (matched) {
         authenticateSuccess(matched);
       } else {
+        if (looksLikePin(pin)) registerLoginFailure();
         showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
       }
     });
@@ -600,8 +707,7 @@
     // Đăng xuất an toàn
     elements.btnAdminLogout?.addEventListener('click', () => {
       if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc Quản Trị?')) {
-        sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-        sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        clearAdminSession();
         state.isAuthenticated = false;
         state.currentUser = null;
         lockAdminDashboard();
@@ -612,43 +718,94 @@
     // Xuất API xác thực cho kiểm thử và tích hợp
     window.AdminAuth = {
       login: (username, password) => {
+        if (rejectIfLoginLocked()) {
+          return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
+        }
         const uStr = (username || '').trim().toLowerCase();
         const matched = state.adminUsers.find(u => u.username.toLowerCase() === uStr && u.password === password);
         if (matched) {
           authenticateSuccess(matched);
           return { success: true, user: matched };
         }
+        if (looksLikePassword(password)) registerLoginFailure();
         showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
         return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
       },
       loginPin: (pin) => {
         const pStr = (pin || '').trim();
-        const matched = state.adminUsers.find(u => u.pin && u.pin === pStr);
+        if (rejectIfLoginLocked()) {
+          return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
+        }
+        const matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pStr);
         if (matched) {
           authenticateSuccess(matched);
           return { success: true, user: matched };
         }
+        if (looksLikePin(pStr)) registerLoginFailure();
         showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
         return { success: false, message: 'Mã PIN không đúng!' };
       },
       logout: () => {
-        sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-        sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        clearAdminSession();
         state.isAuthenticated = false;
         state.currentUser = null;
         lockAdminDashboard();
       },
       isAuthenticated: () => state.isAuthenticated,
       getCurrentUser: () => state.currentUser,
-      getAdminUsers: () => [...state.adminUsers]
+      getAdminUsers: () => [...state.adminUsers],
+      // Dùng cho kiểm thử & chẩn đoán: phiên đã quá hạn 12 giờ chưa?
+      isSessionExpired: () => isSessionExpired()
     };
+  }
+
+  /**
+   * Chỉ giữ các trường KHÔNG bí mật của tài khoản cán bộ.
+   * Dùng khi serialize vào sessionStorage — mật khẩu/PIN không bao giờ được
+   * ghi ra storage mà script cùng origin (hoặc extension) đọc được.
+   */
+  function publicUserFields(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role
+    };
+  }
+
+  /**
+   * Cửa DUY NHẤT ghi phiên đăng nhập vào sessionStorage.
+   * Mọi nơi khác phải gọi hàm này — nhờ vậy không thể vô tình serialize
+   * mật khẩu/PIN của cán bộ ra storage (có test 6.13 canh).
+   */
+  function persistCurrentUser(user) {
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEYS.CURRENT_USER,
+        JSON.stringify(publicUserFields(user))
+      );
+    } catch (e) {
+      // Storage bị chặn (chế độ riêng tư) — phiên vẫn dùng được trong RAM.
+    }
   }
 
   function authenticateSuccess(user) {
     state.isAuthenticated = true;
     state.currentUser = user;
     sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'true');
-    sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    // Đăng nhập thành công -> xoá bộ đếm sai và ghi mốc bắt đầu phiên.
+    resetLoginFailures();
+    try {
+      sessionStorage.setItem(LOGIN_GUARD.SESSION_STARTED_KEY, String(Date.now()));
+    } catch (e) { /* storage bị chặn */ }
+    // KHÔNG serialize mật khẩu/PIN vào sessionStorage.
+    //
+    // sessionStorage đọc được từ bất kỳ script cùng origin nào (XSS, extension),
+    // và trên máy dùng chung nó tồn tại tới khi đóng tab. Chỉ cần id/username/
+    // fullName/role để vẽ header và phân quyền; thông tin xác thực tra lại từ
+    // state.adminUsers khi thực sự cần (đổi mật khẩu).
+    persistCurrentUser(user);
 
     hideAuthError();
     unlockAdminDashboard();
@@ -759,7 +916,19 @@
       const user = state.currentUser;
       if (!user) return;
 
-      if (currentPwd !== user.password) {
+      // state.currentUser được khôi phục từ sessionStorage nên KHÔNG còn chứa
+      // mật khẩu (xem publicUserFields). Luôn đối chiếu với bản ghi thật trong
+      // danh sách cán bộ, nếu không thì sau khi F5 form đổi mật khẩu sẽ luôn
+      // báo "mật khẩu hiện tại không đúng".
+      const liveUser = state.adminUsers.find(
+        u => (user.id && u.id === user.id) || (user.username && u.username === user.username)
+      );
+      if (!liveUser) {
+        showToast('Không tìm thấy tài khoản cán bộ tương ứng. Vui lòng đăng nhập lại!', 'error');
+        return;
+      }
+
+      if (currentPwd !== liveUser.password) {
         showToast('Mật khẩu hiện tại không đúng!', 'error');
         return;
       }
@@ -775,15 +944,15 @@
       }
 
       // Cập nhật trong danh sách cán bộ
-      const idx = state.adminUsers.findIndex(u => u.id === user.id || u.username === user.username);
+      const idx = state.adminUsers.findIndex(u => u.id === liveUser.id);
       if (idx !== -1) {
         state.adminUsers[idx].password = newPwd;
         if (newPin) state.adminUsers[idx].pin = newPin;
         saveAdminUsers();
 
-        state.currentUser.password = newPwd;
-        if (newPin) state.currentUser.pin = newPin;
-        sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(state.currentUser));
+        // Giữ state.currentUser đồng bộ nhưng KHÔNG chứa bí mật.
+        state.currentUser = publicUserFields(state.adminUsers[idx]);
+        persistCurrentUser(state.currentUser);
       }
 
       elements.formChangeCurrentPwd.reset();
@@ -817,8 +986,11 @@
         <td style="color: var(--text-muted); font-weight: 700;">${index + 1}</td>
         <td><code>${escapeHtml(user.username)}</code> ${isCurrent ? '<span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; padding:1px 5px;">Bạn</span>' : ''}</td>
         <td><strong>${escapeHtml(user.fullName)}</strong></td>
-        <td><span style="font-size: 0.78rem; color: #4338ca;">${escapeHtml(user.role)}</span></td>
-        <td><code>${escapeHtml(user.pin || '-')}</code></td>
+        <td><span style="font-size: 0.78rem; color: var(--text-muted);">${escapeHtml(user.role)}</span></td>
+        <td>
+          <code class="pin-cell" data-pin="${escapeHtml(user.pin || '')}" data-hidden="1">${user.pin ? '••••' : '—'}</code>
+          ${user.pin ? `<button type="button" class="btn-action btn-reveal-pin" data-uid="${escapeHtml(user.id)}" title="Hiện/ẩn mã PIN" aria-label="Hiện hoặc ẩn mã PIN của ${escapeHtml(user.fullName)}">👁️</button>` : ''}
+        </td>
         <td>
           ${isRoot ? '<span style="font-size:0.75rem; color:#94a3b8;">Mặc định</span>' : `
             <button type="button" class="btn-action delete btn-delete-user" data-uid="${escapeHtml(user.id)}" title="Thu hồi quyền truy cập">🗑️</button>
@@ -840,6 +1012,20 @@
           renderUserMgmtTable();
           showToast(`Đã thu hồi quyền của cán bộ ${target.fullName}!`, 'info');
         }
+      });
+    });
+
+    // Hiện/ẩn mã PIN: mặc định CHE. Bảng này hay được mở ngay tại quầy tư vấn
+    // (có sinh viên đứng trước), nên PIN không được hiện sẵn cho người lạ đọc.
+    elements.userMgmtTableBody.querySelectorAll('.btn-reveal-pin').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest ? btn.closest('tr') : null;
+        const cell = row ? row.querySelector('.pin-cell') : null;
+        if (!cell) return;
+        const isHidden = cell.getAttribute('data-hidden') === '1';
+        cell.textContent = isHidden ? (cell.getAttribute('data-pin') || '—') : '••••';
+        cell.setAttribute('data-hidden', isHidden ? '0' : '1');
+        btn.textContent = isHidden ? '🙈' : '👁️';
       });
     });
   }

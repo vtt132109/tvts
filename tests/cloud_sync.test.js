@@ -155,8 +155,8 @@ console.log('\n▶ [GROUP 2] Đóng Gói Dữ Liệu LocalStorage (buildPayload)
 
   // Giả lập nạp dữ liệu vào LocalStorage
   env.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify([
-    { id: 'usr_admin', username: 'admin', pin: '9999' },
-    { id: 'usr_new', username: 'canbo1', pin: '5555' }
+    { id: 'usr_admin', username: 'admin', pin: '9999', fullName: 'Trưởng Ban', role: 'Trưởng ban điều hành' },
+    { id: 'usr_new', username: 'canbo1', pin: '5555', fullName: 'Cán Bộ Một', role: 'Điều phối viên tuyển sinh' }
   ]));
   env.localStorage.setItem('ts_scheduler_students', JSON.stringify([
     { id: 'st_1', fullName: 'Sinh Viên A', studentId: '2102001' }
@@ -165,7 +165,13 @@ console.log('\n▶ [GROUP 2] Đóng Gói Dữ Liệu LocalStorage (buildPayload)
 
   const payload = csm.buildPayload();
   assert(Array.isArray(payload.adminUsers) && payload.adminUsers.length === 2, '2.1: Đóng gói chính xác danh sách tài khoản cán bộ');
-  assert(payload.adminUsers[1].pin === '5555', '2.2: Đóng gói đầy đủ mã PIN mới tạo của cán bộ');
+  // BẢO MẬT: payload đi lên Firebase (kênh từng cho đọc công khai) tuyệt đối
+  // không được chứa mật khẩu/PIN. Trước đây test này lại khẳng định ngược lại
+  // ("Đóng gói đầy đủ mã PIN") — tức là khóa cứng đúng lỗ hổng.
+  assert(payload.adminUsers.every(u => !('pin' in u) && !('password' in u)),
+    '2.2: Payload KHÔNG chứa pin/password (credential ở lại máy)');
+  assert(payload.adminUsers[1].username === 'canbo1' && payload.adminUsers[1].fullName !== undefined,
+    '2.2b: Vẫn giữ hồ sơ hiển thị (username/fullName/role) để đồng bộ tên cán bộ');
   assert(Array.isArray(payload.students) && payload.students.length === 1, '2.3: Đóng gói danh sách sinh viên đăng ký ca');
   assert(payload.regConfig && payload.regConfig.publishSchedule === true, '2.4: Đóng gói cấu hình đóng/mở cổng tuyển sinh');
   assert(typeof payload.updatedAt === 'number' && payload.updatedAt > 0, '2.5: Đính kèm timestamp updatedAt chính xác');
@@ -191,8 +197,11 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
 
   const incomingCloudData = {
     adminUsers: [
-      { id: 'usr_admin', username: 'admin', pin: '9999' },
-      { id: 'usr_new_pc2', username: 'canbo_pc2', pin: '7777', fullName: 'Cán Bộ Từ Máy 2' }
+      // Bản ghi trên Cloud (dữ liệu cũ hoặc do kẻ tấn công ghi) có kèm
+      // credential — applyPayload phải bỏ qua phần bí mật.
+      { id: 'usr_admin', username: 'admin', pin: '1234', password: 'hacked', fullName: 'Trưởng Ban Tuyển Sinh' },
+      // Tài khoản không tồn tại trên máy: KHÔNG được tạo mới từ Cloud.
+      { id: 'usr_evil', username: 'ke_gian', password: 'evil', pin: '0000', fullName: 'Kẻ Gian' }
     ],
     students: [
       { id: 'st_99', fullName: 'Trần Văn Mới', studentId: '2102099' }
@@ -201,12 +210,23 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
     regConfig: { mode: 'scheduled', publishSchedule: true }
   };
 
+  // Máy này ĐÃ có tài khoản cán bộ với credential riêng.
+  env.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify([
+    { id: 'usr_admin', username: 'admin', pin: '9999', fullName: 'Trưởng Ban (máy này)', role: 'Trưởng ban điều hành' }
+  ]));
+
   const applyRes = csm.applyPayload(incomingCloudData);
   assert(applyRes.success === true, '3.1: applyPayload trả về success: true');
 
   const storedAdmins = JSON.parse(env.localStorage.getItem('ts_scheduler_admin_users'));
-  assert(storedAdmins.length === 2, '3.2: LocalStorage được cập nhật đúng 2 tài khoản cán bộ');
-  assert(storedAdmins.find(u => u.pin === '7777') !== undefined, '3.3: Mã PIN "7777" từ Cloud được nạp chính xác vào LocalStorage');
+  assert(storedAdmins.length === 1, '3.2: Không thêm tài khoản lạ nào từ Cloud vào máy');
+  const adminAfterSync = storedAdmins.find(u => u.username === 'admin');
+  assert(adminAfterSync.pin === '9999' && !('password' in adminAfterSync),
+    '3.3: PIN/mật khẩu cục bộ KHÔNG bị Cloud ghi đè');
+  assert(adminAfterSync.fullName === 'Trưởng Ban Tuyển Sinh',
+    '3.3b: Hồ sơ (fullName) vẫn được đồng bộ từ Cloud');
+  assert(!storedAdmins.some(u => u.username === 'ke_gian'),
+    '3.3c: KHÔNG tạo tài khoản mới từ Cloud (chống cài admin lạ)');
 
   const storedStudents = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
   assert(storedStudents.length === 1 && storedStudents[0].studentId === '2102099', '3.4: Danh sách sinh viên được cập nhật đồng bộ');
@@ -288,8 +308,10 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
   assert(pullRes.success === true, '4.5: pullFromCloud gửi yêu cầu GET thành công');
   assert(lastFetchMethod === 'GET', '4.6: Phương thức HTTP nhận về là GET');
   
-  const adminsAfterPull = JSON.parse(env.localStorage.getItem('ts_scheduler_admin_users'));
-  assert(adminsAfterPull[0].pin === '1234', '4.7: LocalStorage nạp ngay mã PIN "1234" vừa kéo từ Cloud về');
+  const adminsAfterPullRaw = env.localStorage.getItem('ts_scheduler_admin_users');
+  const adminsAfterPull = adminsAfterPullRaw ? JSON.parse(adminsAfterPullRaw) : [];
+  assert(adminsAfterPull.length === 0,
+    '4.7: Cloud KHÔNG được tạo tài khoản/PIN trên máy (credential chỉ đến từ máy)');
 }
 
 // -----------------------------------------------------------------------------
@@ -317,7 +339,8 @@ console.log('\n▶ [GROUP 5] Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mo
     data: machine1.CloudSyncManager.buildPayload()
   };
 
-  assert(cloudStorageServer.data.adminUsers.some(u => u.pin === '6789'), '5.1: Máy 1 đã đóng gói và đẩy mã PIN 6789 lên Cloud');
+  assert(cloudStorageServer.data.adminUsers.every(u => !('pin' in u) && !('password' in u)),
+    '5.1: Máy 1 KHÔNG đẩy mã PIN 6789 (hay bất kỳ credential nào) lên Cloud');
 
   // Máy 2 (Hoặc Tab Ẩn Danh): Khởi tạo với LocalStorage TRẮNG TINH (mô phỏng tab ẩn danh)
   const incognitoTab = createMockEnvironment();
@@ -342,15 +365,19 @@ console.log('\n▶ [GROUP 5] Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mo
   const syncResult = await incognitoTab.CloudSyncManager.pullFromCloud();
   assert(syncResult.success === true, '5.3: Tab ẩn danh kéo dữ liệu từ Cloud thành công');
 
-  // Sau khi kéo: Kiểm tra mã PIN 6789 đã hiện diện trong tab ẩn danh
-  const incognitoAdmins = JSON.parse(incognitoTab.localStorage.getItem('ts_scheduler_admin_users'));
-  const foundPin = incognitoAdmins.find(u => u.pin === '6789');
-  assert(foundPin !== undefined && foundPin.username === 'tris_admin', '5.4: Tab ẩn danh NHẬN DIỆN THÀNH CÔNG mã PIN "6789" và tài khoản "tris_admin"!');
+  // Sau khi kéo: tab ẩn danh KHÔNG được nhận credential từ Cloud.
+  // Đây là thay đổi có chủ đích: đồng bộ PIN qua kênh công khai chính là lỗ
+  // hổng đã phát hiện. Máy mới đăng nhập bằng tài khoản mặc định rồi cấp lại
+  // quyền, hoặc dùng Firebase Auth khi được cấu hình (xem SECURITY.md).
+  const incognitoRaw = incognitoTab.localStorage.getItem('ts_scheduler_admin_users');
+  const incognitoAdmins = incognitoRaw ? JSON.parse(incognitoRaw) : [];
+  assert(incognitoAdmins.length === 0,
+    '5.4: Tab ẩn danh KHÔNG nhận tài khoản/PIN nào từ Cloud');
 
-  // Giả lập xác thực mã PIN trên tab ẩn danh
-  const inputPin = '6789';
-  const authenticatedUser = incognitoAdmins.find(u => u.pin && u.pin === inputPin);
-  assert(authenticatedUser !== undefined, '5.5: Xác thực đăng nhập mã PIN "6789" trên tab ẩn danh thành công 100%!');
+  // Giả lập thử xác thực bằng PIN "6789" trên tab ẩn danh -> phải thất bại.
+  const authenticatedUser = incognitoAdmins.find(u => u.pin && u.pin === '6789');
+  assert(authenticatedUser === undefined,
+    '5.5: KHÔNG thể đăng nhập bằng PIN của máy khác thông qua Cloud');
 }
 
 // -----------------------------------------------------------------------------
