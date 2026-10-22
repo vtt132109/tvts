@@ -132,6 +132,178 @@
       .replace(/'/g, '&#039;');
   }
 
+  /* -------------------------------------------------------------------------
+   * BĂM MẬT KHẨU / PIN (không lưu plaintext, kể cả trên Cloud)
+   * -------------------------------------------------------------------------
+   * Vì sao tự viết SHA-256 thay vì WebCrypto:
+   *  - `crypto.subtle` chỉ có trên secure context; mở thẳng file:// bằng
+   *    Chrome/Firefox vẫn phải chạy được (yêu cầu "zero configuration").
+   *  - WebCrypto là async, sẽ buộc toàn bộ luồng đăng nhập (và 18 test auth)
+   *    chuyển sang Promise — đổi rộng không cần thiết.
+   * Thuật toán đã đối chiếu với `crypto.createHash('sha256')` của Node trên
+   * 4 vector (rỗng, ASCII, câu dài, tiếng Việt có dấu).
+   * ---------------------------------------------------------------------- */
+  const CREDENTIAL_KDF_ROUNDS = 3000;
+
+  function rotr32(x, n) {
+    return (x >>> n) | (x << (32 - n));
+  }
+
+  /** SHA-256 (FIPS 180-4) -> chuỗi hex 64 ký tự. */
+  function sha256Hex(input) {
+    const K = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    const H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+
+    // UTF-8
+    const bytes = [];
+    const str = String(input);
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if (code < 0x80) {
+        bytes.push(code);
+      } else if (code < 0x800) {
+        bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+      } else {
+        bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+      }
+    }
+
+    const bitLen = bytes.length * 8;
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    bytes.push(0, 0, 0, 0,
+      (bitLen >>> 24) & 0xff, (bitLen >>> 16) & 0xff, (bitLen >>> 8) & 0xff, bitLen & 0xff);
+
+    const w = new Array(64);
+    for (let off = 0; off < bytes.length; off += 64) {
+      for (let i = 0; i < 16; i++) {
+        w[i] = ((bytes[off + i * 4] << 24) | (bytes[off + i * 4 + 1] << 16)
+          | (bytes[off + i * 4 + 2] << 8) | bytes[off + i * 4 + 3]) >>> 0;
+      }
+      for (let i = 16; i < 64; i++) {
+        const s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        const s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+
+      let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (let i = 0; i < 64; i++) {
+        const S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+        const ch = (e & f) ^ (~e & g);
+        const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+        const S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+        const maj = (a & b) ^ (a & c) ^ (b & c);
+        const t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0;
+        d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0;
+      H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0;
+      H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+    }
+    return H.map(x => ('00000000' + x.toString(16)).slice(-8)).join('');
+  }
+
+  function generateSalt() {
+    const bytes = new Uint8Array(16);
+    try {
+      const c = (typeof window !== 'undefined' && window.crypto) ? window.crypto : null;
+      if (!c || !c.getRandomValues) throw new Error('Không có crypto.getRandomValues');
+      c.getRandomValues(bytes);
+    } catch (e) {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    return Array.from(bytes).map(b => ('0' + b.toString(16)).slice(-2)).join('');
+  }
+
+  /** Băm có muối + lặp (chống rainbow table & làm chậm brute-force). */
+  function hashSecret(secret, salt) {
+    const s = String(salt);
+    let acc = sha256Hex(s + ':' + String(secret));
+    for (let i = 0; i < CREDENTIAL_KDF_ROUNDS; i++) acc = sha256Hex(acc + s);
+    return acc;
+  }
+
+  /** Gán bí mật cho tài khoản dưới dạng hash; xoá plaintext nếu có. */
+  function setUserSecret(user, field, value) {
+    if (!user) return;
+    if (value === undefined || value === null || String(value) === '') {
+      delete user[field];
+      delete user[field + 'Hash'];
+      delete user[field + 'Salt'];
+      return;
+    }
+    const salt = generateSalt();
+    user[field + 'Salt'] = salt;
+    user[field + 'Hash'] = hashSecret(value, salt);
+    delete user[field];
+  }
+
+  /** So khớp bí mật: ưu tiên hash, tương thích ngược với plaintext cũ. */
+  function verifyUserSecret(user, field, value) {
+    if (!user || value === undefined || value === null) return false;
+    const hash = user[field + 'Hash'];
+    const salt = user[field + 'Salt'];
+    if (hash && salt) return hashSecret(value, salt) === hash;
+    return user[field] !== undefined && String(user[field]) === String(value);
+  }
+
+  /** Tài khoản cũ còn plaintext -> nâng cấp thành hash ngay sau lần đăng nhập đầu. */
+  function upgradeLegacyCredentials(user) {
+    if (!user) return false;
+    let changed = false;
+    ['password', 'pin'].forEach(field => {
+      if (user[field] !== undefined && user[field] !== null && String(user[field]) !== '' && !user[field + 'Hash']) {
+        setUserSecret(user, field, user[field]);
+        changed = true;
+      }
+    });
+    if (changed) saveAdminUsers();
+    return changed;
+  }
+
+  function findUserByPassword(username, password) {
+    const target = String(username || '').trim().toLowerCase();
+    if (!target) return null;
+    const candidate = state.adminUsers.find(
+      u => u && u.username && String(u.username).toLowerCase() === target
+    );
+    return candidate && verifyUserSecret(candidate, 'password', password) ? candidate : null;
+  }
+
+  function findUserByPin(pin) {
+    const value = String(pin === null || pin === undefined ? '' : pin).trim();
+    if (!value) return null;
+    return state.adminUsers.find(u => {
+      if (!u) return false;
+      if (u.pinHash) return verifyUserSecret(u, 'pin', value);
+      return u.pin !== undefined && String(u.pin).trim() === value;
+    }) || null;
+  }
+
+  // API nội bộ phục vụ kiểm thử & chẩn đoán (không dùng cho UI).
+  if (typeof window !== 'undefined') {
+    window.AdminCredential = {
+      sha256Hex,
+      hashSecret,
+      verifyUserSecret,
+      setUserSecret,
+      generateSalt,
+      rounds: CREDENTIAL_KDF_ROUNDS
+    };
+  }
+
   let elements = {};
 
   function cacheDOMElements() {
@@ -652,7 +824,7 @@
 
       if (rejectIfLoginLocked()) return;
 
-      let matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+      let matched = findUserByPassword(username, password);
       
       // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
       if (!matched && window.CloudSyncManager && typeof window.CloudSyncManager.pullFromCloud === 'function') {
@@ -660,7 +832,7 @@
           const res = await window.CloudSyncManager.pullFromCloud();
           if (res.success) {
             loadAdminUsers();
-            matched = state.adminUsers.find(u => u.username.toLowerCase() === username && u.password === password);
+            matched = findUserByPassword(username, password);
           }
         } catch (err) {}
       }
@@ -678,7 +850,7 @@
       e.preventDefault();
       const pin = elements.inputAuthPin ? elements.inputAuthPin.value.trim() : '';
       if (rejectIfLoginLocked()) return;
-      let matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pin);
+      let matched = findUserByPin(pin);
 
       // Nếu chưa khớp trong memory local (ví dụ vừa mở tab ẩn danh và cloud pull chưa về kịp):
       if (!matched && window.CloudSyncManager && typeof window.CloudSyncManager.pullFromCloud === 'function') {
@@ -686,7 +858,7 @@
           const res = await window.CloudSyncManager.pullFromCloud();
           if (res.success) {
             loadAdminUsers();
-            matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pin);
+            matched = findUserByPin(pin);
           }
         } catch (err) {}
       }
@@ -722,7 +894,7 @@
           return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
         }
         const uStr = (username || '').trim().toLowerCase();
-        const matched = state.adminUsers.find(u => u.username.toLowerCase() === uStr && u.password === password);
+        const matched = findUserByPassword(uStr, password);
         if (matched) {
           authenticateSuccess(matched);
           return { success: true, user: matched };
@@ -736,7 +908,7 @@
         if (rejectIfLoginLocked()) {
           return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
         }
-        const matched = state.adminUsers.find(u => u.pin && String(u.pin).trim() === pStr);
+        const matched = findUserByPin(pStr);
         if (matched) {
           authenticateSuccess(matched);
           return { success: true, user: matched };
@@ -793,6 +965,8 @@
   function authenticateSuccess(user) {
     state.isAuthenticated = true;
     state.currentUser = user;
+    // Nếu tài khoản còn lưu plaintext (mặc định / dữ liệu cũ) thì băm ngay.
+    upgradeLegacyCredentials(user);
     sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'true');
     // Đăng nhập thành công -> xoá bộ đếm sai và ghi mốc bắt đầu phiên.
     resetLoginFailures();
@@ -891,12 +1065,14 @@
       const newUser = {
         id: 'usr_' + Date.now(),
         username,
-        password,
-        pin: pin || '',
         fullName,
         role: role || 'Điều phối viên tuyển sinh',
         createdAt: Date.now()
       };
+      // Chỉ lưu hash có muối — không bao giờ lưu mật khẩu/PIN đọc được,
+      // kể cả trên máy này. Nhờ vậy payload đẩy lên Cloud cũng chỉ có hash.
+      setUserSecret(newUser, 'password', password);
+      if (pin) setUserSecret(newUser, 'pin', pin);
 
       state.adminUsers.push(newUser);
       saveAdminUsers();
@@ -928,7 +1104,7 @@
         return;
       }
 
-      if (currentPwd !== liveUser.password) {
+      if (!verifyUserSecret(liveUser, 'password', currentPwd)) {
         showToast('Mật khẩu hiện tại không đúng!', 'error');
         return;
       }
@@ -946,8 +1122,8 @@
       // Cập nhật trong danh sách cán bộ
       const idx = state.adminUsers.findIndex(u => u.id === liveUser.id);
       if (idx !== -1) {
-        state.adminUsers[idx].password = newPwd;
-        if (newPin) state.adminUsers[idx].pin = newPin;
+        setUserSecret(state.adminUsers[idx], 'password', newPwd);
+        if (newPin) setUserSecret(state.adminUsers[idx], 'pin', newPin);
         saveAdminUsers();
 
         // Giữ state.currentUser đồng bộ nhưng KHÔNG chứa bí mật.

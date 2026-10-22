@@ -162,10 +162,14 @@ firebase deploy --only database --project <project-id>
 | PIN hiện nguyên văn trong bảng "Cấp Quyền & Đổi MK" | Che mặc định (`••••`), có nút 👁️ hiện/ẩn + test `6.11` |
 | Mật khẩu/PIN bị serialize vào `sessionStorage` | Chỉ lưu `id/username/fullName/role` qua một cửa duy nhất `persistCurrentUser()` + test `6.12` |
 | `bankName` + `bankAccount` của 30 CTV nằm trong JSON công khai | Đã bỏ khỏi `data/default_students.json` (không mã nào dùng); test `6.13` chặn tái diễn. **Bản đầy đủ nằm ngoài repo** |
-| Khoá `"pin"`/`"password"` bị đẩy lên Cloud | **Đã sửa:** payload chỉ còn hồ sơ (id/username/fullName/role); `applyPayload` không ghi đè credential và không tạo tài khoản từ Cloud + test `2.2`, `3.3`, `5.1` |
+| Khoá `"pin"`/`"password"` bị đẩy lên Cloud | **Đã sửa:** payload chỉ chứa **hash có muối** (`passwordHash/passwordSalt/pinHash/pinSalt`), không bao giờ có plaintext. Máy khác vẫn đăng nhập được bằng đúng mật khẩu/PIN + test `2.7-2.9`, `3.3d-3.3e`, `5.4-5.5b` |
+| Tài khoản cấp ở máy A không dùng được ở máy B | **Đã sửa:** `applyPayload` tạo tài khoản từ Cloud **chỉ khi có hash hợp lệ** (bản ghi plaintext bị bỏ) + test `3.3d` |
+| Mật khẩu/PIN lưu plaintext ngay trên máy | **Đã sửa:** băm SHA-256 + salt ngẫu nhiên + 3.000 vòng lặp; tài khoản cũ tự nâng cấp sau lần đăng nhập đầu + test vector FIPS `auth.test.js` |
 | Dò mật khẩu/PIN không giới hạn | **Đã sửa:** khoá 60 giây sau 5 lần sai đúng định dạng + test trong `auth.test.js` |
 | Phiên đăng nhập tồn tại vô hạn trong tab | **Đã sửa:** tự hết hạn sau 12 giờ + test |
 | Mật khẩu/PIN mặc định `0000/9999` trong JS được deploy | **CHƯA sửa** — cần quyết định kiến trúc ở mục 4 |
+
+> ⚠️ **Hệ quả của việc đồng bộ hash:** máy có thể **tạo tài khoản từ Cloud**, nên nếu Firebase Rules còn cho ghi công khai thì kẻ tấn công có thể chèn tài khoản của họ vào node `adminUsers`. **Bắt buộc** siết Rules (mục 2, Bước 1) trước khi dùng tính năng này trên môi trường thật.
 
 ---
 
@@ -178,6 +182,6 @@ curl.exe -s -o NUL -w "%{http_code}`n" "https://vtt123-76e07-default-rtdb.fireba
 # 2. Có file PII/tài khoản nào bị track lại không? (mong đợi rỗng)
 git ls-files | Select-String -Pattern '\.(csv|xlsx|xls)$|admin_accounts'
 
-# 3. Bộ test hồi quy (mong đợi 256/256)
+# 3. Bộ test hồi quy (mong đợi 265/265)
 node tests/run_all_tests.js
 ```

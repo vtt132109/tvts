@@ -24,7 +24,7 @@
    - PIN trong bảng "Cấp Quyền & Đổi MK" che mặc định, có nút hiện/ẩn.
    - Bỏ `password`/`pin` khỏi `sessionStorage` (một cửa duy nhất `persistCurrentUser()`).
    - Bỏ `bankName`/`bankAccount` khỏi `data/default_students.json` (không mã nào dùng).
-   - **Không còn đồng bộ mật khẩu/PIN lên Cloud:** payload chỉ còn hồ sơ (id/username/fullName/role); `applyPayload` không ghi đè credential và không tạo tài khoản từ Cloud.
+   - **Tài khoản cán bộ đồng bộ bằng hash có muối:** cấp quyền ở máy A, máy B đăng nhập được ngay bằng đúng mật khẩu/PIN. Payload Cloud chỉ chứa `passwordHash/Salt`, `pinHash/Salt` — không bao giờ có plaintext. `applyPayload` chỉ tạo tài khoản mới khi bản ghi có hash hợp lệ.
    - **Chống dò mật khẩu/PIN:** khoá 60 giây sau 5 lần sai đúng định dạng. **Phiên tự hết hạn sau 12 giờ.**
    - Dark mode: thêm token `--bg-subtle` cho `.card-header` / `.btn-chip` và bỏ nền `#ffffff` hardcode.
    - Mobile: input 16px (chặn iOS auto-zoom), touch target 44px cho nút đóng modal.

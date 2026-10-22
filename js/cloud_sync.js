@@ -61,17 +61,26 @@
     }
   ];
 
-  // Hồ sơ cán bộ được phép đồng bộ qua Cloud. TUYỆT ĐỐI không có password/pin:
-  // database từng cho đọc công khai (xem SECURITY.md), nên chỉ trường hiển thị
-  // mới được rời khỏi máy.
+  // Hồ sơ cán bộ được phép đồng bộ qua Cloud.
+  //
+  // CHỈ đẩy hash đã có muối (passwordHash/passwordSalt/pinHash/pinSalt) —
+  // KHÔNG BAO GIỜ đẩy password/pin thô. Máy khác vẫn đăng nhập được bằng đúng
+  // mật khẩu/PIN đã cấp vì nó băm lại đầu vào rồi so với hash tải về.
   function publicAdminProfile(user) {
-    if (!user || typeof user !== 'object') return null;
-    return {
+    if (!user || typeof user !== 'object' || !user.username) return null;
+    const profile = {
       id: user.id,
       username: user.username,
       fullName: user.fullName,
       role: user.role
     };
+    ['password', 'pin'].forEach(field => {
+      if (user[field + 'Hash'] && user[field + 'Salt']) {
+        profile[field + 'Hash'] = user[field + 'Hash'];
+        profile[field + 'Salt'] = user[field + 'Salt'];
+      }
+    });
+    return profile;
   }
 
   // Khởi tạo Device ID duy nhất cho mỗi máy/tab
@@ -298,14 +307,16 @@
     }
 
     try {
-      // 1. Đồng bộ HỒ SƠ cán bộ (chỉ fullName/role). KHÔNG ghi đè credential và
-      //    KHÔNG tạo tài khoản mới từ Cloud.
+      // 1. Đồng bộ danh sách cán bộ.
       //
-      // Hai rủi ro bị chặn tại đây:
-      //  a) Bản ghi trên Cloud có chứa password/pin (dữ liệu cũ, hoặc do kẻ tấn
-      //     công ghi vào) thì cũng không thể thay thế credential trên máy.
-      //  b) Không tạo tài khoản mới từ Cloud — nếu không, ai ghi được node
-      //     adminUsers là cài được tài khoản admin của mình vào mọi máy.
+      // Quy tắc bảo mật (đã có test canh):
+      //  - KHÔNG bao giờ ghi password/pin thô từ Cloud xuống máy.
+      //  - Chỉ nhận tài khoản MỚI khi bản ghi có hash + salt hợp lệ.
+      //  - Hash được đồng bộ để đổi mật khẩu/PIN ở máy này có hiệu lực ở máy kia.
+      //
+      // ⚠️ Vì có thể tạo tài khoản từ Cloud, Security Rules của Firebase PHẢI
+      // chặn ghi từ người lạ (xem SECURITY.md). Nếu database còn mở, kẻ tấn
+      // công có thể chèn tài khoản của họ vào node adminUsers.
       if (Array.isArray(payload.adminUsers) && payload.adminUsers.length > 0) {
         let currentLocal = [];
         try {
@@ -318,20 +329,53 @@
           if (u && u.username) byUsername.set(String(u.username).toLowerCase(), u);
         });
 
-        let profileChanged = false;
+        let adminsChanged = false;
+
         payload.adminUsers.forEach(remote => {
           if (!remote || !remote.username) return;
-          const local = byUsername.get(String(remote.username).toLowerCase());
-          if (!local) return; // không tạo tài khoản mới từ Cloud
+          const key = String(remote.username).toLowerCase();
+          const local = byUsername.get(key);
+
+          if (!local) {
+            if (!remote.passwordHash || !remote.passwordSalt) return;
+            const created = {
+              id: remote.id,
+              username: remote.username,
+              fullName: remote.fullName,
+              role: remote.role,
+              passwordHash: remote.passwordHash,
+              passwordSalt: remote.passwordSalt
+            };
+            if (remote.pinHash && remote.pinSalt) {
+              created.pinHash = remote.pinHash;
+              created.pinSalt = remote.pinSalt;
+            }
+            currentLocal.push(created);
+            byUsername.set(key, created);
+            adminsChanged = true;
+            return;
+          }
+
           ['fullName', 'role'].forEach(field => {
             if (remote[field] && remote[field] !== local[field]) {
               local[field] = remote[field];
-              profileChanged = true;
+              adminsChanged = true;
+            }
+          });
+
+          ['password', 'pin'].forEach(field => {
+            if (!remote[field + 'Hash'] || !remote[field + 'Salt']) return;
+            if (local[field + 'Hash'] !== remote[field + 'Hash']
+              || local[field + 'Salt'] !== remote[field + 'Salt']) {
+              local[field + 'Hash'] = remote[field + 'Hash'];
+              local[field + 'Salt'] = remote[field + 'Salt'];
+              delete local[field]; // không giữ lại bản plaintext cũ
+              adminsChanged = true;
             }
           });
         });
 
-        if (profileChanged) {
+        if (adminsChanged) {
           writeKey(STORAGE_KEYS.ADMIN_USERS, currentLocal);
         }
       }

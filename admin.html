@@ -197,7 +197,7 @@
         </form>
 
         <div style="text-align: center; margin-top: 1rem; border-top: 1px dashed var(--border-color, #e2e8f0); padding-top: 0.75rem;">
-          <button type="button" id="btn-auth-quick-cloud-pull" style="background: none; border: none; color: #0284c7; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;" onclick="window.adminTriggerAuthCloudPull && window.adminTriggerAuthCloudPull()" title="Kéo hồ sơ cán bộ (họ tên, vai trò) cùng dữ liệu mới nhất từ Đám mây. Mật khẩu/PIN KHÔNG được đồng bộ vì lý do bảo mật.">
+          <button type="button" id="btn-auth-quick-cloud-pull" style="background: none; border: none; color: #0284c7; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;" onclick="window.adminTriggerAuthCloudPull && window.adminTriggerAuthCloudPull()" title="Kéo tài khoản cán bộ (dạng hash), danh sách CTV và dữ liệu mới nhất từ Đám mây.">
             <span>☁️</span> <span>Kéo Dữ Liệu Mới Nhất Từ Cloud</span>
           </button>
           <div id="auth-cloud-sync-status" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; display: none;"></div>
@@ -1107,10 +1107,13 @@
         <!-- Tab 2: Thêm Cán Bộ Mới Được Cấp Quyền -->
         <form id="form-add-admin-user" style="display: none;">
           <div style="background: var(--warning-bg); border: 1px solid var(--warning); color: var(--text-main); border-radius: var(--radius-md); padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.5; margin-bottom: 1rem;">
-            🔐 <strong>Tài khoản chỉ có hiệu lực trên máy đang dùng.</strong>
-            Mật khẩu và PIN không được đồng bộ lên Cloud (để tránh lộ như sự cố vừa qua).
-            Muốn cán bộ đăng nhập trên máy khác, hãy tạo lại tài khoản trên máy đó, hoặc dùng
-            <code>.json</code> sao lưu để cấp lại.
+            🔐 <strong>Tài khoản dùng được trên mọi máy.</strong>
+            Mật khẩu/PIN được đồng bộ dưới dạng <strong>hash có muối</strong> — không ai đọc được,
+            kể cả khi database bị lộ. Cán bộ mở máy khác và đăng nhập bằng đúng mật khẩu/PIN vừa cấp.
+            <span style="display: block; margin-top: 0.35rem;">
+              ⚠️ Điều kiện: Firebase Rules phải chặn ghi từ người lạ (xem <code>SECURITY.md</code>),
+              nếu không kẻ xấu có thể chèn tài khoản vào dữ liệu Cloud.
+            </span>
           </div>
           <div class="form-group">
             <label class="form-label" for="add-user-fullname">Họ và Tên Cán Bộ <span class="required">*</span></label>
@@ -1799,7 +1802,7 @@
             <span>☁️</span> <span>Trung Tâm Đồng Bộ Đám Mây (Firebase Cloud Sync)</span>
           </h2>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
-            Đồng bộ danh sách CTV, lịch trực và hồ sơ cán bộ (họ tên, vai trò) giữa mọi máy tính, điện thoại. <strong>Mật khẩu và mã PIN không được đồng bộ</strong> — mỗi máy đăng nhập bằng tài khoản của máy đó.
+            Đồng bộ danh sách CTV, lịch trực và tài khoản cán bộ giữa mọi máy tính, điện thoại. Mật khẩu/PIN chỉ được đồng bộ dưới dạng <strong>hash có muối</strong> — không đọc được kể cả khi database bị lộ.
           </p>
         </div>
         <button type="button" class="modal-close" onclick="window.adminCloseCloudSyncModal && window.adminCloseCloudSyncModal()" aria-label="Đóng">&times;</button>

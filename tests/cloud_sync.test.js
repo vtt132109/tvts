@@ -176,6 +176,23 @@ console.log('\n▶ [GROUP 2] Đóng Gói Dữ Liệu LocalStorage (buildPayload)
   assert(payload.regConfig && payload.regConfig.publishSchedule === true, '2.4: Đóng gói cấu hình đóng/mở cổng tuyển sinh');
   assert(typeof payload.updatedAt === 'number' && payload.updatedAt > 0, '2.5: Đính kèm timestamp updatedAt chính xác');
   assert(typeof payload.deviceId === 'string', '2.6: Đính kèm định danh thiết bị cập nhật');
+
+  // Tài khoản ĐÃ BĂM: payload phải mang hash + salt, tuyệt đối không plaintext.
+  env.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify([
+    {
+      id: 'usr_h', username: 'hashed_admin', fullName: 'Cán Bộ B', role: 'Điều phối viên tuyển sinh',
+      passwordHash: 'a'.repeat(64), passwordSalt: 'salt-a',
+      pinHash: 'b'.repeat(64), pinSalt: 'salt-b'
+    }
+  ]));
+  const hashedPayload = csm.buildPayload();
+  const hashedRec = hashedPayload.adminUsers[0];
+  assert(hashedRec.passwordHash === 'a'.repeat(64) && hashedRec.passwordSalt === 'salt-a',
+    '2.7: Hash mật khẩu được đồng bộ để máy khác đăng nhập được');
+  assert(hashedRec.pinHash === 'b'.repeat(64) && hashedRec.pinSalt === 'salt-b',
+    '2.8: Hash PIN được đồng bộ');
+  assert(!('password' in hashedRec) && !('pin' in hashedRec),
+    '2.9: Payload chỉ có hash, không có plaintext');
 })();
 
 // -----------------------------------------------------------------------------
@@ -201,7 +218,11 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
       // credential — applyPayload phải bỏ qua phần bí mật.
       { id: 'usr_admin', username: 'admin', pin: '1234', password: 'hacked', fullName: 'Trưởng Ban Tuyển Sinh' },
       // Tài khoản không tồn tại trên máy: KHÔNG được tạo mới từ Cloud.
-      { id: 'usr_evil', username: 'ke_gian', password: 'evil', pin: '0000', fullName: 'Kẻ Gian' }
+      { id: 'usr_evil', username: 'ke_gian', password: 'evil', pin: '0000', fullName: 'Kẻ Gian' },
+      // Tài khoản admin cấp ở máy khác, đã băm: ĐƯỢC tạo (yêu cầu nghiệp vụ).
+      { id: 'usr_hash', username: 'canbo_hash', fullName: 'Cán Bộ Từ Máy Khác', role: 'Điều phối viên tuyển sinh',
+        passwordHash: 'c'.repeat(64), passwordSalt: 'salt-c',
+        pinHash: 'd'.repeat(64), pinSalt: 'salt-d' }
     ],
     students: [
       { id: 'st_99', fullName: 'Trần Văn Mới', studentId: '2102099' }
@@ -219,14 +240,19 @@ console.log('\n▶ [GROUP 3] Áp Dụng Payload Từ Cloud Vào LocalStorage (ap
   assert(applyRes.success === true, '3.1: applyPayload trả về success: true');
 
   const storedAdmins = JSON.parse(env.localStorage.getItem('ts_scheduler_admin_users'));
-  assert(storedAdmins.length === 1, '3.2: Không thêm tài khoản lạ nào từ Cloud vào máy');
+  assert(storedAdmins.length === 2, '3.2: Chỉ thêm tài khoản CÓ HASH từ Cloud, bỏ qua bản ghi plaintext');
   const adminAfterSync = storedAdmins.find(u => u.username === 'admin');
   assert(adminAfterSync.pin === '9999' && !('password' in adminAfterSync),
     '3.3: PIN/mật khẩu cục bộ KHÔNG bị Cloud ghi đè');
   assert(adminAfterSync.fullName === 'Trưởng Ban Tuyển Sinh',
     '3.3b: Hồ sơ (fullName) vẫn được đồng bộ từ Cloud');
   assert(!storedAdmins.some(u => u.username === 'ke_gian'),
-    '3.3c: KHÔNG tạo tài khoản mới từ Cloud (chống cài admin lạ)');
+    '3.3c: KHÔNG tạo tài khoản từ bản ghi chỉ có mật khẩu thô');
+  const createdFromCloud = storedAdmins.find(u => u.username === 'canbo_hash');
+  assert(createdFromCloud && createdFromCloud.passwordHash === 'c'.repeat(64),
+    '3.3d: Tài khoản admin cấp ở máy khác được tạo từ hash');
+  assert(createdFromCloud && !('password' in createdFromCloud) && !('pin' in createdFromCloud),
+    '3.3e: Tài khoản tạo từ Cloud không chứa plaintext');
 
   const storedStudents = JSON.parse(env.localStorage.getItem('ts_scheduler_students'));
   assert(storedStudents.length === 1 && storedStudents[0].studentId === '2102099', '3.4: Danh sách sinh viên được cập nhật đồng bộ');
@@ -328,10 +354,14 @@ console.log('\n▶ [GROUP 5] Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mo
     syncPath: 'admission_schedule'
   });
 
-  // Tạo tài khoản mới với PIN 6789
+  // Tạo tài khoản mới (đã băm, như admin.js làm sau khi cấp quyền)
   const currentAdmins = [
     { id: 'usr_admin', username: 'admin', pin: '9999' },
-    { id: 'usr_tris', username: 'tris_admin', pin: '6789', fullName: 'Tris Quản Trị' }
+    {
+      id: 'usr_tris', username: 'tris_admin', fullName: 'Tris Quản Trị',
+      passwordHash: 'e'.repeat(64), passwordSalt: 'salt-e',
+      pinHash: 'f'.repeat(64), pinSalt: 'salt-f'
+    }
   ];
   machine1.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify(currentAdmins));
 
@@ -365,19 +395,17 @@ console.log('\n▶ [GROUP 5] Khắc Phục Sự Cố Tab Ẩn Danh (Incognito Mo
   const syncResult = await incognitoTab.CloudSyncManager.pullFromCloud();
   assert(syncResult.success === true, '5.3: Tab ẩn danh kéo dữ liệu từ Cloud thành công');
 
-  // Sau khi kéo: tab ẩn danh KHÔNG được nhận credential từ Cloud.
-  // Đây là thay đổi có chủ đích: đồng bộ PIN qua kênh công khai chính là lỗ
-  // hổng đã phát hiện. Máy mới đăng nhập bằng tài khoản mặc định rồi cấp lại
-  // quyền, hoặc dùng Firebase Auth khi được cấu hình (xem SECURITY.md).
+  // Sau khi kéo: tab ẩn danh nhận được TÀI KHOẢN (dạng hash) — đúng yêu cầu
+  // "cấp quyền ở máy A, máy B đăng nhập được", nhưng không có bí mật đọc được.
   const incognitoRaw = incognitoTab.localStorage.getItem('ts_scheduler_admin_users');
   const incognitoAdmins = incognitoRaw ? JSON.parse(incognitoRaw) : [];
-  assert(incognitoAdmins.length === 0,
-    '5.4: Tab ẩn danh KHÔNG nhận tài khoản/PIN nào từ Cloud');
-
-  // Giả lập thử xác thực bằng PIN "6789" trên tab ẩn danh -> phải thất bại.
-  const authenticatedUser = incognitoAdmins.find(u => u.pin && u.pin === '6789');
-  assert(authenticatedUser === undefined,
-    '5.5: KHÔNG thể đăng nhập bằng PIN của máy khác thông qua Cloud');
+  const syncedAdmin = incognitoAdmins.find(u => u.username === 'tris_admin');
+  assert(syncedAdmin !== undefined,
+    '5.4: Tab ẩn danh nhận được tài khoản cán bộ do máy 1 cấp quyền');
+  assert(syncedAdmin.passwordHash === 'e'.repeat(64) && syncedAdmin.passwordSalt === 'salt-e',
+    '5.5: Credential chỉ đến dưới dạng hash có muối, không phải mật khẩu thô');
+  assert(!('pin' in syncedAdmin) && !('password' in syncedAdmin),
+    '5.5b: Không có PIN/mật khẩu đọc được trong dữ liệu tải về');
 }
 
 // -----------------------------------------------------------------------------
