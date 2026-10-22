@@ -310,6 +310,53 @@ runTest('Phiên đăng nhập hết hạn sau 12 giờ', () => {
 });
 
 // ============================================================================
+// TEST GROUP: BĂM MẬT KHẨU / PIN (KHÔNG LƯU PLAINTEXT)
+// ============================================================================
+runTest('Băm mật khẩu: SHA-256 khớp vector chuẩn FIPS 180-4', () => {
+  const C = global.window.AdminCredential;
+  assert.ok(C, 'Thiếu window.AdminCredential');
+  assert.strictEqual(C.sha256Hex(''),
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    'SHA-256 chuỗi rỗng sai');
+  assert.strictEqual(C.sha256Hex('abc'),
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    'SHA-256 "abc" sai');
+});
+
+runTest('Băm mật khẩu: có muối, không lưu plaintext, xác thực đúng/sai chuẩn', () => {
+  const C = global.window.AdminCredential;
+  const user = { username: 'kiem_thu' };
+  C.setUserSecret(user, 'password', 'MatKhauManh123');
+
+  assert.strictEqual(user.password, undefined, 'Không được lưu mật khẩu thô');
+  assert.ok(user.passwordHash && user.passwordSalt, 'Phải có hash + salt');
+  assert.strictEqual(C.verifyUserSecret(user, 'password', 'MatKhauManh123'), true, 'Mật khẩu đúng phải khớp');
+  assert.strictEqual(C.verifyUserSecret(user, 'password', 'sai_mat_khau'), false, 'Mật khẩu sai phải trượt');
+
+  // Cùng mật khẩu nhưng salt khác -> hash khác (chống rainbow table)
+  const other = { username: 'kiem_thu_2' };
+  C.setUserSecret(other, 'password', 'MatKhauManh123');
+  assert.notStrictEqual(user.passwordHash, other.passwordHash,
+    'Hai tài khoản cùng mật khẩu phải ra hash khác nhau');
+});
+
+runTest('Băm mật khẩu: tài khoản còn plaintext tự nâng cấp sau lần đăng nhập đầu', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  const res = AdminAuth.login('admin', '0000');
+  assert.strictEqual(res.success, true, 'Đăng nhập tài khoản mặc định phải thành công');
+  assert.strictEqual(res.user.password, undefined, 'Sau đăng nhập, plaintext phải bị xoá');
+  assert.ok(res.user.passwordHash && res.user.passwordSalt, 'Phải được băm có muối');
+
+  AdminAuth.logout();
+  const again = AdminAuth.login('admin', '0000');
+  assert.strictEqual(again.success, true, 'Lần sau phải đăng nhập được bằng hash');
+  AdminAuth.logout();
+});
+
+// ============================================================================
 // TEST GROUP: LÀM SẠCH DỮ LIỆU & PHÒNG CHỐNG XSS (ESCAPEHTML SANITIZATION)
 // ============================================================================
 // Trích xuất hàm escapeHtml từ admin.js và student.js để kiểm thử bảo mật

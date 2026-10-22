@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-256%2F256%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-265%2F265%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -81,7 +81,7 @@ tvts/
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 11 bộ kiểm thử tự động — 256 test cases
+├── tests/                               # 11 bộ kiểm thử tự động — 265 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -215,17 +215,17 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (256/256 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (265/265 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
 | 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
-| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 18/18 |
+| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 21/21 |
 | 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
 | 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 58/58 |
+| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 64/64 |
 | 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
@@ -257,17 +257,18 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 - **Firebase:** xem [SECURITY.md](SECURITY.md) — database từng cho đọc công khai. Dữ liệu cũ trên node `tvts_production_data/adminUsers` phải được xoá sau khi đổi mật khẩu.
 - Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).
 
-### 🔑 Chuyển tài khoản cán bộ sang máy khác
+### 🔑 Cấp quyền & dùng tài khoản trên máy khác
 
-Tài khoản cán bộ **chỉ lưu trên máy đã tạo** (mật khẩu/PIN không đồng bộ Cloud để tránh rò rỉ).
-Khi cần cấp quyền cho người dùng ở máy khác, chọn một trong hai cách:
+Cán bộ được cấp quyền ở **máy A** đăng nhập được ngay ở **máy B** — không cần thao tác thêm.
 
-| Cách | Thao tác | Phù hợp khi |
-|---|---|---|
-| **Tạo lại** | Máy mới mở `admin.html` → đăng nhập `admin` / `0000` → tab **Thêm Cán Bộ** → nhập đúng username/mật khẩu/PIN như máy cũ | Chỉ 1–2 tài khoản, làm 20 giây |
-| **File sao lưu** | Máy A: `Trung tâm sao lưu → Xuất JSON`. Máy B: `Khôi phục` file đó | Nhiều tài khoản, lập máy mới |
+- **Tạo tài khoản:** `Admin → 🔑 Cấp Quyền & Đổi MK → Thêm Cán Bộ` (Họ tên, Username, Vai trò, Mật khẩu, PIN).
+- **Máy B:** mở `admin.html`, nhập đúng username + mật khẩu (hoặc PIN) vừa cấp. Không cần tạo lại.
+- **Đổi mật khẩu/PIN** ở máy nào cũng có hiệu lực ở các máy khác sau lần đồng bộ kế tiếp.
+- **Bảo mật:** mật khẩu/PIN chỉ rời máy dưới dạng **hash có muối** (SHA-256 + salt ngẫu nhiên, 3.000 vòng lặp). Database lộ cũng không đọc được mật khẩu. Tài khoản cũ còn lưu plaintext sẽ tự được băm ngay sau lần đăng nhập đầu tiên.
 
-> ⚠️ File sao lưu JSON **có chứa mật khẩu/PIN**. Giữ trên USB hoặc Drive riêng, không để trong thư mục dự án, không gửi qua kênh công khai. `.gitignore` đã chặn `*-sao-luu-*.json` và `backup-*.json`.
+> ⚠️ **Điều kiện bắt buộc:** Firebase Rules phải **chặn ghi từ người lạ**. Vì máy có thể nhận tài khoản từ Cloud, nếu database còn mở, kẻ tấn công có thể chèn tài khoản của họ vào node `adminUsers`. Xem [SECURITY.md](SECURITY.md).
+>
+> ⚠️ File sao lưu JSON vẫn chứa mật khẩu/PIN dạng thô (dùng để khôi phục khẩn cấp). Giữ trên USB/Drive riêng, không để trong thư mục dự án. `.gitignore` đã chặn `*-sao-luu-*.json` và `backup-*.json`.
 
 ---
 
