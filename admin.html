@@ -1106,6 +1106,12 @@
 
         <!-- Tab 2: Thêm Cán Bộ Mới Được Cấp Quyền -->
         <form id="form-add-admin-user" style="display: none;">
+          <div style="background: var(--warning-bg); border: 1px solid var(--warning); color: var(--text-main); border-radius: var(--radius-md); padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.5; margin-bottom: 1rem;">
+            🔐 <strong>Tài khoản chỉ có hiệu lực trên máy đang dùng.</strong>
+            Mật khẩu và PIN không được đồng bộ lên Cloud (để tránh lộ như sự cố vừa qua).
+            Muốn cán bộ đăng nhập trên máy khác, hãy tạo lại tài khoản trên máy đó, hoặc dùng
+            <code>.json</code> sao lưu để cấp lại.
+          </div>
           <div class="form-group">
             <label class="form-label" for="add-user-fullname">Họ và Tên Cán Bộ <span class="required">*</span></label>
             <input type="text" id="add-user-fullname" class="form-input" placeholder="Ví dụ: ThS. Hoàng Văn Nam" required aria-label="Họ và Tên Cán Bộ">
