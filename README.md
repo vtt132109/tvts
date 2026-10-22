@@ -252,11 +252,22 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 > Mật khẩu và mã PIN mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
 > nội bộ của Ban Tuyển Sinh.
 
-- **Bắt buộc đổi mật khẩu & PIN** ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
-  Hệ thống tự hiển thị cảnh báo bảo mật và nhấp nháy nút đổi mật khẩu nếu chưa đổi.
+- **Bắt buộc đổi mật khẩu & PIN** của tài khoản `admin` / `diephoi` ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị (mật khẩu mặc định nằm trong mã nguồn công khai).
 - **Không commit** file CSV/XLSX chứa Họ tên, MSSV, SĐT, số tài khoản ngân hàng — đã chặn trong `.gitignore`.
-- **Database Firebase** nên thiết lập Rules chặn ghi từ người lạ và bật xác thực.
+- **Firebase:** xem [SECURITY.md](SECURITY.md) — database từng cho đọc công khai. Dữ liệu cũ trên node `tvts_production_data/adminUsers` phải được xoá sau khi đổi mật khẩu.
 - Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).
+
+### 🔑 Chuyển tài khoản cán bộ sang máy khác
+
+Tài khoản cán bộ **chỉ lưu trên máy đã tạo** (mật khẩu/PIN không đồng bộ Cloud để tránh rò rỉ).
+Khi cần cấp quyền cho người dùng ở máy khác, chọn một trong hai cách:
+
+| Cách | Thao tác | Phù hợp khi |
+|---|---|---|
+| **Tạo lại** | Máy mới mở `admin.html` → đăng nhập `admin` / `0000` → tab **Thêm Cán Bộ** → nhập đúng username/mật khẩu/PIN như máy cũ | Chỉ 1–2 tài khoản, làm 20 giây |
+| **File sao lưu** | Máy A: `Trung tâm sao lưu → Xuất JSON`. Máy B: `Khôi phục` file đó | Nhiều tài khoản, lập máy mới |
+
+> ⚠️ File sao lưu JSON **có chứa mật khẩu/PIN**. Giữ trên USB hoặc Drive riêng, không để trong thư mục dự án, không gửi qua kênh công khai. `.gitignore` đã chặn `*-sao-luu-*.json` và `backup-*.json`.
 
 ---
 
