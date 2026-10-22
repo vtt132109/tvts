@@ -7,8 +7,6 @@
     "email": "22133044@student.hcmute.edu.vn",
     "faculty": "Công nghệ thông tin",
     "major": "Kỹ thuật dữ liệu",
-    "bankName": "BIDV",
-    "bankAccount": "8860146471",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -58,8 +56,6 @@
     "email": "23119143@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Khoa Điện-Điện Tử",
-    "bankName": "Vietcombank",
-    "bankAccount": "1040490656",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -109,8 +105,6 @@
     "email": "23136025@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Kinh doanh quốc tế",
-    "bankName": "Vietcombank",
-    "bankAccount": "1039544983",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -160,8 +154,6 @@
     "email": "23146340@student.hcmute.edu.vn",
     "faculty": "Cơ khí chế tạo máy",
     "major": "CNKT Cơ điện tử",
-    "bankName": "Vietcombank",
-    "bankAccount": "1040490803",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -211,8 +203,6 @@
     "email": "nyannyanmeo@gmail.com",
     "faculty": "Xây dựng",
     "major": "Kiến trúc",
-    "bankName": "Vietcombank",
-    "bankAccount": "1018913810",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -262,8 +252,6 @@
     "email": "23161210@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Công nghệ kỹ thuật điện tử viễn thông",
-    "bankName": "Vietcombank",
-    "bankAccount": "1040683002",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -313,8 +301,6 @@
     "email": "24104049@student.hcmute.edu.vn",
     "faculty": "Cơ khí chế tạo máy",
     "major": "Kỹ thuật công nghiệp",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050241295",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -364,8 +350,6 @@
     "email": "24126277@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Thương mại điện tử",
-    "bankName": "Vietcombank",
-    "bankAccount": "1032428059",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -415,8 +399,6 @@
     "email": "24127030@student.hcmute.edu.vn",
     "faculty": "Xây dựng",
     "major": "KTXD Công trình giao thông",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050250151",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -466,8 +448,6 @@
     "email": "24147061@student.hcmute.edu.vn",
     "faculty": "Giao thông và năng lượng",
     "major": "Công nghệ kỹ thuật nhiệt",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050243609",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -517,8 +497,6 @@
     "email": "24158128@student.hcmute.edu.vn",
     "faculty": "In và truyền thông",
     "major": "Công nghệ kỹ thuật in",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050247175",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -568,8 +546,6 @@
     "email": "24161409@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Chương trình đào tạo Kỹ thuật Thiết kế vi mạch",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050243143",
     "role": "old",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -619,8 +595,6 @@
     "email": "24163025@student.hcmute.edu.vn",
     "faculty": "Chính trị - luật",
     "major": "Luật",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050241154",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -670,8 +644,6 @@
     "email": "24164016@student.hcmute.edu.vn",
     "faculty": "Viện Sư phạm kỹ thuật",
     "major": "Tâm lý học giáo dục",
-    "bankName": "Vietcombank",
-    "bankAccount": "1050248669",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -721,8 +693,6 @@
     "email": "25124095@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Quản lý công nghiệp",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060422679",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -772,8 +742,6 @@
     "email": "25125084@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Kế toán",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060422808",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -823,8 +791,6 @@
     "email": "25125099@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Kế toán",
-    "bankName": "Vietcombank",
-    "bankAccount": "1042506731",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -874,8 +840,6 @@
     "email": "25132107@student.hcmute.edu.vn",
     "faculty": "Kinh tế",
     "major": "Logistics và quản lý chuỗi cung ứng",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060423565",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -925,8 +889,6 @@
     "email": "25149043@student.hcmute.edu.vn",
     "faculty": "Xây dựng",
     "major": "Công nghệ kỹ thuật xây dựng",
-    "bankName": "BIDV",
-    "bankAccount": "8846439132",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -976,8 +938,6 @@
     "email": "25151251@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Công nghệ kỹ thuật điều khiển tự động hoá",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060421463",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1027,8 +987,6 @@
     "email": "25154006@student.hcmute.edu.vn",
     "faculty": "Giao thông và năng lượng",
     "major": "Giao thông và năng lượng",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060421498",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1078,8 +1036,6 @@
     "email": "25158109@student.hcmute.edu.vn",
     "faculty": "In và truyền thông",
     "major": "Công nghệ kỹ thuật in",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060425834",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1129,8 +1085,6 @@
     "email": "25160030@student.hcmute.edu.vn",
     "faculty": "Xây dựng",
     "major": "Quản lý và vận hành hạ tầng",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060425917",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1180,8 +1134,6 @@
     "email": "25161100@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Chương trình đào tạo Kỹ thuật Thiết kế vi mạch",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060425930",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1231,8 +1183,6 @@
     "email": "25161229@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Khoa Điện-Điện Tử",
-    "bankName": "Vietcombank",
-    "bankAccount": "1049482488",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1282,8 +1232,6 @@
     "email": "25161393@student.hcmute.edu.vn",
     "faculty": "Điện - điện tử",
     "major": "Điện tử viễn thông",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060426130",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1333,8 +1281,6 @@
     "email": "25165009@student.hcmute.edu.vn",
     "faculty": "In và truyền thông",
     "major": "Công nghệ Truyền Thông",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060421841",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1384,8 +1330,6 @@
     "email": "25165036@student.hcmute.edu.vn",
     "faculty": "In và truyền thông",
     "major": "Công nghệ Truyền Thông",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060426549",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1435,8 +1379,6 @@
     "email": "25168006@student.hcmute.edu.vn",
     "faculty": "Khoa học ứng dụng",
     "major": "Vật Lý Kỹ Thuật",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060426614",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {
@@ -1486,8 +1428,6 @@
     "email": "25168021@student.hcmute.edu.vn",
     "faculty": "Khoa học ứng dụng",
     "major": "Vật Lý Kỹ Thuật",
-    "bankName": "Vietcombank",
-    "bankAccount": "1060421882",
     "role": "new",
     "registrationMonth": "2026-10",
     "monthlyAvailableShifts": {

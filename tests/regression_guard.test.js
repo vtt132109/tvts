@@ -21,6 +21,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 // CHUẨN HOÁ line ending về \n.
@@ -234,6 +235,22 @@ runTest('2.3: Không còn escapeHtml kép trong call site showToast', () => {
   });
   assert.strictEqual(bad.length, 0,
     `showToast đã escape bên trong, không cần escapeHtml ở call site:\n${bad.join('\n')}`);
+});
+
+runTest('2.4: closedNotice từ Cloud/Admin phải escape trước khi gán innerHTML', () => {
+  // #student-reg-status-desc được gán bằng innerHTML = desc (cần HTML cho
+  // <strong>…</strong>), nhưng desc có thể là cfg.closedNotice — chuỗi do Admin
+  // nhập và được đồng bộ qua Cloud. Không escape => stored XSS chạy trên cổng
+  // sinh viên công khai cho mọi người truy cập.
+  assert.ok(
+    !/desc\s*=\s*cfg\.closedNotice/.test(studentJs),
+    'cfg.closedNotice đang gán thẳng vào desc rồi đổ vào innerHTML (stored XSS)'
+  );
+  const escaped = [...studentJs.matchAll(/desc\s*=\s*escapeHtml\(cfg\.closedNotice\)/g)];
+  assert.ok(escaped.length >= 2,
+    `Phải escape closedNotice ở CẢ 2 nhánh (đang đóng / hết hạn), hiện có ${escaped.length}`);
+  assert.ok(/regStatusDesc\.innerHTML\s*=\s*desc/.test(studentJs),
+    'Không tìm thấy sink regStatusDesc.innerHTML = desc để đối chiếu — cập nhật lại test');
 });
 
 // -----------------------------------------------------------------------------
@@ -607,6 +624,30 @@ runTest('5.3: Không còn định nghĩa trùng window.* (last-write-wins che l�
   });
 });
 
+runTest('5.4: Lịch trực phải có bản AGENDA cho điện thoại (không chỉ bảng 1000px)', () => {
+  // Bảng lịch 11 cột rộng tối thiểu ~1000px: trên 375px chỉ thấy 1/3 và phải
+  // vuốt ngang ~3 màn hình. Agenda theo ngày là bản đọc chính trên điện thoại.
+  assert.ok(/id="student-agenda-mobile"/.test(indexHtml),
+    'index.html thiếu khung #student-agenda-mobile');
+  assert.ok(/agendaMobile:\s*document\.getElementById\('student-agenda-mobile'\)/.test(studentJs),
+    'student.js chưa cache #student-agenda-mobile');
+  assert.ok(/function renderAgendaMobile\s*\(/.test(studentJs),
+    'student.js thiếu renderAgendaMobile()');
+
+  const agendaFn = studentJs.match(/function renderAgendaMobile\s*\([\s\S]*?\n  \}/);
+  assert.ok(agendaFn, 'Không đọc được thân hàm renderAgendaMobile');
+  assert.ok(/escapeHtml\(member\.fullName\)/.test(agendaFn[0]),
+    'Tên CTV trong agenda phải được escapeHtml (chống XSS)');
+
+  const css = readSrc('css/style.css');
+  assert.ok(/\.sv-agenda-mobile\s*\{\s*display:\s*none/.test(css),
+    'Agenda phải ẩn mặc định trên desktop');
+  assert.ok(/@media screen and \(max-width:\s*768px\)[\s\S]*?\.sv-agenda-mobile\s*\{\s*display:\s*flex/.test(css),
+    'Thiếu media query hiện agenda ở màn hình ≤768px');
+  assert.ok(/@media screen and \(max-width:\s*768px\)[\s\S]*?\.timetable-wrapper\s*\{\s*display:\s*none/.test(css),
+    'Phải ẩn bảng rộng .timetable-wrapper trên mobile');
+});
+
 // -----------------------------------------------------------------------------
 group('GROUP 6: Bảo mật — không hardcode bí mật trong mã nguồn');
 // -----------------------------------------------------------------------------
@@ -806,13 +847,22 @@ runTest('6.9: KHÔNG file JSON nào trong data/ chứa thông tin tài khoản',
 });
 
 runTest('6.10: data/admin_accounts.json phải KHÔNG còn trong git index', () => {
-  let tracked = [];
+  let tracked;
   try {
     tracked = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
       .split('\n').map(s => s.trim()).filter(Boolean);
   } catch (e) {
-    return; // không có git trong môi trường này
+    // CHỈ bỏ qua khi môi trường thật sự không có git (ENOENT).
+    //
+    // Trước đây khối này `return` cho MỌI lỗi. Kết hợp với việc file thiếu
+    // `const { execSync } = require('child_process')`, lỗi ReferenceError bị
+    // nuốt và bài test "pass" dù không hề kiểm tra gì — đúng loại test giả
+    // tạo cảm giác an toàn. Từ nay lỗi khác phải nổi lên.
+    if (e && e.code === 'ENOENT') return;
+    throw new Error(`Không chạy được "git ls-files" để kiểm chứng git index: ${e.message}`);
   }
+  assert.ok(tracked.length > 0,
+    'git ls-files trả về danh sách rỗng — không kiểm chứng được git index');
   assert.ok(!tracked.includes('data/admin_accounts.json'),
     'data/admin_accounts.json vẫn còn được git track — sẽ tiếp tục bị deploy công khai');
   assert.ok(!tracked.some(f => /\.(csv|xlsx|xls)$/i.test(f)),
@@ -833,6 +883,53 @@ runTest('6.4: File PII không còn được git track', () => {
   const pii = tracked.filter(f => /\.(csv|xlsx|xls)$/i.test(f));
   assert.strictEqual(pii.length, 0,
     `Còn file PII được track trong git: ${pii.join(', ')}`);
+});
+
+runTest('6.11: PIN trong bảng cấp quyền phải CHE sẵn, không hiện nguyên văn', () => {
+  // Bảng "Cấp Quyền & Đổi MK" hay được mở ngay tại quầy tư vấn, trước mặt
+  // sinh viên. Trước đây PIN render thẳng: <code>${escapeHtml(user.pin)}</code>.
+  assert.ok(!/<td><code>\$\{escapeHtml\(user\.pin/.test(adminJs),
+    'PIN vẫn được render nguyên văn trong bảng cấp quyền');
+  assert.ok(/class="pin-cell"/.test(adminJs) && /data-hidden="1"/.test(adminJs),
+    'Thiếu ô .pin-cell ở trạng thái che mặc định (data-hidden="1")');
+  assert.ok(/'••••'/.test(adminJs),
+    'Không thấy chuỗi che PIN — kiểm tra lại renderUserMgmtTable');
+});
+
+runTest('6.12: Mọi lần ghi phiên đăng nhập phải đi qua persistCurrentUser()', () => {
+  // sessionStorage đọc được bằng mọi script cùng origin. Nếu ai đó lỡ ghi
+  // thẳng object user (kèm password/pin) vào CURRENT_USER thì credential rò
+  // ra ngoài — đúng lỗi đã sửa. Test này chốt "một cửa duy nhất".
+  const writes = [...adminJs.matchAll(/sessionStorage\.setItem\(\s*STORAGE_KEYS\.CURRENT_USER/g)];
+  assert.strictEqual(writes.length, 1,
+    `Chỉ được có ĐÚNG 1 chỗ ghi CURRENT_USER (trong persistCurrentUser), đang có ${writes.length}`);
+  assert.ok(/function persistCurrentUser\s*\(user\)/.test(adminJs),
+    'Thiếu hàm persistCurrentUser(user)');
+  const body = adminJs.match(/function persistCurrentUser\s*\(user\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(body, 'Không đọc được thân hàm persistCurrentUser');
+  assert.ok(/publicUserFields\(user\)/.test(body[0]),
+    'persistCurrentUser phải lọc qua publicUserFields trước khi serialize');
+  assert.ok(!/\.password|\.pin\b/.test(body[0].replace(/\/\*[\s\S]*?\*\//g, '')),
+    'persistCurrentUser không được ghi password/pin');
+  assert.ok(/function publicUserFields\s*\(user\)/.test(adminJs),
+    'Thiếu publicUserFields(user)');
+});
+
+runTest('6.13: data/*.json không chứa số tài khoản ngân hàng', () => {
+  // data/default_students.json từng chứa bankName + bankAccount của 30 CTV và
+  // được track trong repo CÔNG KHAI. Không dòng mã nào đọc hai trường này
+  // (thanh toán vẫn làm ngoài hệ thống), nên đã bỏ khỏi dữ liệu công khai.
+  const dir = path.join(ROOT, 'data');
+  if (!fs.existsSync(dir)) return;
+  const hits = [];
+  fs.readdirSync(dir)
+    .filter(f => f.endsWith('.json'))
+    .forEach(f => {
+      const content = fs.readFileSync(path.join(dir, f), 'utf8');
+      if (/"(bankAccount|bankName|soTaiKhoan|stk)"\s*:/.test(content)) hits.push(`data/${f}`);
+    });
+  assert.strictEqual(hits.length, 0,
+    `Còn thông tin tài khoản ngân hàng trong repo công khai: ${hits.join(', ')}`);
 });
 
 // -----------------------------------------------------------------------------

@@ -87,6 +87,36 @@
 
 ---
 
+### 6. "Test Luôn Pass" — Bài Học Về Test Nuốt Lỗi (Vacuous Test)
+- **Ngày phát hiện:** 2026-10-22
+- **Hiện tượng:** `tests/regression_guard.test.js` báo `6.10: data/admin_accounts.json phải KHÔNG còn trong git index` là **PASS**, trong khi `git ls-files` thực tế vẫn track đúng file đó.
+- **Nguyên nhân gốc rễ (Root Cause):**
+  1. File chỉ import `assert`, `fs`, `path` nhưng dòng kiểm thử gọi `execSync(...)` → `ReferenceError: execSync is not defined`.
+  2. `catch (e) { return; }` bắt **mọi** lỗi rồi `return` — kể cả lỗi lập trình.
+  3. `runTest()` coi "không throw" là pass, nên bài test không kiểm tra gì vẫn xanh.
+  Đây là dạng nguy hiểm nhất của test: tạo cảm giác an toàn giả.
+- **Cách phòng tránh & Khắc phục:**
+  - Chỉ bỏ qua khi môi trường thật sự thiếu công cụ (`e.code === 'ENOENT'`); mọi lỗi khác phải `throw`.
+  - Thêm assert chứng minh dữ liệu kiểm thử có thật: `tracked.length > 0`.
+  - Luôn kiểm chứng bằng **negative test**: tạo lại file bị cấm → test phải FAIL. Nếu vẫn PASS thì test vô nghĩa.
+  - Bổ sung test hồi quy `6.11`–`6.13` khóa các lỗi bảo mật: PIN hiện nguyên văn, credential vào sessionStorage, số tài khoản ngân hàng trong JSON công khai.
+
+---
+
+### 7. Dữ Liệu Nhạy Cảm Bị Đẩy Lên Kênh Công Khai (Firebase RTDB + Repo Public)
+- **Ngày phát hiện:** 2026-10-22
+- **Hiện tượng:** `GET .../tvts_production_data.json` trả HTTP 200 không cần đăng nhập; node `adminUsers` chứa `password`/`pin` dạng plaintext của 4 cán bộ. Repo GitHub ở chế độ public, `data/default_students.json` còn chứa cả số tài khoản ngân hàng.
+- **Nguyên nhân gốc rễ (Root Cause):**
+  - Ứng dụng tĩnh dùng localStorage làm "nguồn sự thật" rồi `PATCH` nguyên payload (kể cả `adminUsers`) lên RTDB không auth.
+  - Firebase Realtime Database mặc định cho phép đọc/ghi khi chưa cấu hình Rules.
+  - Nhầm tưởng "không deploy thư mục `data/`" là đủ, trong khi **repo** vẫn công khai và **lịch sử git** vẫn giữ file cũ.
+- **Cách phòng tránh & Khắc phục:**
+  - Không bao giờ đồng bộ credential qua kênh đọc được công khai; PIN/mật khẩu chỉ phục vụ hiển thị đã che.
+  - Dữ liệu không dùng trong code (ví dụ `bankAccount`) không được nằm trong repo — kiểm tra bằng test `6.13`.
+  - Kiểm tra định kỳ theo `SECURITY.md` mục 6 (probe HTTP status + `git ls-files`).
+
+---
+
 ## 📝 Mẫu Thêm Bài Học Mới (Template Khi Ghi Nhận Sự Cố)
 ```markdown
 ### <Số thứ tự>. <Tên Sự Cố Ngắn Gọn>

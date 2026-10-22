@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-195%2F195%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-256%2F256%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -59,6 +59,9 @@ tvts/
 ├── index.html                           # Cổng Sinh Viên: Đăng ký ca rảnh & tra cứu lịch trực
 ├── admin.html                           # Cổng Quản Trị: Xác thực bảo mật, xếp lịch, cấu hình cổng
 ├── README.md                            # Tài liệu kỹ thuật dự án
+├── SECURITY.md                          # Sự cố bảo mật, cách khắc phục & kiểm tra định kỳ
+├── package.json                         # npm test / npm run check (không có dependency)
+├── database.rules.json                  # Firebase Realtime Database Rules mẫu (chặn truy cập công khai)
 ├── skills-lock.json                     # Khóa định danh kỹ năng Agent
 │
 ├── css/
@@ -68,16 +71,17 @@ tvts/
 │   ├── scheduler.js                     # Thuật toán ghép cặp Bipartite Matching & luân phiên 4 tuần
 │   ├── month_calendar.js                # Tính lịch 4 tuần hành chính theo tháng/năm bất kỳ
 │   ├── cloud_sync.js                    # Đồng bộ hai chiều Firebase REST + phát hiện xung đột + quota guard
-│   ├── sample30.js                      # Dữ liệu mẫu 30 CTV (12 Cũ + 18 Mới) dùng kiểm thử
+│   ├── roster.js                        # Nạp danh sách CTV từ CSV (thay cho sample30.js đã xoá)
+│   ├── a11y_modal.js                    # Focus trap, phục hồi focus, Esc đóng modal (accessibility)
 │   ├── student.js                       # Logic cổng sinh viên (MSSV-first, lưu ca, tra cứu lịch)
 │   └── admin.js                         # Logic quản trị (xác thực, xếp ca, bulk, sự kiện, xuất Excel)
 │
 ├── data/
-│   ├── admin_accounts.json              # Tài khoản quản trị mặc định (KHÔNG chứa tài khoản thật)
 │   ├── default_students.json            # Danh sách CTV mặc định
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
+│   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 11 bộ kiểm thử tự động — 195 test cases
+├── tests/                               # 11 bộ kiểm thử tự động — 256 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -157,10 +161,13 @@ npx serve .
 - **Khóa đăng ký an toàn khi cổng đóng:** Khi Ban điều phối khóa cổng hoặc hết thời hạn, form đăng ký sẽ tự động khóa và hiển thị đồng hồ đếm ngược. Sinh viên vẫn tra cứu được thông tin cá nhân và ca trực của mình.
 - **Tra cứu ca trực cá nhân:** Nhập MSSV để xem danh sách toàn bộ các ca trực trong tuần kèm tên bạn trực cùng.
 - **Đổi ca trực linh hoạt:** Chọn ca muốn nhường và ca mong muốn đổi, hệ thống lưu yêu cầu vào danh sách chờ quản trị viên phê duyệt.
+- **Lịch trực dạng agenda trên điện thoại:** Ở màn hình ≤768px, bảng lịch 11 cột được thay bằng danh sách theo ngày (mỗi ngày 2 ca Sáng/Chiều kèm tên + MSSV), đọc dọc bằng một ngón tay thay vì vuốt ngang ~3 màn hình.
 
 ### 🛡️ B. Phân Hệ Bảng Quản Trị (`admin.html`)
 - **Xác thực bảo mật 2 lớp:**
-  - Đăng nhập bằng Tài khoản/Mật khẩu hoặc **Mã PIN Nhanh** (Trưởng ban: `admin` / `123` / PIN: `9999`; Điều phối: `diephoi` / `123` / PIN: `8888`).
+  - Đăng nhập bằng Tài khoản/Mật khẩu hoặc **Mã PIN Nhanh** (Trưởng ban: `admin` / `0000` / PIN: `9999`; Điều phối: `diephoi` / `0000` / PIN: `8888`).
+  - **Chống dò mật khẩu/PIN:** sai 5 lần liên tiếp (đúng định dạng) sẽ tạm khoá 60 giây; gõ nhầm/rỗng không bị tính.
+  - **Phiên đăng nhập tự hết hạn sau 12 giờ**, phù hợp máy dùng chung ở văn phòng.
   - Phím tắt mở bí mật từ trang sinh viên: `Ctrl + Shift + A` (hoặc `Cmd + Shift + A`).
 - **Thuật toán luân phiên 4 tuần cho 30 CTV (100% Đều Có Ca):**
   - Đảm bảo mỗi ca trực luôn có đúng **2 bạn (1 Cũ + 1 Mới)**.
@@ -205,24 +212,24 @@ Dự án được điều phối và bảo trì bởi hệ sinh thái Multi-Agen
 Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc bên ngoài:
 
 ```powershell
-node tests/run_all_tests.js
+node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (195/195 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (256/256 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
 | 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
-| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 15/15 |
+| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 18/18 |
 | 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
 | 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 41/41 |
-| 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 4/4 |
+| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 58/58 |
+| 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
-| 11 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **33/33** |
+| 11 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **71/71** |
 
 **Suite 11 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
 - Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
