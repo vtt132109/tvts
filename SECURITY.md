@@ -182,6 +182,6 @@ curl.exe -s -o NUL -w "%{http_code}`n" "https://vtt123-76e07-default-rtdb.fireba
 # 2. Có file PII/tài khoản nào bị track lại không? (mong đợi rỗng)
 git ls-files | Select-String -Pattern '\.(csv|xlsx|xls)$|admin_accounts'
 
-# 3. Bộ test hồi quy (mong đợi 265/265)
+# 3. Bộ test hồi quy (mong đợi 269/269)
 node tests/run_all_tests.js
 ```

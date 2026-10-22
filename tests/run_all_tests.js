@@ -25,6 +25,7 @@ const suites = [
   { name: 'Xác Thực MSSV Nghiêm Ngặt & Bảo Toàn Danh Sách 30 CTV (Strict MSSV Validation)', script: 'student_strict_validation.test.js' },
   { name: 'Lưu Trữ Đám Mây & Chống Ghi Đè Dữ Liệu Khi Tải Lại Trang (Cloud Persistence & Anti-Overwrite)', script: 'cloud_persistence.test.js' },
   { name: 'Điều Hướng Tháng, Hiển Thị Ngày & Tự Động Sao Lưu (Admin Month Navigation & Auto-Backup)', script: 'admin_month_navigation.test.js' },
+  { name: 'Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (Credential Sync E2E)', script: 'credential_sync_e2e.test.js' },
   { name: 'Hồi Quy: Chống Tái Phát Các Bug Đã Sửa (Regression Guard)', script: 'regression_guard.test.js' }
 ];
 
