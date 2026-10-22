@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-265%2F265%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-269%2F269%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -81,7 +81,7 @@ tvts/
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 11 bộ kiểm thử tự động — 265 test cases
+├── tests/                               # 12 bộ kiểm thử tự động — 269 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -93,6 +93,7 @@ tvts/
 │   ├── student_strict_validation.test.js# Xác thực MSSV nghiêm ngặt
 │   ├── cloud_persistence.test.js        # Chống ghi đè dữ liệu khi tải lại trang
 │   ├── admin_month_navigation.test.js   # Điều hướng tháng & tự động sao lưu
+│   ├── credential_sync_e2e.test.js      # E2E: cấp quyền máy A, đăng nhập máy B (hash)
 │   └── regression_guard.test.js         # Hồi quy: khóa lại các bug đã sửa
 │
 ├── scripts/
@@ -215,7 +216,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (265/265 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (269/269 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -229,7 +230,8 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
-| 11 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **71/71** |
+| 11 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
+| 12 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **71/71** |
 
 **Suite 11 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
 - Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
