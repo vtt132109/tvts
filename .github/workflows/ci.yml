@@ -1,0 +1,43 @@
+name: CI • Test Harness
+
+# Chạy bộ kiểm thử hồi quy trên mọi push / pull request.
+#
+# Tách khỏi static.yml (deploy) để một commit hỏng test vẫn không âm thầm
+# lên production, nhưng cũng không chặn deploy nếu hạ tầng CI gặp sự cố.
+# Muốn chặn deploy thật sự: thêm `needs: test` vào job deploy trong static.yml.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Kiểm thử (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Chạy bộ kiểm thử hồi quy
+        run: node tests/run_all_tests.js
+
+      - name: Kiểm tra chất lượng mã nguồn
+        run: node scripts/clean_code.js

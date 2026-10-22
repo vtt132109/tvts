@@ -24,9 +24,10 @@ const jsFiles = [
   'js/scheduler.js',
   'js/student.js',
   'js/admin.js',
-  'js/sample30.js',
   'js/cloud_sync.js',
   'js/month_calendar.js',
+  'js/roster.js',
+  'js/a11y_modal.js',
   'scripts/seed_mock_data.js'
 ];
 

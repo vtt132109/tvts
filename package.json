@@ -1,0 +1,15 @@
+{
+  "name": "tvts-hcmute",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Hệ thống quản lý & xếp lịch trực Ban Tư Vấn Tuyển Sinh HCM-UTE (web tĩnh, không phụ thuộc thư viện ngoài)",
+  "scripts": {
+    "test": "node tests/run_all_tests.js",
+    "check": "node scripts/clean_code.js",
+    "verify": "node scripts/clean_code.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
