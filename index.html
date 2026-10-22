@@ -203,7 +203,7 @@
                 <input type="text" id="input-studentid" class="form-input sv-mssv-input" 
                        inputmode="numeric" pattern="[0-9]*" maxlength="12" enterkeyhint="done"
                        autocapitalize="off" autocorrect="off" spellcheck="false"
-                       placeholder="VD: 22133044 — 8 chữ số trong tên miếng sinh viên" 
+                       placeholder="VD: 22133044 — 8 chữ số trên thẻ sinh viên" 
                        autocomplete="off" required aria-label="Mã Số Sinh Viên (MSSV), gồm 8 chữ số"
                        aria-describedby="mssv-input-hint"
                        style="font-size: 1.15rem; padding: 0.9rem 1.25rem; text-align: center; font-weight: 700; letter-spacing: 0.5px; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 48px;">
@@ -607,6 +607,12 @@
             <!-- JS sẽ nạp lịch trực vào đây -->
           </div>
         </div>
+
+        <!-- Lịch trực dạng AGENDA cho điện thoại (mỗi ngày 1 thẻ, 2 ca Sáng/Chiều).
+             Bảng 10 cột ở trên rộng tối thiểu 1000px nên trên máy 375px phải
+             vuốt ngang gần 3 màn hình mới đọc hết. Agenda chỉ hiện ở <=768px. -->
+        <div class="sv-agenda-mobile" id="student-agenda-mobile"
+             role="list" aria-label="Lịch trực dạng danh sách theo ngày"></div>
 
       </div>
     </section>

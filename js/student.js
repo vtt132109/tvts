@@ -394,6 +394,7 @@ function paintSlotAvailability() {
 
       // Timetable Display
       timetableGrid: document.getElementById('student-timetable-grid'),
+      agendaMobile: document.getElementById('student-agenda-mobile'),
       scheduleUpdateTime: document.getElementById('schedule-update-time'),
       scheduleStatusBanner: document.getElementById('schedule-status-banner'),
 
@@ -865,7 +866,7 @@ function paintSlotAvailability() {
       open = false;
       icon = '🔒';
       title = 'Cổng Đăng Ký Ca Trực Hiện Đang Đóng';
-      desc = cfg.closedNotice || 'Cổng đăng ký tạm khóa để ban điều hành chốt danh sách xếp lịch.';
+      desc = escapeHtml(cfg.closedNotice) || 'Cổng đăng ký tạm khóa để ban điều hành chốt danh sách xếp lịch.';
       bannerClass = 'closed';
     } else if (mode === 'time_window') {
       if (start && now < start) {
@@ -878,7 +879,7 @@ function paintSlotAvailability() {
         open = false;
         icon = '🔒';
         title = 'Cổng Đăng Ký Đã Hết Hạn';
-        desc = cfg.closedNotice || `Thời hạn đăng ký đã kết thúc lúc ${formatVNDateTime(cfg.endTime)}. Ban điều hành đã khóa tiếp nhận ca mới.`;
+        desc = escapeHtml(cfg.closedNotice) || `Thời hạn đăng ký đã kết thúc lúc ${formatVNDateTime(cfg.endTime)}. Ban điều hành đã khóa tiếp nhận ca mới.`;
         bannerClass = 'closed';
       } else {
         open = true;
@@ -1668,7 +1669,7 @@ function paintSlotAvailability() {
 
     if (!scheduleResult || Object.keys(schedule).length === 0) {
       elements.timetableGrid.innerHTML = `
-        <div style="grid-column: 1 / -1; background: #ffffff; padding: 3rem 1.5rem; text-align: center;">
+        <div style="grid-column: 1 / -1; background: var(--bg-card); padding: 3rem 1.5rem; text-align: center;">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⏳</div>
           <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Ban Điều Hành Đang Tổng Hợp Lịch</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
@@ -1678,6 +1679,16 @@ function paintSlotAvailability() {
       `;
       if (elements.scheduleStatusBanner) {
         elements.scheduleStatusBanner.innerHTML = `<span class="badge" style="background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a;">Đang chờ xếp lịch</span>`;
+      }
+      // Trên mobile, .timetable-wrapper bị ẩn nên thông báo rỗng phải hiện ở agenda.
+      if (elements.agendaMobile) {
+        elements.agendaMobile.innerHTML = `
+          <div class="sv-agenda-empty-state">
+            <div style="font-size: 2rem; margin-bottom: 0.4rem;">⏳</div>
+            <strong style="display:block; color: var(--text-main); margin-bottom: 0.25rem;">Ban Điều Hành Đang Tổng Hợp Lịch</strong>
+            <span>Lịch trực chính thức sẽ được công bố tại đây.</span>
+          </div>
+        `;
       }
       return;
     }
@@ -1702,6 +1713,17 @@ function paintSlotAvailability() {
     }
 
     let gridHtml = '';
+
+    // Ngày cụ thể của từng thứ (05/10, 06/10…) dùng cho agenda mobile.
+    let weekDates = {};
+    try {
+      const target = selectedMonth === 'prev' ? prevMonth : curMonth;
+      const weeksCfg = buildMonthWeeksConfig(target.month, target.year);
+      const wk = weeksCfg[Math.min(Math.max(1, viewWeek), 4) - 1];
+      if (wk && wk.days) weekDates = wk.days;
+    } catch (e) {
+      weekDates = {};
+    }
 
     gridHtml += `<div class="grid-cell grid-header"><span class="day-name">Ca / Ngày</span></div>`;
     days.forEach(day => {
@@ -1740,6 +1762,67 @@ function paintSlotAvailability() {
     });
 
     elements.timetableGrid.innerHTML = gridHtml;
+
+    if (elements.agendaMobile) {
+      elements.agendaMobile.innerHTML = renderAgendaMobile(schedule, days, weekDates);
+    }
+  }
+
+  /**
+   * Lịch trực dạng AGENDA cho điện thoại: mỗi ngày một thẻ, hai ca Sáng/Chiều.
+   *
+   * Bảng lịch chung rộng tối thiểu ~1000px (11 cột). Trên màn hình 375px người
+   * dùng phải vuốt ngang gần 3 màn hình mới đọc hết một tuần — mà đây lại là
+   * màn hình tra cứu chính. Agenda xếp dọc theo ngày để đọc bằng một ngón tay.
+   *
+   * @param {Object} schedule   scheduleTable: shiftId -> slot
+   * @param {Array}  days       [{key:'T2', name:'Thứ Hai'}, …]
+   * @param {Object} weekDates  { T2: {dateStr:'05/10'} … }
+   * @returns {string} HTML
+   */
+  function renderAgendaMobile(schedule, days, weekDates) {
+    const periods = [
+      { key: 'S', label: '☀️ Sáng', time: '07:30 - 11:30' },
+      { key: 'C', label: '🌤️ Chiều', time: '13:00 - 16:30' }
+    ];
+
+    return days.map(day => {
+      const dateInfo = weekDates[day.key] || {};
+      const dateStr = dateInfo.dateStr || '';
+
+      const shiftsHtml = periods.map(period => {
+        const slot = schedule[`${day.key}_${period.key}`];
+        const members = [];
+        if (slot) {
+          [slot.oldMember, slot.newMember].forEach(member => {
+            if (member && member.fullName) {
+              members.push(
+                `<li class="sv-agenda-member">
+                   <span class="sv-agenda-member-name">${escapeHtml(member.fullName)}</span>
+                   <span class="sv-agenda-member-mssv">${escapeHtml(member.studentId || '')}</span>
+                 </li>`
+              );
+            }
+          });
+        }
+        const body = members.length
+          ? `<ul class="sv-agenda-members">${members.join('')}</ul>`
+          : '<div class="sv-agenda-empty">Chưa phân công</div>';
+
+        return `<div class="sv-agenda-shift">
+            <div class="sv-agenda-shift-head"><span>${period.label}</span><span>${period.time}</span></div>
+            ${body}
+          </div>`;
+      }).join('');
+
+      return `<article class="sv-agenda-day" role="listitem">
+          <header class="sv-agenda-day-head">
+            <span class="sv-agenda-day-name">${day.name}</span>
+            ${dateStr ? `<span class="sv-agenda-day-date">${escapeHtml(dateStr)}</span>` : ''}
+          </header>
+          ${shiftsHtml}
+        </article>`;
+    }).join('');
   }
 
   /**
