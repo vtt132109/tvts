@@ -37,6 +37,10 @@
   --bg-page: #f8fafc;
   --bg-card: #ffffff;
   --bg-card-hover: #f1f5f9;
+  /* Bề mặt phụ (header card, chip, dải phân cách). Bắt buộc dùng token này
+     thay vì hardcode #fafbfc/#f1f5f9: bản dark phải đổi theo, nếu không chữ
+     --text-main (#f1f5f9) nằm trên nền sáng #fafbfc chỉ còn ~1.06:1. */
+  --bg-subtle: #fafbfc;
   --bg-glass: rgba(255, 255, 255, 0.85);
   --border-color: #e2e8f0;
   --border-focus: #6366f1;
@@ -97,6 +101,7 @@
   --bg-page: #0b0f19;
   --bg-card: #131b2e;
   --bg-card-hover: #1b253d;
+  --bg-subtle: #1b253d;
   --bg-glass: rgba(19, 27, 46, 0.92);
   --border-color: #243049;
   --border-focus: #818cf8;
@@ -453,7 +458,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fafbfc;
+  background: var(--bg-subtle);
   flex-wrap: wrap;
   gap: 0.75rem;
 }
@@ -617,9 +622,9 @@ select.form-input,
 }
 
 .btn-chip {
-  background: #f1f5f9;
+  background: var(--bg-subtle);
   border: 1px solid var(--border-color);
-  color: var(--text-muted);
+  color: var(--text-main);
   font-size: 0.76rem;
   font-weight: 600;
   padding: 0.35rem 0.7rem;
@@ -6512,5 +6517,161 @@ input[type="checkbox"]:checked {
 
   .sv-matrix .slot-toggle .slot-state-text {
     font-size: 0.8125rem;  /* 13px */
+  }
+}
+
+/* =====================================================================
+ * MOBILE & TOUCH — chuẩn hoá tối thiểu (2026-10-22)
+ * =====================================================================
+ * 1) iOS Safari TỰ ĐỘNG ZOOM khi focus vào ô nhập có font-size < 16px.
+ *    Hậu quả: layout nhảy, người dùng mất ngữ cảnh, nút Gửi bị đẩy khỏi
+ *    màn hình. Chỉ 4 ô từng được ép 16px, phần còn lại là 14.72px.
+ * 2) Nút cảm ứng nhỏ hơn 44×44px (chuẩn Apple HIG / WCAG 2.5.5) gây bấm
+ *    trượt — đặc biệt nguy hiểm với nút Xoá trong bảng CTV.
+ * ===================================================================== */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 16px;
+  }
+}
+
+@media (pointer: coarse) {
+  .modal-close-btn,
+  .modal-close,
+  .btn-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Thanh công cụ rất chật trên mobile: 40px là mức thấp nhất còn dễ chạm
+     mà không làm vỡ bố cục hàng ngang. */
+  .btn-sm {
+    min-height: 40px;
+  }
+}
+
+/* =====================================================================
+ * LỊCH TRỰC DẠNG AGENDA CHO ĐIỆN THOẠI (2026-10-22)
+ * =====================================================================
+ * Bảng lịch chung có min-width ~1000px (11 cột). Trên màn hình 375px, người
+ * dùng chỉ thấy ~1/3 bảng và phải vuốt ngang gần 3 màn hình mới đọc hết tuần.
+ * Agenda xếp dọc theo ngày, mỗi ngày 2 ca — đọc được bằng một ngón tay.
+ *
+ * Dùng `screen and` để không ảnh hưởng bản in (A4 ≈ 793px CSS px).
+ * ===================================================================== */
+.sv-agenda-mobile {
+  display: none;
+}
+
+@media screen and (max-width: 768px) {
+  .timetable-wrapper {
+    display: none;
+  }
+
+  .sv-agenda-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .sv-agenda-day {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .sv-agenda-day-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .sv-agenda-day-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .sv-agenda-day-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sv-agenda-shift {
+    padding: 0.6rem 0.85rem;
+    border-top: 1px dashed var(--border-color);
+  }
+
+  .sv-agenda-shift:first-of-type {
+    border-top: none;
+  }
+
+  .sv-agenda-shift-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .sv-agenda-members {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+  }
+
+  .sv-agenda-member {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.88rem;
+    line-height: 1.35;
+  }
+
+  .sv-agenda-member-name {
+    color: var(--text-main);
+    font-weight: 600;
+    min-width: 0;
+  }
+
+  .sv-agenda-member-mssv {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    white-space: nowrap;
+  }
+
+  .sv-agenda-empty {
+    font-size: 0.82rem;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+
+  .sv-agenda-empty-state {
+    padding: 2rem 1rem;
+    text-align: center;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
   }
 }
