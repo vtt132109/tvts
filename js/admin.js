@@ -320,6 +320,8 @@
       inputAuthPin: document.getElementById('auth-input-pin'),
       authErrorBox: document.getElementById('auth-error-box'),
       authErrorMsg: document.getElementById('auth-error-msg'),
+      btnAdminGoogleLogin: document.getElementById('btn-admin-google-login'),
+      adminGoogleAuthStatus: document.getElementById('admin-google-auth-status'),
       btnAdminLogout: document.getElementById('btn-admin-logout'),
       adminUserName: document.getElementById('admin-user-name'),
       adminUserAvatar: document.getElementById('admin-user-avatar'),
@@ -342,6 +344,7 @@
       totalStudentsCount: document.getElementById('count-total-students'),
       oldStudentsCount: document.getElementById('count-old-students'),
       newStudentsCount: document.getElementById('count-new-students'),
+      availabilityShiftsCount: document.getElementById('count-availability-shifts'),
       filledShiftsCount: document.getElementById('count-filled-shifts'),
       badgeAdminStudentCount: document.getElementById('badge-admin-student-count'),
 
@@ -621,6 +624,197 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // ĐĂNG NHẬP GOOGLE + NHẬN CA RẢNH TỰ ĐỘNG
+  // ---------------------------------------------------------------------------
+  // Ca rảnh KHÔNG cần cán bộ duyệt từng yêu cầu. Sau khi cán bộ đăng nhập
+  // Google (UID nằm trong /staff), app tự kéo yêu cầu và gộp ca rảnh vào danh
+  // sách CTV. Lịch trực vẫn chỉ được xếp khi cán bộ bấm nút xếp ca.
+  let lastStudentRequestPullAt = 0;
+
+  function getCurrentGoogleStaffUser() {
+    if (!window.CloudSyncManager || typeof window.CloudSyncManager.getCurrentAuthUser !== 'function') {
+      return null;
+    }
+    try {
+      const user = window.CloudSyncManager.getCurrentAuthUser();
+      return user && !user.isAnonymous ? user : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function updateAdminGoogleStatus(message, tone) {
+    const el = elements.adminGoogleAuthStatus;
+    if (!el) return;
+    el.textContent = message || '';
+    let color = 'var(--text-muted, #64748b)';
+    if (tone === 'error') color = '#ef4444';
+    else if (tone === 'success') color = '#16a34a';
+    else if (tone === 'info') color = '#0284c7';
+    el.style.color = color;
+    // Một số chế độ dark-mode tự đặt -webkit-text-fill-color; đặt kèm để
+    // màu trạng thái (đỏ/xanh) không bị luật kế thừa của trình duyệt che mất.
+    el.style.webkitTextFillColor = color;
+  }
+
+  async function handleAdminGoogleLogin() {
+    hideAuthError();
+    if (!window.CloudSyncManager
+      || typeof window.CloudSyncManager.signInWithGoogle !== 'function'
+      || typeof window.CloudSyncManager.checkStaffAccess !== 'function') {
+      showAuthError('Cloud Sync chưa sẵn sàng để đăng nhập Google.');
+      return;
+    }
+
+    const cfg = window.CloudSyncManager.getConfig();
+    if (!cfg || !String(cfg.apiKey || '').trim()) {
+      const msg = 'Chưa cấu hình Firebase Web API Key. Hãy đăng nhập bằng tài khoản/PIN, mở ☁️ Cloud Sync, nhập Web API Key rồi thử lại.';
+      showAuthError(msg);
+      updateAdminGoogleStatus('⚠️ ' + msg, 'error');
+      return;
+    }
+
+    const btn = elements.btnAdminGoogleLogin;
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ Đang mở Google…</span>';
+    }
+    updateAdminGoogleStatus('⏳ Đang mở bảng chọn tài khoản Google…', 'info');
+
+    try {
+      const res = await window.CloudSyncManager.signInWithGoogle();
+      if (!res || !res.success) {
+        showAuthError((res && res.error) || 'Không đăng nhập được Google.');
+        updateAdminGoogleStatus('❌ ' + ((res && res.error) || 'Đăng nhập Google thất bại.'), 'error');
+        return;
+      }
+
+      const user = res.user || window.CloudSyncManager.getCurrentAuthUser();
+      if (!user || !user.uid) {
+        showAuthError('Không lấy được UID tài khoản Google.');
+        updateAdminGoogleStatus('❌ Không lấy được UID Google.', 'error');
+        return;
+      }
+
+      updateAdminGoogleStatus('⏳ Đang kiểm tra quyền cán bộ trong /staff hoặc /staff_emails…', 'info');
+      const access = await window.CloudSyncManager.checkStaffAccess(user.uid, user.email);
+      if (!access || !access.success || !access.allowed) {
+        try {
+          await window.CloudSyncManager.signOutFirebase();
+        } catch (e) {}
+        const msg = (access && access.error)
+          || `Tài khoản ${user.email || user.uid} chưa được cấp quyền cán bộ. Thêm UID ${user.uid} vào /staff hoặc email ${user.email || ''} vào /staff_emails trên Firebase.`;
+        showAuthError(msg);
+        updateAdminGoogleStatus('❌ ' + msg, 'error');
+        return;
+      }
+
+      const adminUser = {
+        id: 'google_' + user.uid,
+        username: user.email || user.uid,
+        fullName: user.displayName || user.email || 'Cán bộ Google',
+        role: 'Cán bộ (Google)',
+        authProvider: 'google',
+        googleUid: user.uid,
+        googleEmail: user.email || '',
+        staffVia: access.via || 'uid'
+      };
+      authenticateSuccess(adminUser);
+      const viaLabel = access.via === 'email' ? 'email đã cấp trước' : 'UID';
+      updateAdminGoogleStatus(
+        `✅ Đã xác thực ${user.email || user.uid} (qua ${viaLabel}). Ca rảnh sẽ được nhận tự động.`,
+        'success'
+      );
+      // Nhận ca rảnh ngay sau khi đăng nhập; không chờ cán bộ bấm duyệt.
+      await pullStudentRequests({ silent: false, reason: 'google-login' });
+    } catch (err) {
+      showAuthError('Lỗi đăng nhập Google: ' + ((err && err.message) || 'không xác định'));
+      updateAdminGoogleStatus('❌ Lỗi đăng nhập Google.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText || '<span>Đăng nhập bằng Google</span>';
+      }
+    }
+  }
+
+  /**
+   * Kéo yêu cầu từ Cloud và gộp ca rảnh NGAY (không có bước duyệt).
+   * Đề xuất đổi ca vẫn được đưa vào hàng chờ để cán bộ duyệt riêng.
+   */
+  async function pullStudentRequests(options) {
+    const opts = options || {};
+    const silent = opts.silent === true;
+    if (!window.CloudSyncManager
+      || typeof window.CloudSyncManager.pullRequests !== 'function'
+      || typeof window.CloudSyncManager.applyRequestsPayload !== 'function') {
+      if (!silent) showToast('Cloud Sync chưa sẵn sàng!', 'warning');
+      return { success: false, error: 'Cloud Sync chưa sẵn sàng.' };
+    }
+    if (!getCurrentGoogleStaffUser()) {
+      if (!silent) {
+        showToast('Cần đăng nhập Google (cán bộ) để nhận ca rảnh từ Cloud.', 'warning', 6500);
+      }
+      return { success: false, error: 'Cần đăng nhập Google (cán bộ).' };
+    }
+
+    lastStudentRequestPullAt = Date.now();
+    if (!silent) {
+      showToast('⏳ Đang tải ca rảnh & yêu cầu đổi ca từ sinh viên…', 'info', 2500);
+    }
+
+    const res = await window.CloudSyncManager.pullRequests();
+    if (!res || !res.success) {
+      if (!silent) {
+        showToast('Lỗi tải yêu cầu: ' + ((res && res.error) || 'không rõ nguyên nhân'), 'error', 7000);
+      }
+      return res || { success: false, error: 'Lỗi tải yêu cầu.' };
+    }
+
+    const applied = window.CloudSyncManager.applyRequestsPayload(res.data);
+    if (!applied || !applied.success) {
+      if (!silent) {
+        showToast('Lỗi gộp yêu cầu: ' + ((applied && applied.error) || 'không rõ nguyên nhân'), 'error', 7000);
+      }
+      return applied || { success: false, error: 'Lỗi gộp yêu cầu.' };
+    }
+
+    loadData();
+    renderAll();
+    if (typeof renderSwapRequestsTable === 'function') renderSwapRequestsTable();
+    if (typeof updateBackupStats === 'function') updateBackupStats();
+
+    const mergedRegistrations = Number(applied.mergedRegistrations) || 0;
+    const mergedSwaps = Number(applied.mergedSwaps) || 0;
+    if (mergedRegistrations > 0) {
+      showToast(
+        `✅ Đã nhận ${mergedRegistrations} đăng ký ca rảnh mới. Cán bộ xếp lịch khi sẵn sàng.`,
+        'success',
+        6500
+      );
+    } else if (!silent) {
+      showToast('ℹ️ Không có đăng ký ca rảnh mới. Danh sách ca rảnh hiện tại được giữ nguyên.', 'info', 5000);
+    }
+    if (!silent && mergedSwaps > 0) {
+      showToast(`🔄 Có ${mergedSwaps} đề xuất đổi ca trong hàng chờ duyệt.`, 'info', 5000);
+    }
+
+    return Object.assign({}, res, { applied });
+  }
+
+  /** Tự kéo ca rảnh khi mở dashboard nếu trình duyệt đã có phiên Google cán bộ. */
+  function scheduleAutoPullStudentRequests() {
+    if (!getCurrentGoogleStaffUser()) return;
+    if (Date.now() - lastStudentRequestPullAt < 15000) return;
+    setTimeout(() => {
+      if (!getCurrentGoogleStaffUser()) return;
+      if (Date.now() - lastStudentRequestPullAt < 15000) return;
+      pullStudentRequests({ silent: true, reason: 'auto' });
+    }, 900);
+  }
+
   function unlockAdminDashboard() {
     if (elements.authScreen) elements.authScreen.style.display = 'none';
     if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'block';
@@ -652,6 +846,10 @@
     renderAll();
     renderRegConfigUI();
     updateSwapCountBadges();
+
+    // Nếu đã có phiên Google cán bộ (ví dụ F5 trang), tự nhận ca rảnh mới.
+    // Không chặn thao tác: chạy nền, lỗi mạng thì bỏ qua im lặng.
+    scheduleAutoPullStudentRequests();
   }
 
   function lockAdminDashboard() {
@@ -799,6 +997,9 @@
   }
 
   function bindAuthEvents() {
+    // Đăng nhập Google: luôn mở bảng chọn tài khoản (prompt=select_account)
+    elements.btnAdminGoogleLogin?.addEventListener('click', handleAdminGoogleLogin);
+
     // Chuyển tab Đăng nhập: Mật khẩu vs Mã PIN
     elements.tabAuthPwd?.addEventListener('click', () => {
       elements.tabAuthPwd.classList.add('active');
@@ -877,12 +1078,16 @@
     elements.inputAuthPin?.addEventListener('input', hideAuthError);
 
     // Đăng xuất an toàn
-    elements.btnAdminLogout?.addEventListener('click', () => {
+    elements.btnAdminLogout?.addEventListener('click', async () => {
       if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc Quản Trị?')) {
         clearAdminSession();
         state.isAuthenticated = false;
         state.currentUser = null;
         lockAdminDashboard();
+        // Đăng xuất luôn phiên Google để máy dùng chung không giữ quyền Cloud.
+        if (window.CloudSyncManager && typeof window.CloudSyncManager.signOutFirebase === 'function') {
+          try { await window.CloudSyncManager.signOutFirebase(); } catch (e) {}
+        }
         showToast('Đã đăng xuất khỏi hệ thống an toàn!', 'info');
       }
     });
@@ -922,6 +1127,12 @@
         state.isAuthenticated = false;
         state.currentUser = null;
         lockAdminDashboard();
+        if (window.CloudSyncManager && typeof window.CloudSyncManager.signOutFirebase === 'function') {
+          try {
+            const out = window.CloudSyncManager.signOutFirebase();
+            if (out && typeof out.catch === 'function') out.catch(() => {});
+          } catch (e) {}
+        }
       },
       isAuthenticated: () => state.isAuthenticated,
       getCurrentUser: () => state.currentUser,
@@ -1289,10 +1500,30 @@
     }
   }
 
+  /**
+   * Chỉ tự động đẩy khi Cloud đang bật và có URL.
+   * Người dùng có thể tắt Cloud trong Cài đặt (enabled: false); khi đó mọi
+   * thao tác lưu cục bộ tuyệt đối không được gọi Firebase, tránh ghi nhầm
+   * vào database thật.
+   */
+  function canAutoPushToCloud() {
+    if (!window.CloudSyncManager
+      || typeof window.CloudSyncManager.getConfig !== 'function'
+      || typeof window.CloudSyncManager.pushToCloud !== 'function') {
+      return false;
+    }
+    try {
+      const cfg = window.CloudSyncManager.getConfig() || {};
+      return Boolean(cfg.enabled && cfg.databaseUrl);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function saveStudents(syncImmediate = true) {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
     if (window.CloudSyncManager) {
-      if (syncImmediate && typeof window.CloudSyncManager.pushToCloud === 'function') {
+      if (syncImmediate && canAutoPushToCloud()) {
         window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
       } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
         window.CloudSyncManager.triggerAutoPush();
@@ -1329,7 +1560,7 @@
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
     }
     if (window.CloudSyncManager) {
-      if (syncImmediate && typeof window.CloudSyncManager.pushToCloud === 'function') {
+      if (syncImmediate && canAutoPushToCloud()) {
         window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
       } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
         window.CloudSyncManager.triggerAutoPush();
@@ -1796,8 +2027,8 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     updateMonthNavigatorUI();
     renderAll();
 
-    // 5. Đồng bộ lên Firebase Cloud
-    if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+    // 5. Đồng bộ lên Firebase Cloud (chỉ khi Cloud đang bật)
+    if (canAutoPushToCloud()) {
       window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Month switch error:', err));
     }
 
@@ -2383,6 +2614,9 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
     if (elements.totalStudentsCount) elements.totalStudentsCount.textContent = total;
     if (elements.oldStudentsCount) elements.oldStudentsCount.textContent = oldStudents;
     if (elements.newStudentsCount) elements.newStudentsCount.textContent = newStudents;
+    if (elements.availabilityShiftsCount) {
+      elements.availabilityShiftsCount.textContent = countRegisteredShifts(state.students);
+    }
     if (elements.badgeAdminStudentCount) elements.badgeAdminStudentCount.textContent = total;
 
     if (elements.filledShiftsCount) {
@@ -3884,7 +4118,7 @@ window.adminDeleteStudent = async function(studentId) {
     renderAll();
     closeImportModal();
 
-    if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+    if (canAutoPushToCloud()) {
       showToast('⏳ Đang lưu dữ liệu và đồng bộ lên Firebase Đám Mây…', 'info', 2500);
       try {
         const syncRes = await window.CloudSyncManager.pushToCloud();
@@ -4150,6 +4384,23 @@ window.adminDeleteStudent = async function(studentId) {
       detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SWAP_REQUESTS, STORAGE_KEYS.SCHEDULE] }
     }));
 
+    // Cập nhật trạng thái trên nhánh yêu cầu để sinh viên thấy kết quả duyệt.
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.updateSwapRequest === 'function') {
+      window.CloudSyncManager.updateSwapRequest(req.id, {
+        status: 'approved',
+        approvedAt: req.approvedAt
+      }).then(res => {
+        if (!res || !res.success) {
+          showToast(
+            '⚠️ Đã duyệt trên máy này nhưng chưa cập nhật được trạng thái lên Cloud: '
+              + ((res && res.error) || 'không rõ nguyên nhân'),
+            'warning',
+            7000
+          );
+        }
+      }).catch(() => {});
+    }
+
     renderSwapRequestsTable();
     renderAll();
     showToast(`Đã phê duyệt đề xuất của CTV ${req.studentName}! Lịch trực đã được tự động cập nhật.`, 'success');
@@ -4223,6 +4474,23 @@ window.adminDeleteStudent = async function(studentId) {
     window.dispatchEvent(new CustomEvent('ts:data-changed', {
       detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] }
     }));
+
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.updateSwapRequest === 'function') {
+      window.CloudSyncManager.updateSwapRequest(req.id, {
+        status: 'rejected',
+        rejectedAt: req.rejectedAt
+      }).then(res => {
+        if (!res || !res.success) {
+          showToast(
+            '⚠️ Đã từ chối trên máy này nhưng chưa cập nhật được trạng thái lên Cloud: '
+              + ((res && res.error) || 'không rõ nguyên nhân'),
+            'warning',
+            7000
+          );
+        }
+      }).catch(() => {});
+    }
+
     renderSwapRequestsTable();
     showToast(`Đã từ chối đề xuất của CTV ${req.studentName}.`, 'info');
   }
@@ -5021,7 +5289,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     try {
       localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
 window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.WEB_BACKUPS] } }));
-      if (window.CloudSyncManager && typeof window.CloudSyncManager.pushToCloud === 'function') {
+      if (canAutoPushToCloud()) {
         window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] WebBackups push error:', err));
       }
     } catch (err) {
@@ -7151,7 +7419,61 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       }
     }
 
+    /** Hiển thị trạng thái đăng nhập Google của cán bộ trong modal Cloud. */
+    function updateGoogleAuthStatus() {
+      const statusEl = document.getElementById('cloud-google-auth-status');
+      const loginBtn = document.getElementById('btn-cloud-google-login');
+      const logoutBtn = document.getElementById('btn-cloud-google-logout');
+      let user = null;
+      try {
+        user = (window.CloudSyncManager
+          && typeof window.CloudSyncManager.getCurrentAuthUser === 'function')
+          ? window.CloudSyncManager.getCurrentAuthUser()
+          : null;
+      } catch (e) { user = null; }
+
+      if (statusEl) {
+        if (user) {
+          statusEl.textContent = `✅ Đã đăng nhập: ${user.email || user.uid} — UID: ${user.uid}`;
+          statusEl.style.color = '#16a34a';
+          statusEl.title = 'Thêm UID này vào node /staff trên Firebase Console để cấp quyền ghi.';
+        } else {
+          statusEl.textContent = '⛔ Chưa đăng nhập Google — chưa thể đọc/ghi dữ liệu riêng tư.';
+          statusEl.style.color = '#b45309';
+          statusEl.title = '';
+        }
+      }
+      if (loginBtn) loginBtn.style.display = user ? 'none' : '';
+      if (logoutBtn) logoutBtn.style.display = user ? '' : 'none';
+    }
+
+    /** Cảnh báo nếu dữ liệu riêng tư lên Cloud nhưng nhánh công khai bị lỗi. */
+    function notifyPublicSyncResult(res) {
+      if (res && res.publicResult && res.publicResult.success === false) {
+        showToast(
+          '⚠️ Dữ liệu riêng tư đã lên Cloud nhưng nhánh công khai lỗi: ' + res.publicResult.error,
+          'warning',
+          7000
+        );
+      }
+    }
+
     window.addEventListener('ts:cloud-status', updateCloudUIStatus);
+    window.addEventListener('ts:cloud-status', updateGoogleAuthStatus);
+    updateGoogleAuthStatus();
+
+    // Cập nhật UI khi Firebase khôi phục phiên Google sau khi tải lại trang.
+    try {
+      if (window.firebase && typeof window.firebase.auth === 'function') {
+        const firebaseAuth = window.firebase.auth();
+        if (firebaseAuth && typeof firebaseAuth.onAuthStateChanged === 'function') {
+          firebaseAuth.onAuthStateChanged(() => {
+            updateGoogleAuthStatus();
+            updateCloudUIStatus();
+          });
+        }
+      }
+    } catch (e) {}
     window.addEventListener('ts:cloud-synced', () => {
       loadAdminUsers();
       if (state.isAuthenticated) {
@@ -7182,6 +7504,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       if (autosyncInput) autosyncInput.checked = cfg.autoSync !== false;
 
       updateCloudUIStatus();
+      updateGoogleAuthStatus();
       modal.style.display = 'flex';
       modal.classList.add('active');
     };
@@ -7216,15 +7539,10 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       }
 
       if (window.CloudSyncManager) {
-        window.CloudSyncManager.saveConfig({
-          enabled,
-          databaseUrl,
-          syncPath,
-          apiKey,
-          autoSync
-        });
+        window.CloudSyncManager.saveConfig({ enabled, databaseUrl, syncPath, apiKey, autoSync });
         showToast('Đã lưu cấu hình Đồng bộ Đám mây thành công!', 'success');
         updateCloudUIStatus();
+        updateGoogleAuthStatus();
       }
     });
 
@@ -7241,13 +7559,65 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
       showToast('Đang kiểm tra kết nối tới Firebase…', 'info');
       if (window.CloudSyncManager) {
-        const res = await window.CloudSyncManager.testConnection({ databaseUrl, syncPath, apiKey });
+        const cfgNow = window.CloudSyncManager.getConfig();
+        const res = await window.CloudSyncManager.testConnection(Object.assign({}, cfgNow, {
+          databaseUrl,
+          syncPath,
+          apiKey
+        }));
         if (res.success) {
           showToast(res.message, 'success');
         } else {
           showToast(res.message, 'error');
         }
       }
+    });
+
+    // Đăng nhập Google cho cán bộ (thay tài khoản Email/Password dùng chung)
+    document.getElementById('btn-cloud-google-login')?.addEventListener('click', async () => {
+      if (!window.CloudSyncManager) return;
+      const keyInput = document.getElementById('cloud-input-key');
+      const urlInput = document.getElementById('cloud-input-url');
+      const apiKey = keyInput ? keyInput.value.trim() : '';
+      if (!apiKey) {
+        showToast('Vui lòng nhập Web API Key (Project settings → General) trước khi đăng nhập Google!', 'error', 6000);
+        if (keyInput) keyInput.focus();
+        return;
+      }
+      const cfg = window.CloudSyncManager.getConfig();
+      window.CloudSyncManager.saveConfig({
+        apiKey: apiKey,
+        databaseUrl: (urlInput && urlInput.value.trim()) || cfg.databaseUrl
+      });
+      showToast('Đang mở cửa sổ đăng nhập Google…', 'info');
+      const res = await window.CloudSyncManager.signInWithGoogle();
+      if (res && res.success) {
+        updateGoogleAuthStatus();
+        updateCloudUIStatus();
+        const user = res.user || {};
+        showToast(
+          `Đăng nhập Google thành công (${user.email || user.uid}). `
+            + `Thêm UID ${user.uid} vào node /staff trên Firebase Console để cấp quyền ghi dữ liệu.`,
+          'success',
+          9000
+        );
+      } else {
+        showToast('Lỗi đăng nhập Google: ' + ((res && res.error) || 'không xác định'), 'error', 7000);
+      }
+    });
+
+    document.getElementById('btn-cloud-google-logout')?.addEventListener('click', async () => {
+      if (window.CloudSyncManager && typeof window.CloudSyncManager.signOutFirebase === 'function') {
+        await window.CloudSyncManager.signOutFirebase();
+      }
+      updateGoogleAuthStatus();
+      showToast('Đã đăng xuất Google khỏi trình duyệt này.', 'info');
+    });
+
+    // Nhận ca rảnh & yêu cầu đổi ca do sinh viên gửi.
+    // Ca rảnh được gộp tự động, KHÔNG hỏi duyệt và KHÔNG tự xếp lịch.
+    document.getElementById('btn-cloud-pull-requests')?.addEventListener('click', async () => {
+      await pullStudentRequests({ silent: false, reason: 'manual' });
     });
 
     // Nút Đẩy dữ liệu lên Cloud
@@ -7257,6 +7627,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       const res = await window.CloudSyncManager.pushToCloud();
       if (res.success) {
         showToast('Đẩy toàn bộ dữ liệu lên Đám mây thành công!', 'success');
+        notifyPublicSyncResult(res);
         updateCloudUIStatus();
       } else {
         showToast('Lỗi đẩy dữ liệu: ' + res.error, 'error');
@@ -7334,6 +7705,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         const res = await window.CloudSyncManager.pushToCloud();
         if (res && res.success) {
           showToast('☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Dữ liệu đã an toàn trên mọi thiết bị và không bị mất khi tải lại trang.', 'success', 5000);
+          notifyPublicSyncResult(res);
           updateCloudUIStatus();
         } else {
           showToast('Lỗi đẩy dữ liệu lên Cloud: ' + (res?.error || 'Không xác định'), 'error', 4000);

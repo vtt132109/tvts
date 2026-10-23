@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-269%2F269%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-375%2F375%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -61,7 +61,7 @@ tvts/
 ├── README.md                            # Tài liệu kỹ thuật dự án
 ├── SECURITY.md                          # Sự cố bảo mật, cách khắc phục & kiểm tra định kỳ
 ├── package.json                         # npm test / npm run check (không có dependency)
-├── database.rules.json                  # Firebase Realtime Database Rules mẫu (chặn truy cập công khai)
+├── database.rules.json                  # Firebase Rules 3 nhánh dữ liệu + /staff và /staff_emails
 ├── skills-lock.json                     # Khóa định danh kỹ năng Agent
 │
 ├── css/
@@ -70,7 +70,7 @@ tvts/
 ├── js/
 │   ├── scheduler.js                     # Thuật toán ghép cặp Bipartite Matching & luân phiên 4 tuần
 │   ├── month_calendar.js                # Tính lịch 4 tuần hành chính theo tháng/năm bất kỳ
-│   ├── cloud_sync.js                    # Đồng bộ hai chiều Firebase REST + phát hiện xung đột + quota guard
+│   ├── cloud_sync.js                    # Firebase: Google/Anonymous Auth, 3 nhánh dữ liệu, yêu cầu sinh viên
 │   ├── roster.js                        # Nạp danh sách CTV từ CSV (thay cho sample30.js đã xoá)
 │   ├── a11y_modal.js                    # Focus trap, phục hồi focus, Esc đóng modal (accessibility)
 │   ├── student.js                       # Logic cổng sinh viên (MSSV-first, lưu ca, tra cứu lịch)
@@ -81,7 +81,7 @@ tvts/
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 12 bộ kiểm thử tự động — 269 test cases
+├── tests/                               # 12 bộ kiểm thử tự động — 375 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -89,7 +89,7 @@ tvts/
 │   ├── backup.test.js                   # Sao lưu web 6 tháng & auto-pruning
 │   ├── payroll_events.test.js           # Bảng chấm công tháng & quản lý sự kiện
 │   ├── monthly_registration.test.js     # Đăng ký ca rảnh trọn tháng
-│   ├── cloud_sync.test.js               # Đồng bộ đám mây đa thiết bị
+│   ├── cloud_sync.test.js               # Cloud, dữ liệu công khai, yêu cầu ẩn danh & Rules
 │   ├── student_strict_validation.test.js# Xác thực MSSV nghiêm ngặt
 │   ├── cloud_persistence.test.js        # Chống ghi đè dữ liệu khi tải lại trang
 │   ├── admin_month_navigation.test.js   # Điều hướng tháng & tự động sao lưu
@@ -216,7 +216,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (269/269 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (375/375 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -226,14 +226,23 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Đồng Bộ Đám Mây Đa Thiết Bị (Cloud Sync) | 64/64 |
+| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 170/170 |
 | 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
 | 11 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
 | 12 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **71/71** |
 
-**Suite 11 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
+**Suite 7** bổ sung 95 kiểm thử cho kiến trúc mới:
+- `directory` công khai chỉ chứa MSSV, họ tên, vai trò và ca rảnh — **không SĐT/email/ngân hàng/hash**.
+- Lịch trực & sự kiện được **quét sạch PII ở mọi cấp** trước khi lên nhánh công khai.
+- Sinh viên gửi đăng ký & đổi ca bằng **phiên ẩn danh**, không hiện giao diện đăng nhập.
+- **Ca rảnh không cần duyệt:** cán bộ đăng nhập Google là app tự kéo và gộp ngay; **đề xuất đổi ca** vẫn vào hàng chờ duyệt riêng.
+- Nút **📥 Kéo Ca Rảnh & Yêu Cầu** chỉ nhận dữ liệu, **không tự xếp lịch và không tự đẩy** lên Cloud.
+- Khi Cloud đang **tắt** (`enabled: false`), mọi thao tác lưu cục bộ (xếp ca, nhập CSV, sao lưu) **không gọi Firebase**.
+- `database.rules.json` có 3 nhánh dữ liệu + `/staff` và `/staff_emails`, chặn sửa yêu cầu của người khác; mỗi cán bộ chỉ đọc được đúng UID hoặc email của chính mình.
+
+**Suite 12 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
 - Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
 - `showToast()` **escape HTML** bắt buộc (chống XSS qua tên/MSSV người dùng nhập).
 - Cloud Sync phát `ts:data-changed` kèm danh sách key, bắt `QuotaExceededError`, phát hiện xung đột dữ liệu hai chiều.
@@ -248,15 +257,57 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 
 ---
 
-## 🔐 7. Lưu Ý Bảo Mật
+## 🔐 7. Kiến Trúc Dữ Liệu & Bảo Mật
 
-> ⚠️ **Quan trọng:** Đây là ứng dụng web tĩnh, xác thực chạy hoàn toàn phía trình duyệt.
-> Mật khẩu và mã PIN mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
+### 7.1 Ba nhánh Firebase
+
+| Nhánh | Quyền đọc | Quyền ghi | Nội dung |
+|---|---|---|---|
+| `tvts_production_data` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Danh sách đầy đủ, lịch, tài khoản (hash), sao lưu |
+| `tvts_public` | Mọi người (kể cả chưa đăng nhập) | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Bản rút gọn **không PII** + lịch công khai |
+| `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc `swaps` | Sinh viên tạo/sửa yêu cầu gắn `uid`; cán bộ nhận ca rảnh tự động, duyệt đổi ca | Đăng ký ca & đề xuất đổi ca |
+
+> `/staff` và `/staff_emails` chỉ ghi được trong Firebase Console (`.write: false`). Giá trị phải là boolean `true`.
+> Email key phải viết thường và thay **tất cả** dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`.
+> Rules chỉ chấp nhận tài khoản Google đã xác thực email (`email_verified === true`, `sign_in_provider === 'google.com'`).
+
+### 7.2 Đăng nhập
+
+- **Cán bộ:** đăng nhập **Google** ngay trên màn hình xác thực admin (nút **Đăng nhập bằng Google**, luôn mở bảng chọn tài khoản). Tài khoản phải có **UID trong `/staff`** hoặc **email trong `/staff_emails`** mới đọc/ghi được dữ liệu riêng tư. Không còn tài khoản Firebase Email/Password dùng chung trên UI.
+- **Cấp quyền trước bằng email:** thêm `staff_emails/<email đã mã hóa>: true` trong Firebase Console. Người được add chỉ cần đăng nhập Google bằng đúng email đó, **không cần lấy UID trước**. Email key viết thường, thay tất cả dấu chấm bằng `%2E` (ví dụ `ten@gmail%2Ecom`); giá trị phải là boolean `true`.
+- **Sinh viên:** **không có trang đăng nhập**. Chỉ nhập MSSV; app tự tạo phiên **Anonymous** để gửi yêu cầu. Sinh viên không cần tài khoản Google/email.
+- **Ca rảnh không chờ duyệt:** sau khi cán bộ đăng nhập Google, app tự kéo `tvts_requests/registrations` và gộp ngay vào danh sách CTV; **không tự xếp lịch**. Cán bộ xem tổng **Lượt ca rảnh đã đăng ký** trên dashboard rồi bấm xếp ca khi sẵn sàng. Đề xuất đổi ca vẫn chờ cán bộ duyệt.
+- Tài khoản nội bộ của app (username/PIN) vẫn dùng để mở bảng quản trị trên máy trực; Google là lớp kiểm soát dữ liệu Cloud.
+- **Web API Key** là mã công khai phía client. Cán bộ nhập một lần trong modal Cloud; app công bố nó trong `tvts_public/clientConfig` để máy sinh viên tạo được phiên ẩn danh.
+
+#### Quy trình ca rảnh (không chờ duyệt)
+
+1. Sinh viên nhập MSSV, chọn ca rảnh và bấm lưu. App ghi yêu cầu vào `tvts_requests/registrations/<mssv>` với `status: "registered"`.
+2. Cán bộ bấm **Đăng nhập bằng Google** ở màn hình admin. App kiểm tra UID trong `/staff/<uid>` hoặc email trong `/staff_emails/<email đã mã hóa>`, sau đó tự kéo yêu cầu.
+3. Ca rảnh được **gộp ngay** vào danh sách CTV; dashboard cập nhật thẻ **Lượt ca rảnh đã đăng ký** và cột **Rảnh N ca** của từng người.
+4. Cán bộ xem dữ liệu rồi chủ động bấm **⚡ Xếp Ca Nhanh** (hoặc nút xếp lịch tháng). App **không tự xếp lịch, không tự ghi đè** lịch đã có.
+5. Đề xuất **đổi ca** vẫn nằm trong hàng chờ để cán bộ duyệt riêng vì ảnh hưởng lịch đã công bố.
+
+---
+
+### 7.3 Cấu hình Firebase bắt buộc (một lần)
+
+1. **Authentication → Sign-in method:** bật **Google** và **Anonymous**.
+2. **Authentication → Settings → Authorized domains:** thêm tên miền GitHub Pages (ví dụ `vtt132109.github.io`).
+3. **Realtime Database → Data:** thêm `staff/<UID Google của quản trị chính>: true`. Để cấp quyền trước cho người khác, thêm `staff_emails/<email đã mã hóa>: true` (email viết thường, thay dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`). Chỉ dùng boolean `true`, không dùng chuỗi `"true"` hay object.
+4. **Realtime Database → Rules:** dán toàn bộ `database.rules.json` (3 nhánh dữ liệu + `/staff`, `/staff_emails`) rồi **Publish**. Rules cho phép mỗi tài khoản đã đăng nhập chỉ đọc đúng UID hoặc email của mình để app xác minh quyền cán bộ.
+5. **Project settings → General → Web API Key:** dán vào modal Cloud của admin → **Lưu Cấu Hình**. Sau đó có thể bấm **Đăng nhập bằng Google** ngay ở màn hình xác thực admin (hoặc trong modal Cloud).
+6. Bấm **Đẩy Lên Cloud** một lần để tạo `tvts_public` cho trang sinh viên.
+
+> ⚠️ Nếu chưa Publish rules mới, sinh viên sẽ không gửi được yêu cầu và trang sinh viên không có dữ liệu công khai.
+
+> ⚠️ **Quan trọng:** Đây là ứng dụng web tĩnh, phần mở bảng quản trị chạy phía trình duyệt.
+> Mật khẩu/PIN nội bộ mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
 > nội bộ của Ban Tuyển Sinh.
 
-- **Bắt buộc đổi mật khẩu & PIN** của tài khoản `admin` / `diephoi` ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị (mật khẩu mặc định nằm trong mã nguồn công khai).
+- **Bắt buộc đổi mật khẩu & PIN** của tài khoản `admin` / `diephoi` ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
 - **Không commit** file CSV/XLSX chứa Họ tên, MSSV, SĐT, số tài khoản ngân hàng — đã chặn trong `.gitignore`.
-- **Firebase:** xem [SECURITY.md](SECURITY.md) — database từng cho đọc công khai. Dữ liệu cũ trên node `tvts_production_data/adminUsers` phải được xoá sau khi đổi mật khẩu.
+- **Firebase:** dữ liệu công khai chỉ chứa MSSV/họ tên/vai trò/ca rảnh; SĐT, email, ngân hàng và hash mật khẩu chỉ nằm trong `tvts_production_data` (cán bộ).
 - Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).
 
 ### 🔑 Cấp quyền & dùng tài khoản trên máy khác
@@ -268,7 +319,7 @@ Cán bộ được cấp quyền ở **máy A** đăng nhập được ngay ở 
 - **Đổi mật khẩu/PIN** ở máy nào cũng có hiệu lực ở các máy khác sau lần đồng bộ kế tiếp.
 - **Bảo mật:** mật khẩu/PIN chỉ rời máy dưới dạng **hash có muối** (SHA-256 + salt ngẫu nhiên, 3.000 vòng lặp). Database lộ cũng không đọc được mật khẩu. Tài khoản cũ còn lưu plaintext sẽ tự được băm ngay sau lần đăng nhập đầu tiên.
 
-> ⚠️ **Điều kiện bắt buộc:** Firebase Rules phải **chặn ghi từ người lạ**. Vì máy có thể nhận tài khoản từ Cloud, nếu database còn mở, kẻ tấn công có thể chèn tài khoản của họ vào node `adminUsers`. Xem [SECURITY.md](SECURITY.md).
+> ⚠️ **Điều kiện bắt buộc:** Firebase Rules phải **chặn ghi từ người lạ**. Nếu database còn mở, kẻ tấn công có thể chèn tài khoản vào `tvts_production_data/adminUsers` hoặc sửa dữ liệu công khai. Luôn Publish `database.rules.json` trước khi dùng. Xem [SECURITY.md](SECURITY.md).
 >
 > ⚠️ File sao lưu JSON vẫn chứa mật khẩu/PIN dạng thô (dùng để khôi phục khẩn cấp). Giữ trên USB/Drive riêng, không để trong thư mục dự án. `.gitignore` đã chặn `*-sao-luu-*.json` và `backup-*.json`.
 

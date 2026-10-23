@@ -604,6 +604,904 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
     `7.8: Lỗi HTTP 500 vẫn phải bị bắt. Thực tế: ${pull.error}`);
 }
 
+// -----------------------------------------------------------------------------
+// GROUP 8: Đăng nhập Firebase Auth để đọc/ghi database đang khoá (auth != null)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 8] Đăng Nhập Firebase Auth (Database Khoá Quyền):');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://locked-db.firebaseio.com',
+    syncPath: 'tvts_production_data',
+    apiKey: 'AIza_test_key',
+    authEmail: 'office@tvts.local',
+    authPassword: 'matkhau-van-phong'
+  });
+
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({ idToken: 'ID_TOKEN_ABC', expiresIn: '3600' })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const push = await csm.pushToCloud();
+  assert(push.success === true, `8.1: push thành công sau khi đăng nhập. Lỗi: ${push.error}`);
+
+  const authCall = calls.find(c => c.url.includes('identitytoolkit'));
+  assert(authCall && authCall.method === 'POST', '8.2: phải gọi signInWithPassword (POST)');
+  const sentBody = JSON.parse(authCall.body);
+  assert(sentBody.email === 'office@tvts.local', '8.3: gửi đúng email đồng bộ');
+  assert(sentBody.password === 'matkhau-van-phong', '8.3b: gửi đúng mật khẩu đồng bộ');
+  assert(authCall.url.includes('key=AIza_test_key'), '8.3c: dùng đúng Web API Key');
+
+  const dbCall = calls.find(c => c.url.includes('locked-db'));
+  assert(dbCall && /[?&]auth=ID_TOKEN_ABC/.test(dbCall.url),
+    `8.4: request database phải kèm ?auth=<idToken>. Thực tế: ${dbCall && dbCall.url}`);
+
+  // Token được cache trong RAM -> lần đồng bộ sau không đăng nhập lại
+  const authCallsBefore = calls.filter(c => c.url.includes('identitytoolkit')).length;
+  await csm.pullFromCloud();
+  const authCallsAfter = calls.filter(c => c.url.includes('identitytoolkit')).length;
+  assert(authCallsAfter === authCallsBefore, '8.5: ID token phải được cache, không đăng nhập lại mỗi lần');
+}
+
+{
+  // Sai mật khẩu đồng bộ -> báo lỗi rõ ràng, KHÔNG gọi database
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://locked-db.firebaseio.com',
+    syncPath: 'tvts_production_data',
+    apiKey: 'AIza_test_key',
+    authEmail: 'office@tvts.local',
+    authPassword: 'sai-mat-khau'
+  });
+
+  env.window.fetch = async (url) => {
+    calls.push(url);
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: false, status: 400,
+        json: async () => ({ error: { message: 'INVALID_LOGIN_CREDENTIALS' } })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullFromCloud();
+  assert(res.success === false, '8.6: Sai mật khẩu đồng bộ phải thất bại');
+  assert(/Sai email hoặc mật khẩu/i.test(res.error || ''),
+    `8.7: Thông báo lỗi phải dễ hiểu. Thực tế: ${res.error}`);
+  assert(!calls.some(u => u.includes('locked-db')), '8.8: Không được gọi database khi chưa đăng nhập được');
+}
+
+{
+  // Database khoá (401) mà chưa cấu hình tài khoản đồng bộ -> báo đúng nguyên nhân
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://locked-db.firebaseio.com',
+    syncPath: 'tvts_production_data',
+    apiKey: '',
+    authEmail: '',
+    authPassword: ''
+  });
+
+  env.window.fetch = async () => ({ ok: false, status: 401, statusText: 'Unauthorized', text: async () => 'Permission denied' });
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullFromCloud();
+  assert(res.success === false && /401/.test(res.error || ''),
+    `8.9: Database khoá phải trả lỗi 401 rõ ràng. Thực tế: ${res.error}`);
+}
+
+
+// -----------------------------------------------------------------------------
+// GROUP 9: Dữ liệu công khai cho sinh viên — không PII
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 9] Dữ Liệu Công Khai Cho Sinh Viên (Không PII):');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({
+    enabled: false,
+    apiKey: 'AIza_PUBLIC_TEST',
+    databaseUrl: 'https://pub-db.firebaseio.com'
+  });
+
+  const sample = {
+    id: 'sv1',
+    studentId: 'SV001',
+    fullName: 'Nguyễn Văn A',
+    role: 'CTV',
+    phone: '0909123456',
+    email: 'a@example.com',
+    bankAccount: '123456789',
+    passwordHash: 'hash',
+    passwordSalt: 'salt',
+    pinHash: 'pinhash',
+    pinSalt: 'pinsalt',
+    monthlyAvailableShifts: { 1: ['T2-S1'], 2: [], 3: [], 4: [] },
+    availableShifts: ['T2-S1'],
+    updatedAt: 123456
+  };
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([sample]));
+  env.localStorage.setItem(K.SCHEDULE, JSON.stringify({ assignments: [] }));
+
+  const payload = csm.buildPublicPayload();
+  const rec = payload.directory && payload.directory[0];
+  assert(Array.isArray(payload.directory) && payload.directory.length === 1,
+    '9.1: buildPublicPayload phải có directory cho sinh viên');
+  assert(rec && rec.studentId === 'SV001' && rec.fullName === 'Nguyễn Văn A',
+    '9.2: Giữ MSSV & họ tên để tra cứu');
+  assert(rec && !('phone' in rec) && !('email' in rec) && !('bankAccount' in rec),
+    '9.3: Không đưa SĐT/email/số tài khoản lên nhánh công khai');
+  assert(rec && !('passwordHash' in rec) && !('pinHash' in rec)
+    && !('passwordSalt' in rec) && !('pinSalt' in rec),
+    '9.4: Không đưa hash mật khẩu/PIN lên nhánh công khai');
+  assert(rec && JSON.stringify(rec.monthlyAvailableShifts)
+    === JSON.stringify(sample.monthlyAvailableShifts),
+    '9.5: Giữ ca rảnh để sinh viên xem lại đăng ký');
+  assert(payload.clientConfig && payload.clientConfig.apiKey === 'AIza_PUBLIC_TEST',
+    '9.6: Công bố Web API Key (công khai) để máy sinh viên tạo phiên ẩn danh');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://pub-db.firebaseio.com' });
+  env.localStorage.setItem(K.ADMIN_USERS, JSON.stringify([{ username: 'admin', password: '0000' }]));
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{ studentId: 'OLD', phone: 'secret' }]));
+  env.localStorage.setItem(K.AVAILABILITY_MONTH, JSON.stringify('2026-10'));
+
+  const res = csm.applyPublicPayload({
+    directory: [{
+      studentId: 'SV002', fullName: 'Trần B', role: 'CTV',
+      phone: '0909', email: 'b@x.vn', bankAccount: '999'
+    }],
+    monthSchedule: { week1: true },
+    clientConfig: { apiKey: 'AIza_FROM_PUBLIC', authDomain: 'x.firebaseapp.com' },
+    availabilityMonth: '2026-11',
+    activeMonth: { month: 10, year: 2026 }
+  });
+
+  assert(res.success === true, '9.7: applyPublicPayload phải áp dụng được payload hợp lệ');
+  const students = JSON.parse(env.localStorage.getItem(K.STUDENTS));
+  assert(students.length === 1 && students[0].studentId === 'SV002',
+    '9.8: Danh sách sinh viên phải được thay bằng bản công khai');
+  assert(!students[0].phone && !students[0].email && !students[0].bankAccount,
+    '9.9: Bản ghi áp dụng vào máy sinh viên vẫn phải sạch PII');
+  assert(JSON.parse(env.localStorage.getItem(K.MONTH_SCHEDULE)).week1 === true,
+    '9.10: Lịch tháng phải được áp dụng');
+  assert(JSON.parse(env.localStorage.getItem(K.ADMIN_USERS))[0].password === '0000',
+    '9.11: applyPublicPayload KHÔNG được ghi đè tài khoản cán bộ');
+  assert(env.localStorage.getItem(K.AVAILABILITY_MONTH) === JSON.stringify('2026-10'),
+    '9.12: Không được ghi đè tháng ca rảnh đang có trên máy');
+  assert(csm.getConfig().apiKey === 'AIza_FROM_PUBLIC',
+    '9.13: Nhận Web API Key công khai từ Cloud');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://pub-db.firebaseio.com',
+    apiKey: '',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{
+    studentId: 'SV001', fullName: 'A', role: 'CTV',
+    phone: '0909', email: 'a@x', bankAccount: '123'
+  }]));
+
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pushPublicToCloud();
+  assert(res.success === true, `9.14: pushPublicToCloud phải thành công. Lỗi: ${res.error || ''}`);
+  const call = calls[0];
+  assert(call && call.method === 'PATCH', '9.15: Phải PATCH để không xoá nhánh khác');
+  assert(call && call.url.includes('/tvts_public.json'), '9.16: Phải ghi đúng nhánh tvts_public');
+  const body = call ? JSON.parse(call.body) : {};
+  assert(JSON.stringify(body).indexOf('0909') === -1
+    && JSON.stringify(body).indexOf('a@x') === -1,
+  '9.17: Body công khai không chứa SĐT/email');
+  assert(body.directory && body.directory[0].studentId === 'SV001',
+    '9.18: Body công khai vẫn có MSSV để tra cứu');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://pub-db.firebaseio.com',
+    apiKey: '',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.localStorage.setItem(K.ADMIN_USERS, JSON.stringify([{ username: 'admin' }]));
+
+  env.window.fetch = async (url) => {
+    if (!url.includes('/tvts_public.json')) throw new Error('sai URL: ' + url);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        directory: [{
+          studentId: 'SV003', fullName: 'Lê C', role: 'CTV',
+          phone: '0908', email: 'c@x', bankAccount: '999'
+        }],
+        monthSchedule: { week2: true },
+        clientConfig: { apiKey: 'AIza_PUBLIC_2' }
+      })
+    };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullPublicFromCloud();
+  assert(res.success === true, `9.19: pullPublicFromCloud phải thành công. Lỗi: ${res.error || ''}`);
+  const students = JSON.parse(env.localStorage.getItem(K.STUDENTS));
+  assert(students[0].studentId === 'SV003' && !students[0].phone
+    && !students[0].email && !students[0].bankAccount,
+  '9.20: Dữ liệu kéo về phải được làm sạch PII');
+  assert(csm.getConfig().apiKey === 'AIza_PUBLIC_2',
+    '9.21: Lưu Web API Key nhận từ nhánh công khai');
+  assert(JSON.parse(env.localStorage.getItem(K.ADMIN_USERS))[0].username === 'admin',
+    '9.22: Kéo dữ liệu công khai không đụng tài khoản cán bộ');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://pub-db.firebaseio.com',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.window.fetch = async () => ({
+    ok: false, status: 500, statusText: 'Server Error', text: async () => 'boom'
+  });
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullPublicFromCloud();
+  assert(res.success === false && /500/.test(res.error || ''),
+    '9.23: Lỗi HTTP khi kéo dữ liệu công khai phải bị bắt');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://sync-db.firebaseio.com',
+    apiKey: '',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{
+    studentId: 'SV001', fullName: 'A', role: 'CTV', phone: '0909'
+  }]));
+  env.sandbox.document.querySelector = (sel) =>
+    (String(sel).indexOf('tvts-publish-public') !== -1 ? { content: 'true' } : null);
+
+  const calls = [];
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pushToCloud();
+  assert(res.success === true && res.publicResult && res.publicResult.success === true,
+    '9.24: Trang admin phải tự đẩy cả nhánh công khai sau khi đẩy dữ liệu riêng tư');
+  assert(calls.length === 2 && calls[1].url.includes('/tvts_public.json'),
+    `9.25: Lần gọi thứ hai phải là PATCH nhánh tvts_public. Thực tế: ${calls.map(c => c.url).join(' | ')}`);
+  const publicBody = calls[1] ? JSON.parse(calls[1].body) : {};
+  assert(JSON.stringify(publicBody).indexOf('0909') === -1,
+    '9.26: Nhánh công khai tự động vẫn không chứa SĐT');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://pub-db.firebaseio.com' });
+  const scheduleWithPii = {
+    scheduleTable: {
+      'T2-S1': {
+        oldMember: {
+          id: 'sv1', studentId: 'SV001', fullName: 'A', role: 'old',
+          phone: '0909123456', email: 'a@example.com', bankAccount: '123456789'
+        },
+        newMember: {
+          id: 'sv2', studentId: 'SV002', fullName: 'B', role: 'new',
+          partnerPhone: '0911222333', passwordHash: 'hash'
+        }
+      }
+    }
+  };
+  env.localStorage.setItem(K.MONTH_SCHEDULE, JSON.stringify(scheduleWithPii));
+  env.localStorage.setItem(K.EVENTS, JSON.stringify([
+    { id: 'e1', name: 'Sự kiện tư vấn', phone: '0922333444' }
+  ]));
+
+  const payload = csm.buildPublicPayload();
+  const flat = JSON.stringify({
+    monthSchedule: payload.monthSchedule,
+    events: payload.events
+  });
+  assert(flat.indexOf('0909123456') === -1 && flat.indexOf('a@example.com') === -1
+    && flat.indexOf('123456789') === -1 && flat.indexOf('0911222333') === -1
+    && flat.indexOf('0922333444') === -1,
+  '9.27: Lịch/sự kiện công khai phải được quét sạch PII ở mọi cấp');
+  const slot = payload.monthSchedule
+    && payload.monthSchedule.scheduleTable
+    && payload.monthSchedule.scheduleTable['T2-S1'];
+  assert(slot && slot.oldMember.fullName === 'A' && slot.oldMember.studentId === 'SV001'
+    && slot.newMember.fullName === 'B',
+  '9.28: Vẫn giữ họ tên/MSSV cần cho sinh viên xem lịch');
+  assert(JSON.parse(env.localStorage.getItem(K.MONTH_SCHEDULE))
+    .scheduleTable['T2-S1'].oldMember.phone === '0909123456',
+  '9.29: Bản gốc trong máy cán bộ không bị sửa khi đóng gói công khai');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://pub-db.firebaseio.com' });
+  const res = csm.applyPublicPayload({
+    monthSchedule: {
+      scheduleTable: {
+        'T3-S2': {
+          oldMember: {
+            id: 'sv3', studentId: 'SV003', fullName: 'C', role: 'old',
+            phone: '0988777666', bankName: 'VCB', bankAccount: '999888'
+          }
+        }
+      }
+    },
+    events: [{ id: 'e2', name: 'Họp CTV', email: 'c@example.com' }]
+  });
+  assert(res.success === true, '9.30: applyPublicPayload với lịch công khai hợp lệ');
+  const saved = JSON.parse(env.localStorage.getItem(K.MONTH_SCHEDULE));
+  const member = saved.scheduleTable['T3-S2'].oldMember;
+  assert(member.fullName === 'C' && !member.phone && !member.bankName && !member.bankAccount,
+    '9.31: Dữ liệu lịch kéo về máy sinh viên cũng phải sạch PII');
+  const events = JSON.parse(env.localStorage.getItem(K.EVENTS));
+  assert(events[0].name === 'Họp CTV' && !events[0].email,
+    '9.32: Sự kiện công khai kéo về cũng phải sạch email');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 10: Sinh viên gửi yêu cầu bằng phiên ẩn danh (không giao diện đăng nhập)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 10] Sinh Viên Gửi Yêu Cầu Bằng Phiên Ẩn Danh:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://req-db.firebaseio.com',
+    apiKey: 'AIza_ANON_TEST',
+    authEmail: '',
+    authPassword: ''
+  });
+
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          idToken: 'ID_TOKEN_ANON',
+          localId: 'ANON_UID_1',
+          expiresIn: '3600',
+          refreshToken: 'REFRESH_1'
+        })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.submitRegistration('SV001', {
+    fullName: 'Nguyễn Văn A',
+    month: { month: 10, year: 2026 },
+    shifts: { 1: ['T2-S1'], 2: [], 3: [], 4: [] },
+    availableShifts: ['T2-S1']
+  });
+  assert(res.success === true, `10.1: submitRegistration phải thành công. Lỗi: ${res.error || ''}`);
+  const authCall = calls.find(c => c.url.includes('identitytoolkit') && c.method === 'POST');
+  assert(Boolean(authCall), '10.2: Phải tạo phiên ẩn danh, không hiện giao diện đăng nhập');
+  const put = calls.find(c => c.method === 'PUT'
+    && c.url.includes('/tvts_requests/registrations/SV001.json'));
+  assert(Boolean(put), `10.3: Phải PUT đúng node registrations/SV001. URL: ${calls.map(c => c.url).join(' | ')}`);
+  assert(put && /[?&]auth=ID_TOKEN_ANON/.test(put.url),
+    '10.4: Request phải kèm ID token ẩn danh');
+  const body = put ? JSON.parse(put.body) : {};
+  assert(body.mssv === 'SV001' && body.uid === 'ANON_UID_1',
+    '10.5: Body phải có mssv & uid của phiên ẩn danh');
+  assert(body.status === 'registered' && body.month && body.month.month === 10,
+    '10.6: Ca rảnh phải ở trạng thái registered (không chờ duyệt) và đúng tháng');
+  assert(JSON.stringify(body.shifts) === JSON.stringify({ 1: ['T2-S1'], 2: [], 3: [], 4: [] }),
+    '10.7: Giữ nguyên ca rảnh theo tuần');
+
+  const authCallsBefore = calls.filter(c => c.url.includes('identitytoolkit')).length;
+  const swap = await csm.submitSwap({
+    studentId: 'SV001',
+    studentName: 'Nguyễn Văn A',
+    targetStudentId: 'SV002',
+    weekNum: 1,
+    shiftId: 'T2-S1',
+    swapType: 'swap',
+    reason: 'Bận thi'
+  });
+  assert(swap.success === true, `10.8: submitSwap phải thành công. Lỗi: ${swap.error || ''}`);
+  const authCallsAfter = calls.filter(c => c.url.includes('identitytoolkit')).length;
+  assert(authCallsAfter === authCallsBefore,
+    '10.9: Dùng lại token ẩn danh đã cache, không đăng nhập lại');
+  const swapPut = calls.find(c => c.method === 'PUT'
+    && c.url.includes('/tvts_requests/swaps/swap_'));
+  assert(Boolean(swapPut), '10.10: Phải ghi đề xuất đổi ca vào nhánh swaps');
+  const swapBody = swapPut ? JSON.parse(swapPut.body) : {};
+  assert(/^swap_/.test(swapBody.id || '') && swapBody.status === 'pending'
+    && swapBody.uid === 'ANON_UID_1',
+  '10.11: Đề xuất đổi ca phải có id, status pending và uid');
+
+  // Kể cả khi UI lỡ gửi kèm PII, cloud_sync phải chặn trước khi ghi công khai.
+  const piiReg = await csm.submitRegistration('SV002', {
+    fullName: 'Trần B', phone: '0900000000', email: 'b@example.com', shifts: {}
+  });
+  assert(piiReg.success === true, '10.17: Gửi đăng ký kèm PII vẫn xử lý được');
+  const piiPut = calls.slice().reverse().find(c => c.method === 'PUT'
+    && c.url.includes('/registrations/SV002.json'));
+  const piiBody = piiPut ? JSON.parse(piiPut.body) : {};
+  assert(piiBody.fullName === 'Trần B' && !piiBody.phone && !piiBody.email,
+    '10.18: Body gửi lên phải bị lọc bỏ SĐT/email');
+
+  const piiSwap = await csm.submitSwap({
+    id: 'swap_pii_1', studentId: 'SV001', studentName: 'A', phone: '0911222333'
+  });
+  assert(piiSwap.success === true, '10.19: Gửi đề xuất đổi ca kèm PII vẫn xử lý được');
+  const piiSwapPut = calls.slice().reverse().find(c => c.method === 'PUT'
+    && c.url.includes('/swaps/swap_pii_1.json'));
+  const piiSwapBody = piiSwapPut ? JSON.parse(piiSwapPut.body) : {};
+  assert(piiSwapBody.studentId === 'SV001' && !piiSwapBody.phone,
+    '10.20: Đề xuất đổi ca công khai cũng phải sạch PII');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://req-db.firebaseio.com',
+    apiKey: 'AIza_ANON_TEST',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'OPERATION_NOT_ALLOWED' } })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.submitRegistration('SV009', { shifts: {} });
+  assert(res.success === false && /ẩn danh/i.test(res.error || ''),
+    `10.12: Báo lỗi rõ khi Firebase chưa bật Anonymous. Thực tế: ${res.error}`);
+  assert(!calls.some(c => c.method === 'PUT'),
+    '10.13: Không ghi database khi chưa có phiên ẩn danh');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const res = await csm.submitRegistration('SV 001/../x', { shifts: {} });
+  assert(res.success === false,
+    '10.14: MSSV chứa ký tự lạ phải bị chặn trước khi ghi Firebase');
+}
+
+{
+  const env = createMockEnvironment();
+  env.sandbox.document.querySelector = (sel) =>
+    (String(sel).indexOf('tvts-cloud-role') !== -1 ? { content: 'student' } : null);
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://sync-db.firebaseio.com'
+  });
+  assert(csm.getConfig().role === 'student',
+    '10.15: Thẻ meta tvts-cloud-role=student phải chuyển trang sang chế độ sinh viên');
+  const push = await csm.pushToCloud();
+  assert(push.success === false && /sinh viên/i.test(push.error || ''),
+    '10.16: Trang sinh viên không được đẩy dữ liệu riêng tư');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 11: Gộp yêu cầu & cập nhật trạng thái đổi ca
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://req-db.firebaseio.com' });
+  const local = [{
+    studentId: 'SV001',
+    fullName: 'A',
+    monthlyAvailableShifts: { 1: ['OLD'] },
+    updatedAt: 1000
+  }];
+
+  const older = csm.mergeRegistrationRequests(local, {
+    SV001: {
+      mssv: 'SV001',
+      submittedAt: '1970-01-01T00:00:01.000Z',
+      shifts: { 1: ['OLD2'] },
+      availableShifts: ['OLD2']
+    }
+  });
+  assert(older.mergedCount === 0,
+    '11.1: Yêu cầu cũ hơn dữ liệu hiện tại phải bị bỏ qua');
+
+  const newer = csm.mergeRegistrationRequests(local, {
+    SV001: {
+      mssv: 'SV001',
+      submittedAt: '2026-10-22T10:00:00.000Z',
+      shifts: { 1: ['NEW'] },
+      availableShifts: ['NEW']
+    }
+  });
+  assert(newer.mergedCount === 1 && newer.students[0].monthlyAvailableShifts[1][0] === 'NEW',
+    '11.2: Yêu cầu mới hơn phải được gộp vào ca rảnh');
+  assert(local[0].monthlyAvailableShifts[1][0] === 'OLD',
+    '11.3: Không được sửa mảng đầu vào (tránh tác dụng phụ)');
+
+  const unknown = csm.mergeRegistrationRequests(local, {
+    SV999: {
+      mssv: 'SV999',
+      submittedAt: '2026-10-22T10:00:00.000Z',
+      shifts: { 1: ['X'] }
+    }
+  });
+  assert(unknown.mergedCount === 0 && unknown.students.length === 1,
+    '11.4: Không tự thêm MSSV lạ vào danh sách CTV');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  const merged = csm.mergeSwapRequests(
+    [{ id: 's1', status: 'pending', createdAt: '2026-10-21T00:00:00.000Z' }],
+    [
+      { id: 's1', status: 'approved', createdAt: '2026-10-21T00:00:00.000Z' },
+      { id: 's2', status: 'pending', createdAt: '2026-10-22T00:00:00.000Z' }
+    ]
+  );
+  assert(merged.length === 2 && merged[0].id === 's2',
+    '11.5: Gộp & sắp xếp đề xuất mới nhất trước');
+  assert(merged.find(x => x.id === 's1').status === 'approved',
+    '11.6: Trạng thái approved từ Cloud phải thắng pending cục bộ');
+
+  const keepLocal = csm.mergeSwapRequests(
+    [{ id: 's3', status: 'rejected', createdAt: '2026-10-20T00:00:00.000Z' }],
+    [{ id: 's3', status: 'pending', createdAt: '2026-10-20T00:00:00.000Z' }]
+  );
+  assert(keepLocal[0].status === 'rejected',
+    '11.7: Không để bản pending trên Cloud ghi đè kết quả đã duyệt trên máy');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://req-db.firebaseio.com' });
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([
+    { studentId: 'SV001', fullName: 'A', updatedAt: 0 }
+  ]));
+  env.localStorage.setItem(K.ADMIN_USERS, JSON.stringify([{ username: 'admin' }]));
+
+  const res = csm.applyRequestsPayload({
+    registrations: {
+      SV001: {
+        mssv: 'SV001',
+        submittedAt: '2026-10-22T10:00:00.000Z',
+        shifts: { 1: ['NEW'] },
+        availableShifts: ['NEW']
+      }
+    },
+    swaps: {
+      s1: { id: 's1', status: 'pending', createdAt: '2026-10-22T00:00:00.000Z' }
+    }
+  });
+  assert(res.success === true && res.mergedRegistrations === 1 && res.mergedSwaps === 1,
+    '11.8: applyRequestsPayload phải báo đúng số yêu cầu đã gộp');
+  const students = JSON.parse(env.localStorage.getItem(K.STUDENTS));
+  assert(students[0].monthlyAvailableShifts[1][0] === 'NEW',
+    '11.9: Đăng ký mới phải được ghi vào danh sách CTV');
+  const swaps = JSON.parse(env.localStorage.getItem(K.SWAP_REQUESTS));
+  assert(swaps.length === 1 && swaps[0].id === 's1',
+    '11.10: Đề xuất đổi ca phải được ghi vào hàng chờ duyệt');
+  assert(JSON.parse(env.localStorage.getItem(K.ADMIN_USERS))[0].username === 'admin',
+    '11.11: Gộp yêu cầu không được đụng tài khoản cán bộ');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://req-db.firebaseio.com',
+    apiKey: 'AIza_ADMIN_TEST',
+    authEmail: 'office@tvts.local',
+    authPassword: 'matkhau'
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ idToken: 'ADMIN_TOKEN', expiresIn: '3600' })
+      };
+    }
+    if (url.includes('/tvts_requests/swaps/s1.json')) {
+      return { ok: true, status: 200, json: async () => ({ status: 'approved' }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ registrations: {}, swaps: {} })
+    };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const update = await csm.updateSwapRequest('s1', { status: 'approved' });
+  assert(update.success === true,
+    `11.12: updateSwapRequest phải thành công. Lỗi: ${update.error || ''}`);
+  const patchCall = calls.find(c => c.method === 'PATCH');
+  assert(patchCall && patchCall.url.includes('/tvts_requests/swaps/s1.json'),
+    '11.13: Phải PATCH đúng yêu cầu đổi ca');
+  assert(patchCall && /[?&]auth=ADMIN_TOKEN/.test(patchCall.url),
+    '11.14: Cập nhật phải dùng token cán bộ');
+  assert(patchCall && JSON.parse(patchCall.body).status === 'approved',
+    '11.15: Gửi đúng trạng thái approved');
+
+  const pull = await csm.pullRequests();
+  assert(pull.success === true,
+    `11.16: pullRequests phải thành công. Lỗi: ${pull.error || ''}`);
+  assert(pull.data && typeof pull.data === 'object',
+    '11.17: pullRequests trả về object yêu cầu');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://req-db.firebaseio.com',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.localStorage.setItem(K.SWAP_REQUESTS, JSON.stringify([
+    { id: 's1', status: 'rejected', createdAt: '2026-10-20T00:00:00.000Z' }
+  ]));
+
+  let requestedUrl = '';
+  env.window.fetch = async (url) => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        s1: { id: 's1', status: 'pending', createdAt: '2026-10-20T00:00:00.000Z' },
+        s2: { id: 's2', status: 'pending', createdAt: '2026-10-22T00:00:00.000Z' }
+      })
+    };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullPublicSwaps();
+  assert(res.success === true, '11.18: pullPublicSwaps phải thành công');
+  assert(requestedUrl.includes('/tvts_requests/swaps.json'),
+    '11.19: Chỉ đọc nhánh swaps công khai');
+  const swaps = JSON.parse(env.localStorage.getItem(K.SWAP_REQUESTS));
+  assert(swaps.length === 2 && swaps.find(s => s.id === 's1').status === 'rejected',
+    '11.20: Giữ kết quả đã duyệt trên máy, chỉ thêm đề xuất mới');
+}
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://staff-db.firebaseio.com',
+    apiKey: 'AIza_STAFF_TEST',
+    authEmail: 'staff@tvts.local',
+    authPassword: 'matkhau'
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ idToken: 'STAFF_TOKEN', expiresIn: '3600' })
+      };
+    }
+    if (url.includes('/staff/STAFF_UID.json')) {
+      return { ok: true, status: 200, json: async () => true };
+    }
+    if (url.includes('/staff_emails/staff%40tvts%252Elocal.json')) {
+      return { ok: true, status: 200, json: async () => true };
+    }
+    return { ok: true, status: 200, json: async () => null };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const allowed = await csm.checkStaffAccess('STAFF_UID');
+  assert(allowed.success === true && allowed.allowed === true,
+    '11.21: UID có trong /staff phải được phép đăng nhập Google');
+  const staffCall = calls.find(c => c.url.includes('/staff/STAFF_UID.json'));
+  assert(staffCall && /[?&]auth=STAFF_TOKEN/.test(staffCall.url),
+    '11.22: Phải đọc /staff/<uid> bằng ID token của chính tài khoản Google');
+
+  const denied = await csm.checkStaffAccess('OTHER_UID');
+  assert(denied.success === true && denied.allowed === false,
+    '11.23: UID không có trong /staff phải bị từ chối mở dashboard');
+
+  // Email được add trước trong /staff_emails phải mở được dashboard dù UID
+  // chưa có trong /staff. Key email phải mã hóa dấu chấm thành %2E.
+  const emailAllowed = await csm.checkStaffAccess('EMAIL_UID', 'staff@tvts.local');
+  const emailCall = calls.find(c => c.url.includes('/staff_emails/'));
+  assert(emailAllowed.success === true
+    && emailAllowed.allowed === true
+    && emailAllowed.via === 'email'
+    && csm.encodeStaffEmailKey('A.B.C@Gmail.com') === 'a%2Eb%2Ec@gmail%2Ecom'
+    && emailCall
+    && emailCall.url.includes('/staff_emails/staff%40tvts%252Elocal.json'),
+  '11.24: Email đã cấp trước trong /staff_emails phải được phép đăng nhập');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 12: Cấu hình trang & Security Rules
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
+
+{
+  const indexHtml = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const adminHtml = fs.readFileSync(path.join(__dirname, '../admin.html'), 'utf8');
+  let rules = null;
+  let rulesError = '';
+  try {
+    rules = JSON.parse(fs.readFileSync(path.join(__dirname, '../database.rules.json'), 'utf8'));
+  } catch (e) {
+    rulesError = e.message;
+  }
+
+  assert(/<meta\s+name="tvts-cloud-role"\s+content="student"/.test(indexHtml),
+    '12.1: Trang sinh viên phải khai báo chế độ student bằng thẻ meta');
+  assert(indexHtml.includes('firebase-app-compat.js')
+    && indexHtml.includes('firebase-auth-compat.js'),
+  '12.2: Trang sinh viên phải nạp Firebase SDK để tạo phiên ẩn danh');
+  assert(!/window\.TVTS_CLOUD_ROLE\s*=/.test(indexHtml),
+    '12.3: Không dùng biến window trong HTML (tránh guard dead-selector)');
+  assert(/<meta\s+name="tvts-publish-public"\s+content="true"/.test(adminHtml),
+    '12.4: Trang admin phải bật cờ tự đẩy nhánh công khai bằng thẻ meta');
+  assert(adminHtml.includes('btn-cloud-google-login')
+    && adminHtml.includes('btn-cloud-pull-requests'),
+  '12.5: Admin phải có nút Đăng nhập Google và nút nhận ca rảnh');
+  assert(!adminHtml.includes('cloud-input-auth-email')
+    && !adminHtml.includes('cloud-input-auth-password'),
+  '12.6: Đã bỏ tài khoản Email/Password dùng chung khỏi UI admin');
+  assert(adminHtml.includes('btn-admin-google-login')
+    && adminHtml.includes('admin-google-auth-status'),
+  '12.6b: Màn hình đăng nhập admin phải có nút Google và vùng trạng thái');
+  assert(!adminHtml.includes('Kéo &amp; Duyệt Yêu Cầu')
+    && !adminHtml.includes('Kéo & Duyệt Yêu Cầu'),
+  '12.6c: Không còn nút "Kéo & Duyệt" cho đăng ký ca rảnh');
+  assert(adminHtml.includes('count-availability-shifts'),
+  '12.6d: Dashboard phải có thẻ tổng lượt ca rảnh đã đăng ký');
+  const cloudJs = fs.readFileSync(path.join(__dirname, '../js/cloud_sync.js'), 'utf8');
+  assert(/prompt:\s*'select_account'/.test(cloudJs),
+  '12.6e: Đăng nhập Google phải luôn mở bảng chọn tài khoản');
+
+  assert(rules && rules.rules, '12.7: database.rules.json phải là JSON hợp lệ: ' + rulesError);
+  const r = (rules && rules.rules) || {};
+  assert(r.tvts_production_data && /staff/.test(r.tvts_production_data['.read'] || ''),
+    '12.8: Dữ liệu riêng tư chỉ cho tài khoản trong /staff hoặc email đã cấp đọc');
+  assert(r.tvts_public && r.tvts_public['.read'] === true,
+    '12.9: Nhánh công khai cho phép mọi người đọc');
+  assert(r.tvts_requests && r.tvts_requests.registrations && r.tvts_requests.swaps,
+    '12.10: Rules phải có nhánh registrations & swaps cho yêu cầu sinh viên');
+  assert(/auth\.uid/.test((r.tvts_requests.registrations['$mssv'] || {})['.write'] || '')
+    && /auth\.uid/.test((r.tvts_requests.swaps['$swapId'] || {})['.write'] || ''),
+  '12.11: Sinh viên chỉ được ghi yêu cầu gắn với uid của chính mình');
+  assert(/auth\.uid/.test((r.staff && r.staff['$uid'] || {})['.read'] || ''),
+  '12.12: Rules cho phép cán bộ đọc đúng node staff/<uid> của mình');
+  const adminJsSrc = fs.readFileSync(path.join(__dirname, '../js/admin.js'), 'utf8');
+  assert(adminJsSrc.includes('function canAutoPushToCloud')
+    && /syncImmediate && canAutoPushToCloud\(\)/.test(adminJsSrc),
+  '12.13: Lưu cục bộ phải tôn trọng Cloud đang tắt, không tự gửi Firebase');
+
+  const staffEmails = (r.staff_emails || {});
+  const emailReadRule = (staffEmails['$emailKey'] || {})['.read'] || '';
+  assert(staffEmails['.write'] === false
+    && /auth\.token\.email/.test(emailReadRule)
+    && emailReadRule.includes('auth.token.email_verified === true')
+    && emailReadRule.includes("sign_in_provider === 'google.com'")
+    && emailReadRule.includes("replace('.', '%2E')"),
+  '12.14: /staff_emails chỉ cho tài khoản Google đã xác thực đọc đúng email của mình, không cho ghi');
+
+  const productionReadRule = (r.tvts_production_data || {})['.read'] || '';
+  assert(productionReadRule.includes('staff_emails')
+    && /auth\.token\.email/.test(productionReadRule)
+    && productionReadRule.includes('auth.token.email_verified === true')
+    && productionReadRule.includes("sign_in_provider === 'google.com'")
+    && adminJsSrc.includes('checkStaffAccess(user.uid, user.email)'),
+  '12.15: Dữ liệu riêng tư mở cho email Google đã cấp và admin phải truyền email khi kiểm tra');
+}
 
 // -----------------------------------------------------------------------------
 // TỔNG KẾT

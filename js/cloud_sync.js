@@ -31,12 +31,547 @@
     enabled: true,
     provider: 'firebase',
     databaseUrl: 'https://vtt123-76e07-default-rtdb.firebaseio.com',
+    // Web API Key của Firebase (Project settings > General > Web API Key).
     apiKey: '',
+    // Tài khoản "đồng bộ văn phòng" (Firebase Authentication - Email/Password).
+    // Nhập 1 lần trên mỗi máy; dùng để lấy ID token cho Rules `auth != null`.
+    authEmail: '',
+    authPassword: '',
     syncPath: 'tvts_production_data',
+    // Nhánh CÔNG KHAI: trang sinh viên chỉ được ĐỌC (không PII).
+    publicPath: 'tvts_public',
+    // Nhánh YÊU CẦU: sinh viên ghi đăng ký ca & đề xuất đổi ca.
+    // Ca rảnh được cán bộ nhận tự động; đề xuất đổi ca vẫn chờ duyệt.
+    requestsPath: 'tvts_requests',
+    // 'admin' | 'student' — trang sinh viên tự khai báo window.TVTS_CLOUD_ROLE.
+    role: 'admin',
     autoSync: true,
     lastSyncTime: null,
     deviceId: ''
   };
+
+  /**
+   * Cache ID token trong RAM (không ghi ra localStorage).
+   * Token Firebase sống 1 giờ; hết hạn thì đăng nhập lại bằng email/mật khẩu
+   * đã lưu trên máy — không cần refresh token.
+   */
+  let authTokenCache = { token: '', expiresAt: 0, email: '' };
+
+  /** Thông báo lỗi dễ hiểu cho các mã lỗi Firebase Auth hay gặp. */
+  function mapAuthError(code) {
+    const c = String(code || '');
+    if (c.includes('OPERATION_NOT_ALLOWED')) {
+      return 'Firebase chưa bật đăng nhập Email/Password (Authentication > Sign-in method).';
+    }
+    if (c.includes('EMAIL_NOT_FOUND') || c.includes('INVALID_PASSWORD')
+      || c.includes('INVALID_LOGIN_CREDENTIALS') || c.includes('INVALID_EMAIL')) {
+      return 'Sai email hoặc mật khẩu tài khoản đồng bộ.';
+    }
+    if (c.includes('API_KEY_INVALID') || c.includes('API key not valid')) {
+      return 'Web API Key không hợp lệ (Project settings > General > Web API Key).';
+    }
+    if (c.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+      return 'Firebase tạm khoá do đăng nhập sai nhiều lần. Thử lại sau ít phút.';
+    }
+    if (c.includes('CONFIGURATION_NOT_FOUND')) {
+      return 'Firebase Authentication chưa được khởi tạo cho dự án này.';
+    }
+    return 'Không đăng nhập được tài khoản đồng bộ: ' + c;
+  }
+
+  /**
+   * Lấy đối tượng Auth của Firebase SDK (compat) nếu trang đã nạp SDK.
+   * Trả về null khi trang không nạp SDK (ví dụ môi trường Node test).
+   */
+  function getFirebaseAuthSdk() {
+    try {
+      if (typeof window !== 'undefined'
+        && window.firebase
+        && typeof window.firebase.auth === 'function') {
+        return window.firebase.auth();
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Khởi tạo Firebase SDK bằng cấu hình đang lưu (nếu trang đã nạp SDK).
+   * Web API Key là thông tin CÔNG KHAI phía client, không phải bí mật.
+   */
+  function ensureFirebaseApp(cfg) {
+    try {
+      if (typeof window === 'undefined'
+        || !window.firebase
+        || typeof window.firebase.initializeApp !== 'function') {
+        return null;
+      }
+      if (window.firebase.apps && window.firebase.apps.length > 0) {
+        return window.firebase.app();
+      }
+      const apiKey = ((cfg && cfg.apiKey) || '').trim();
+      if (!apiKey) return null;
+      window.firebase.initializeApp({
+        apiKey: apiKey,
+        authDomain: (cfg && cfg.authDomain) || 'vtt123-76e07.firebaseapp.com',
+        databaseURL: (cfg && cfg.databaseUrl) || DEFAULT_CONFIG.databaseUrl,
+        projectId: (cfg && cfg.projectId) || 'vtt123-76e07'
+      });
+      return window.firebase.app();
+    } catch (e) {
+      console.warn('[CloudSync] Không khởi tạo được Firebase SDK:', e.message);
+      return null;
+    }
+  }
+
+  /** Thông tin người đang đăng nhập Firebase SDK (nếu có). */
+  function getCurrentAuthUser() {
+    // Khởi tạo app (nếu đã có Web API Key) để Firebase khôi phục phiên Google
+    // sau khi tải lại trang.
+    ensureFirebaseApp(getConfig());
+    const auth = getFirebaseAuthSdk();
+    const user = auth && auth.currentUser;
+    if (!user) return null;
+    return {
+      uid: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || '',
+      isAnonymous: Boolean(user.isAnonymous)
+    };
+  }
+
+  /** Lỗi đăng nhập Google dễ hiểu. */
+  function mapGoogleAuthError(err) {
+    const code = String((err && err.code) || (err && err.message) || '');
+    if (code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request')) {
+      return 'Đã huỷ đăng nhập Google.';
+    }
+    if (code.includes('popup-blocked')) {
+      return 'Trình duyệt chặn cửa sổ đăng nhập Google. Hãy cho phép popup cho trang này rồi thử lại.';
+    }
+    if (code.includes('unauthorized-domain')) {
+      return 'Tên miền này chưa được phép đăng nhập Google (Firebase Console > Authentication > Settings > Authorized domains).';
+    }
+    if (code.includes('operation-not-allowed')) {
+      return 'Firebase chưa bật nhà cung cấp đăng nhập Google (Authentication > Sign-in method).';
+    }
+    if (code.includes('api-key-not-valid') || code.includes('API_KEY_INVALID')) {
+      return 'Web API Key không hợp lệ hoặc chưa được nhập trong cấu hình Cloud.';
+    }
+    if (code.includes('network-request-failed')) {
+      return 'Không kết nối được tới Google/Firebase. Kiểm tra mạng rồi thử lại.';
+    }
+    return 'Không đăng nhập được Google: ' + ((err && err.message) || code || 'lỗi không xác định');
+  }
+
+  /** Lỗi đăng nhập ẩn danh dễ hiểu. */
+  function mapAnonError(err) {
+    const raw = String((err && err.code) || (err && err.message) || '');
+    const code = raw.toLowerCase();
+    if (code.includes('operation-not-allowed')) {
+      return 'Firebase chưa bật đăng nhập Ẩn danh (Authentication > Sign-in method > Anonymous).';
+    }
+    if (code.includes('api-key-not-valid') || code.includes('api_key_invalid')) {
+      return 'Web API Key không hợp lệ — không tạo được phiên ẩn danh cho sinh viên.';
+    }
+    if (code.includes('network-request-failed')) {
+      return 'Không kết nối được tới Firebase Authentication. Kiểm tra mạng.';
+    }
+    return 'Không tạo được phiên gửi yêu cầu ẩn danh: ' + (raw || 'lỗi không xác định');
+  }
+
+  /**
+   * Đăng nhập Google cho CÁN BỘ. Không dùng mật khẩu dùng chung.
+   * Sau khi đăng nhập, UID phải có trong node /staff trên Firebase thì Rules
+   * mới cho đọc/ghi dữ liệu riêng tư.
+   */
+  async function signInWithGoogle(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!((cfg.apiKey || '').trim())) {
+      return { success: false, error: 'Vui lòng nhập Web API Key của Firebase trước khi đăng nhập Google.' };
+    }
+    ensureFirebaseApp(cfg);
+    const auth = getFirebaseAuthSdk();
+    if (!auth || typeof window.firebase.auth.GoogleAuthProvider !== 'function') {
+      return { success: false, error: 'Chưa nạp Firebase SDK trên trang này (firebase-app-compat + firebase-auth-compat).' };
+    }
+    try {
+      const provider = new window.firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await auth.signInWithPopup(provider);
+      const user = result && result.user;
+      authTokenCache = { token: '', expiresAt: 0, email: '' };
+      return {
+        success: true,
+        user: user ? {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || ''
+        } : getCurrentAuthUser()
+      };
+    } catch (err) {
+      return { success: false, error: mapGoogleAuthError(err), code: err && err.code };
+    }
+  }
+
+  /** Đăng xuất phiên Firebase SDK (Google hoặc ẩn danh). */
+  async function signOutFirebase() {
+    const auth = getFirebaseAuthSdk();
+    if (auth && typeof auth.signOut === 'function') {
+      try { await auth.signOut(); } catch (e) {}
+    }
+    authTokenCache = { token: '', expiresAt: 0, email: '' };
+    anonymousAuthCache = { token: '', uid: '', expiresAt: 0, refreshToken: '', apiKey: '' };
+    return { success: true };
+  }
+
+  /** Cache token cho phiên ẩn danh tạo bằng REST (khi trang không nạp SDK). */
+  let anonymousAuthCache = { token: '', uid: '', expiresAt: 0, refreshToken: '', apiKey: '' };
+  let lastAnonymousAuthError = '';
+
+  /** Giải mã payload JWT (không kiểm chữ ký — chỉ để lấy uid). */
+  function decodeJwtPayload(token) {
+    try {
+      const part = String(token || '').split('.')[1];
+      if (!part) return null;
+      const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let json = '';
+      if (typeof atob === 'function') {
+        json = atob(padded);
+      } else if (typeof Buffer !== 'undefined') {
+        json = Buffer.from(padded, 'base64').toString('binary');
+      } else {
+        return null;
+      }
+      return JSON.parse(json);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Tạo phiên ẨN DANH cho sinh viên — hoàn toàn không hiện giao diện đăng nhập.
+   * Sinh viên vẫn chỉ cần nhập MSSV; Firebase Auth chỉ dùng để Rules biết
+   * "cùng một trình duyệt" và chặn sửa yêu cầu của người khác.
+   */
+  async function signInAnonymous(customCfg) {
+    const cfg = customCfg || getConfig();
+    ensureFirebaseApp(cfg);
+    const auth = getFirebaseAuthSdk();
+    if (auth) {
+      if (auth.currentUser) {
+        return { success: true, user: getCurrentAuthUser() };
+      }
+      try {
+        const cred = await auth.signInAnonymously();
+        return {
+          success: true,
+          user: cred && cred.user
+            ? { uid: cred.user.uid, isAnonymous: true }
+            : getCurrentAuthUser()
+        };
+      } catch (err) {
+        return { success: false, error: mapAnonError(err), code: err && err.code };
+      }
+    }
+
+    // Fallback REST: hữu ích khi trang không nạp Firebase SDK.
+    const apiKey = ((cfg.apiKey) || '').trim();
+    if (!apiKey) {
+      return { success: false, error: 'Thiếu Web API Key của Firebase — không gửi được yêu cầu ẩn danh.' };
+    }
+    if (anonymousAuthCache.token
+      && anonymousAuthCache.apiKey === apiKey
+      && Date.now() < anonymousAuthCache.expiresAt - 60 * 1000) {
+      return { success: true, uid: anonymousAuthCache.uid, token: anonymousAuthCache.token };
+    }
+    try {
+      const res = await fetch(
+        'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(apiKey),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ returnSecureToken: true })
+        }
+      );
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok || !data || !data.idToken) {
+        const code = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+        return { success: false, error: mapAnonError(code) };
+      }
+      const expiresIn = parseInt(data.expiresIn, 10) || 3600;
+      anonymousAuthCache = {
+        token: data.idToken,
+        uid: data.localId || '',
+        expiresAt: Date.now() + expiresIn * 1000,
+        refreshToken: data.refreshToken || '',
+        apiKey: apiKey
+      };
+      return { success: true, uid: anonymousAuthCache.uid, token: data.idToken };
+    } catch (e) {
+      return { success: false, error: 'Không kết nối được Firebase Authentication: ' + e.message };
+    }
+  }
+
+  /** Lấy ID token ẩn danh, tự tạo mới/refresh khi cần. */
+  async function getAnonymousIdToken(customCfg) {
+    const cfg = customCfg || getConfig();
+    lastAnonymousAuthError = '';
+    ensureFirebaseApp(cfg);
+    const auth = getFirebaseAuthSdk();
+    if (auth && auth.currentUser && typeof auth.currentUser.getIdToken === 'function') {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        if (token) return token;
+      } catch (e) {}
+    }
+    const apiKey = ((cfg.apiKey) || '').trim();
+    if (anonymousAuthCache.token
+      && anonymousAuthCache.apiKey === apiKey
+      && Date.now() < anonymousAuthCache.expiresAt - 60 * 1000) {
+      return anonymousAuthCache.token;
+    }
+    if (anonymousAuthCache.refreshToken && apiKey) {
+      try {
+        const res = await fetch(
+          'https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(apiKey),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(anonymousAuthCache.refreshToken)
+          }
+        );
+        let data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+        if (res.ok && data && data.id_token) {
+          anonymousAuthCache.token = data.id_token;
+          anonymousAuthCache.refreshToken = data.refresh_token || anonymousAuthCache.refreshToken;
+          anonymousAuthCache.expiresAt = Date.now() + (parseInt(data.expires_in, 10) || 3600) * 1000;
+          return data.id_token;
+        }
+      } catch (e) {}
+    }
+    const result = await signInAnonymous(cfg);
+    if (result && result.token) return result.token;
+    lastAnonymousAuthError = (result && result.error) || '';
+    return '';
+  }
+
+  /**
+   * Lấy ID token để gọi Realtime Database (Rules `auth != null`).
+   * Ưu tiên phiên Firebase SDK (Google cho cán bộ, ẩn danh cho sinh viên),
+   * sau đó mới fallback tài khoản Email/Password cũ.
+   * Trả về '' nếu chưa cấu hình tài khoản đồng bộ (khi đó database phải mở,
+   * hoặc request sẽ nhận 401 kèm hướng dẫn).
+   */
+  async function getAuthToken(cfg) {
+    ensureFirebaseApp(cfg);
+    const auth = getFirebaseAuthSdk();
+    if (auth && auth.currentUser && typeof auth.currentUser.getIdToken === 'function') {
+      try {
+        const sdkToken = await auth.currentUser.getIdToken();
+        if (sdkToken) return sdkToken;
+      } catch (e) {}
+    }
+
+    const email = (cfg && cfg.authEmail || '').trim();
+
+    const password = cfg && cfg.authPassword || '';
+    const apiKey = (cfg && cfg.apiKey || '').trim();
+    if (!email || !password) return '';
+    if (!apiKey) {
+      throw new Error('Thiếu Web API Key của Firebase — không đăng nhập được tài khoản đồng bộ.');
+    }
+
+    if (authTokenCache.token
+      && authTokenCache.email === email
+      && Date.now() < authTokenCache.expiresAt - 60 * 1000) {
+      return authTokenCache.token;
+    }
+
+    let res;
+    try {
+      res = await fetch(
+        'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='
+        + encodeURIComponent(apiKey),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, returnSecureToken: true })
+        }
+      );
+    } catch (e) {
+      throw new Error('Không kết nối được tới Firebase Authentication: ' + e.message);
+    }
+
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+
+    if (!res.ok || !data || !data.idToken) {
+      const code = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+      throw new Error(mapAuthError(code));
+    }
+
+    const expiresIn = parseInt(data.expiresIn, 10) || 3600;
+    authTokenCache = {
+      token: data.idToken,
+      expiresAt: Date.now() + expiresIn * 1000,
+      email
+    };
+    return data.idToken;
+  }
+
+  /**
+   * Chuyển email thành key Realtime Database an toàn.
+   * RTDB không cho phép dấu chấm trong key, nên thay TẤT CẢ dấu chấm bằng
+   * "%2E" (đúng quy ước Firebase Rules dùng trong database.rules.json).
+   */
+  function encodeStaffEmailKey(email) {
+    return String(email || '').trim().toLowerCase().replace(/\./g, '%2E');
+  }
+
+  /**
+   * Đọc một cờ quyền cán bộ trên Firebase.
+   * Chỉ chấp nhận đúng giá trị boolean true; false/null đều là không có quyền.
+   */
+  async function readStaffFlag(url, label) {
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+
+      if (!response.ok) {
+        const detail = data && data.error
+          ? (typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
+          : ('HTTP ' + response.status);
+        return { ok: false, error: label + ': ' + detail };
+      }
+      // Firebase REST trả HTTP 200 kèm { error: 'Permission denied' } khi Rules chặn.
+      if (data && typeof data === 'object' && data.error) {
+        const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        return { ok: false, error: label + ': ' + detail };
+      }
+      return { ok: true, allowed: data === true, data };
+    } catch (err) {
+      return { ok: false, error: label + ': ' + (err.message || 'lỗi kết nối Firebase Cloud') };
+    }
+  }
+
+  /**
+   * Kiểm tra quyền cán bộ theo UID hoặc email đã được cấp trước.
+   *
+   * - `/staff/<uid>: true` dành cho tài khoản quản trị chính.
+   * - `/staff_emails/<email đã mã hóa>: true` dành cho người được add trước.
+   *   Email mã hóa bằng cách thay dấu chấm thành %2E, ví dụ:
+   *   ten@gmail.com -> ten@gmail%2Ecom
+   *
+   * Rules chỉ cho mỗi tài khoản đọc đúng node của mình, nên client xác minh
+   * được quyền mà không mở toàn bộ danh sách.
+   */
+  async function checkStaffAccess(uid, email, customCfg) {
+    // Giữ tương thích với cách gọi cũ: checkStaffAccess(uid, config)
+    if (email && typeof email === 'object') {
+      customCfg = email;
+      email = '';
+    }
+
+    const cfg = customCfg || getConfig();
+    const id = String(uid || '').trim();
+    const rawEmail = String(email || '').trim().toLowerCase();
+    const emailKey = encodeStaffEmailKey(rawEmail);
+
+    if (!id) {
+      return { success: false, allowed: false, error: 'Thiếu UID tài khoản Google.' };
+    }
+    if (!cfg.databaseUrl) {
+      return { success: false, allowed: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, allowed: false, error: authErr.message };
+    }
+    if (!token) {
+      return { success: false, allowed: false, error: 'Chưa có phiên đăng nhập Google hợp lệ.' };
+    }
+
+    const uidUrl = formatFirebaseUrl(
+      cfg.databaseUrl,
+      'staff/' + encodeURIComponent(id),
+      token
+    );
+    if (!uidUrl) {
+      return { success: false, allowed: false, error: 'URL Firebase không hợp lệ!' };
+    }
+
+    const uidResult = await readStaffFlag(uidUrl, 'UID');
+    if (uidResult.ok && uidResult.allowed) {
+      return {
+        success: true,
+        allowed: true,
+        via: 'uid',
+        uid: id,
+        email: rawEmail,
+        emailKey,
+        data: uidResult.data
+      };
+    }
+
+    let emailResult = null;
+    if (emailKey) {
+      const emailUrl = formatFirebaseUrl(
+        cfg.databaseUrl,
+        'staff_emails/' + encodeURIComponent(emailKey),
+        token
+      );
+      if (emailUrl) {
+        emailResult = await readStaffFlag(emailUrl, 'email');
+        if (emailResult.ok && emailResult.allowed) {
+          return {
+            success: true,
+            allowed: true,
+            via: 'email',
+            uid: id,
+            email: rawEmail,
+            emailKey,
+            data: emailResult.data
+          };
+        }
+      }
+    }
+
+    const emailGuidance = emailKey
+      ? ` hoặc email ${rawEmail} vào /staff_emails (khóa ${emailKey})`
+      : '';
+    const guidance = `Thêm UID ${id} vào /staff${emailGuidance} với giá trị boolean true.`;
+    const errors = [uidResult.error, emailResult && emailResult.error].filter(Boolean);
+
+    if (errors.length) {
+      return {
+        success: false,
+        allowed: false,
+        uid: id,
+        email: rawEmail,
+        emailKey,
+        error: 'Không đọc được quyền cán bộ trên Firebase: ' + errors.join(' | ')
+          + '. Hãy Publish database.rules.json. ' + guidance
+      };
+    }
+
+    return {
+      success: true,
+      allowed: false,
+      uid: id,
+      email: rawEmail,
+      emailKey,
+      error: 'Tài khoản ' + (rawEmail || id) + ' chưa được cấp quyền cán bộ. ' + guidance
+    };
+  }
 
   // Danh sách tài khoản khởi tạo CHỈ dùng khi máy chưa có dữ liệu nào.
 // LƯU Ý BẢO MẬT: đây là thông tin công khai trong mã nguồn. Ban Tuyển Sinh
@@ -109,6 +644,7 @@
           parsed.enabled = true;
         }
         return Object.assign({}, DEFAULT_CONFIG, parsed, {
+          role: getDeclaredRole() || parsed.role || DEFAULT_CONFIG.role,
           deviceId: getOrCreateDeviceId()
         });
       }
@@ -116,14 +652,66 @@
 
     // Fallback: Kiểm tra xem có cấu hình nhúng trước trong window hay không
     if (window.TVTS_CLOUD_CONFIG && typeof window.TVTS_CLOUD_CONFIG === 'object') {
-      return Object.assign({}, DEFAULT_CONFIG, window.TVTS_CLOUD_CONFIG, {
+      const embedded = window.TVTS_CLOUD_CONFIG;
+      return Object.assign({}, DEFAULT_CONFIG, embedded, {
+        role: getDeclaredRole() || embedded.role || DEFAULT_CONFIG.role,
         deviceId: getOrCreateDeviceId()
       });
     }
 
     return Object.assign({}, DEFAULT_CONFIG, {
+      role: getDeclaredRole() || DEFAULT_CONFIG.role,
       deviceId: getOrCreateDeviceId()
     });
+  }
+
+  /**
+   * Trang nào đang chạy: 'admin' (mặc định, có toàn quyền) hay 'student'
+   * (chỉ đọc dữ liệu công khai và gửi yêu cầu).
+   *
+   * Trang sinh viên khai báo window.TVTS_CLOUD_ROLE = 'student' TRƯỚC khi nạp
+   * js/cloud_sync.js. Trong môi trường test (không khai báo) mặc định là admin
+   * để giữ nguyên toàn bộ hành vi cũ.
+   */
+  /** Đọc nội dung thẻ <meta name="..."> (dùng thay cho biến window trong HTML). */
+  function getMetaContent(name) {
+    try {
+      if (typeof document === 'undefined' || typeof document.querySelector !== 'function') {
+        return '';
+      }
+      const el = document.querySelector('meta[name="' + name + '"]');
+      return el && el.content !== undefined ? String(el.content).trim() : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function getDeclaredRole() {
+    const metaRole = getMetaContent('tvts-cloud-role');
+    if (metaRole === 'student' || metaRole === 'admin') return metaRole;
+    try {
+      if (typeof window !== 'undefined'
+        && (window.TVTS_CLOUD_ROLE === 'student' || window.TVTS_CLOUD_ROLE === 'admin')) {
+        return window.TVTS_CLOUD_ROLE;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /** Trang sinh viên có bị cấm ghi dữ liệu riêng tư / dữ liệu công khai không. */
+  function isStudentMode(cfg) {
+    return Boolean(cfg && cfg.role === 'student');
+  }
+
+  /**
+   * Chỉ trang admin.html bật cờ này trước khi nạp cloud_sync.js.
+   * Nhờ vậy mỗi lần đẩy dữ liệu riêng tư thành công, app cũng tự cập nhật
+   * nhánh công khai cho trang sinh viên — mà test/Node không phát sinh request.
+   */
+  function shouldPublishPublic(cfg) {
+    return !isStudentMode(cfg)
+      && (getMetaContent('tvts-publish-public') === 'true'
+        || (typeof window !== 'undefined' && window.TVTS_PUBLISH_PUBLIC === true));
   }
 
   // Lưu cấu hình đồng bộ
@@ -463,9 +1051,701 @@
     }
   }
 
+  /**
+   * ==========================================================================
+   * DỮ LIỆU CÔNG KHAI CHO TRANG SINH VIÊN (KHÔNG PII)
+   * ==========================================================================
+   * Chỉ các trường cần cho việc tra cứu MSSV, xem lịch và đăng ký ca:
+   *   - id, studentId, fullName, role
+   *   - registrationMonth, monthlyAvailableShifts, availableShifts
+   * Tuyệt đối KHÔNG đưa phone/email/bank/passwordHash/pinHash lên nhánh này.
+   */
+  function publicStudentRecord(student) {
+    if (!student || typeof student !== 'object') return null;
+    const record = {
+      id: student.id,
+      studentId: student.studentId,
+      fullName: student.fullName,
+      role: student.role
+    };
+    ['registrationMonth', 'monthlyAvailableShifts', 'availableShifts', 'faculty', 'className']
+      .forEach(field => {
+        if (student[field] !== undefined && student[field] !== null) {
+          record[field] = student[field];
+        }
+      });
+    if (student.updatedAt) record.updatedAt = student.updatedAt;
+    return record;
+  }
+
+  /** Đọc JSON từ localStorage, trả về mặc định nếu thiếu/hỏng. */
+  function readStorageJson(key, defaultValue) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null || raw === undefined) return defaultValue;
+      try {
+        return JSON.parse(raw);
+      } catch (jsonErr) {
+        return raw;
+      }
+    } catch (e) {
+      return defaultValue;
+    }
+  }
+
+  /**
+   * Các khoá PII TUYỆT ĐỐI không được xuất hiện trong nhánh công khai.
+   * Lịch trực chứa nguyên object sinh viên (oldMember/newMember), nên chỉ
+   * whitelist `directory` là KHÔNG đủ — phải quét sâu toàn bộ lịch/sự kiện.
+   */
+  const PUBLIC_SENSITIVE_KEYS = new Set([
+    'phone', 'mobile', 'email', 'bankname', 'bankaccount',
+    'password', 'passwordsalt', 'passwordhash',
+    'pin', 'pinsalt', 'pinhash',
+    'address', 'cccd', 'cmnd', 'dob', 'birthday', 'ngaysinh', 'quequan'
+  ]);
+
+  function isSensitivePublicKey(key) {
+    const k = String(key || '').toLowerCase();
+    if (!k) return false;
+    if (PUBLIC_SENSITIVE_KEYS.has(k)) return true;
+    return k.endsWith('phone') || k.endsWith('email')
+      || k.endsWith('bankaccount') || k.endsWith('bankname')
+      || k.endsWith('password') || k.endsWith('pinhash') || k.endsWith('pinsalt');
+  }
+
+  /**
+   * Bản sao sạch PII của dữ liệu công khai (lịch, sự kiện, cấu hình).
+   * Không sửa object gốc trong localStorage.
+   */
+  function sanitizePublicData(value, depth) {
+    const level = depth || 0;
+    if (level > 20) return null;
+    if (Array.isArray(value)) {
+      return value.map(item => sanitizePublicData(item, level + 1));
+    }
+    if (!value || typeof value !== 'object') return value;
+    const clean = {};
+    Object.keys(value).forEach(key => {
+      if (isSensitivePublicKey(key)) return;
+      clean[key] = sanitizePublicData(value[key], level + 1);
+    });
+    return clean;
+  }
+
+  /**
+   * Đóng gói bản CÔNG KHAI từ LocalStorage của cán bộ.
+   * Dùng PATCH để không xoá nhánh khác nếu máy này chưa có dữ liệu.
+   */
+  function buildPublicPayload() {
+    const localStudents = readStorageJson(STORAGE_KEYS.STUDENTS, null);
+    const directory = Array.isArray(localStudents)
+      ? localStudents.map(publicStudentRecord).filter(Boolean)
+      : [];
+
+    const cfg = getConfig();
+    const payload = {
+      meta: {
+        updatedAt: Date.now(),
+        version: 'public-1.0',
+        deviceId: getOrCreateDeviceId()
+      },
+      // Cấu hình client công khai (Web API Key KHÔNG phải bí mật). Nhờ đó máy
+      // sinh viên biết API Key để tạo phiên ẩn danh mà không cần nhập tay.
+      clientConfig: {
+        apiKey: (cfg.apiKey || '').trim(),
+        authDomain: cfg.authDomain || 'vtt123-76e07.firebaseapp.com',
+        projectId: cfg.projectId || 'vtt123-76e07'
+      },
+      scheduleResult: sanitizePublicData(readStorageJson(STORAGE_KEYS.SCHEDULE, null)),
+      twoWeekSchedule: sanitizePublicData(readStorageJson(STORAGE_KEYS.TWO_WEEK_SCHEDULE, null)),
+      monthSchedule: sanitizePublicData(readStorageJson(STORAGE_KEYS.MONTH_SCHEDULE, null)),
+      regConfig: sanitizePublicData(readStorageJson(STORAGE_KEYS.REG_CONFIG, null)),
+      events: sanitizePublicData(readStorageJson(STORAGE_KEYS.EVENTS, [])),
+      allMonthSchedules: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
+      allMonths: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
+      activeMonth: normalizeActiveMonth(readStorageJson(STORAGE_KEYS.ACTIVE_MONTH, null)),
+      availabilityMonth: readStorageJson(STORAGE_KEYS.AVAILABILITY_MONTH, null),
+      updatedAt: Date.now(),
+      deviceId: getOrCreateDeviceId(),
+      version: 'public-1.0'
+    };
+
+    // Cùng nguyên tắc chống xoá nhầm như buildPayload: máy chưa có danh sách
+    // thì không gửi khoá directory (PATCH sẽ giữ nguyên bản cũ trên Cloud).
+    if (directory.length > 0) payload.directory = directory;
+    return payload;
+  }
+
+  /**
+   * Áp dụng dữ liệu CÔNG KHAI vào LocalStorage của trang sinh viên.
+   * Không bao giờ ghi adminUsers / webBackups / swapRequests từ nhánh này.
+   */
+  function applyPublicPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, error: 'Payload công khai không hợp lệ' };
+    }
+
+    const touchedKeys = [];
+
+    function writeKey(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        touchedKeys.push(key);
+        return true;
+      } catch (e) {
+        console.warn(`[CloudSync] Không ghi được "${key}":`, e);
+        return false;
+      }
+    }
+
+    try {
+      const remoteDirectory = Array.isArray(payload.directory)
+        ? payload.directory
+        : (Array.isArray(payload.students) ? payload.students : null);
+      if (remoteDirectory) {
+        const sanitized = remoteDirectory.map(publicStudentRecord).filter(Boolean);
+        writeKey(STORAGE_KEYS.STUDENTS, sanitized);
+      }
+
+      if (payload.monthSchedule) writeKey(STORAGE_KEYS.MONTH_SCHEDULE, sanitizePublicData(payload.monthSchedule));
+      if (payload.scheduleResult) writeKey(STORAGE_KEYS.SCHEDULE, sanitizePublicData(payload.scheduleResult));
+      if (payload.twoWeekSchedule) writeKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, sanitizePublicData(payload.twoWeekSchedule));
+
+      if (payload.regConfig && typeof payload.regConfig === 'object') {
+        writeKey(STORAGE_KEYS.REG_CONFIG, sanitizePublicData(payload.regConfig));
+      }
+
+      // Khoá tháng ca rảnh chỉ ghi khi máy chưa có — tránh xoá ca rảnh thật.
+      if (typeof payload.availabilityMonth === 'string' && payload.availabilityMonth) {
+        let currentLocal = null;
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
+          if (raw) currentLocal = JSON.parse(raw);
+        } catch (e) {}
+        if (!currentLocal) writeKey(STORAGE_KEYS.AVAILABILITY_MONTH, payload.availabilityMonth);
+      }
+
+      if (Array.isArray(payload.events)) writeKey(STORAGE_KEYS.EVENTS, sanitizePublicData(payload.events));
+
+      const allMonthsData = payload.allMonthSchedules || payload.allMonths;
+      if (allMonthsData && typeof allMonthsData === 'object') {
+        writeKey(STORAGE_KEYS.ALL_MONTHS, sanitizePublicData(allMonthsData));
+      }
+
+      if (payload.activeMonth !== undefined && payload.activeMonth !== null) {
+        const normalized = normalizeActiveMonth(payload.activeMonth);
+        if (normalized && safeSetItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify(normalized))) {
+          touchedKeys.push(STORAGE_KEYS.ACTIVE_MONTH);
+        }
+      }
+
+      const cfg = getConfig();
+      // Nhận Web API Key công khai do cán bộ công bố để máy sinh viên tạo được
+      // phiên ẩn danh (Firebase Auth yêu cầu apiKey).
+      if (payload.clientConfig && payload.clientConfig.apiKey) {
+        cfg.apiKey = payload.clientConfig.apiKey;
+        if (payload.clientConfig.authDomain) cfg.authDomain = payload.clientConfig.authDomain;
+        if (payload.clientConfig.projectId) cfg.projectId = payload.clientConfig.projectId;
+      }
+      cfg.lastSyncTime = Date.now();
+      cfg.lastPublicSyncTime = Date.now();
+      if (payload.updatedAt) cfg.lastCloudUpdatedAt = payload.updatedAt;
+      safeSetItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(cfg));
+
+      try {
+        window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: touchedKeys } }));
+        window.dispatchEvent(new CustomEvent('ts:cloud-synced', { detail: { payload, public: true } }));
+      } catch (evErr) {}
+
+      notifyStatusChange();
+      return { success: true, timestamp: cfg.lastSyncTime, keys: touchedKeys };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  /** Đẩy riêng nhánh dữ liệu công khai (chỉ cán bộ đã đăng nhập mới ghi được). */
+  async function pushPublicToCloud(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (isStudentMode(cfg)) {
+      return { success: false, error: 'Trang sinh viên không có quyền ghi nhánh dữ liệu công khai.' };
+    }
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, error: authErr.message };
+    }
+
+    const url = formatFirebaseUrl(cfg.databaseUrl, cfg.publicPath || 'tvts_public', token);
+    if (!url) {
+      return { success: false, error: 'URL Firebase không hợp lệ!' };
+    }
+    const payload = buildPublicPayload();
+
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      let result = null;
+      try { result = await response.json(); } catch (e) { result = null; }
+      if (result && typeof result === 'object' && result.error) {
+        const detail = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
+        return {
+          success: false,
+          error: `Firebase từ chối ghi nhánh công khai: ${detail} — kiểm tra Rules của tvts_public.`
+        };
+      }
+      cfg.lastPublicSyncTime = Date.now();
+      saveConfig(cfg);
+      return {
+        success: true,
+        timestamp: cfg.lastPublicSyncTime,
+        message: 'Đã cập nhật dữ liệu công khai cho trang sinh viên!',
+        data: result
+      };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /** Kéo dữ liệu công khai về máy sinh viên (hoặc cán bộ). */
+  async function pullPublicFromCloud(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      token = '';
+    }
+    const url = formatFirebaseUrl(cfg.databaseUrl, cfg.publicPath || 'tvts_public', token);
+    if (!url) {
+      return { success: false, error: 'URL Firebase không hợp lệ!' };
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      const data = await response.json();
+      if (data && typeof data === 'object' && data.error) {
+        const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        throw new Error(`Firebase từ chối truy cập nhánh công khai: ${detail}`);
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return {
+          success: true,
+          message: 'Đám mây hiện chưa có dữ liệu công khai nào để kéo.',
+          data: null
+        };
+      }
+
+      const applyRes = applyPublicPayload(data);
+      if (!applyRes.success) throw new Error(applyRes.error);
+      return {
+        success: true,
+        timestamp: Date.now(),
+        keys: applyRes.keys,
+        message: 'Đã kéo dữ liệu công khai mới nhất từ Đám mây!',
+        data
+      };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
+   * ==========================================================================
+   * YÊU CẦU TỪ SINH VIÊN (đăng ký ca & đổi ca)
+   * ==========================================================================
+   * Ghi vào tvts_requests/<loại>/<id>. Rules bắt buộc:
+   *   - auth != null (phiên ẩn danh hoặc Google của cán bộ)
+   *   - newData.uid === auth.uid (chống sửa yêu cầu của người khác)
+   *
+   * Ca rảnh: cán bộ nhận và gộp TỰ ĐỘNG, không có bước duyệt từng yêu cầu.
+   * Đổi ca: vẫn giữ quy trình cán bộ duyệt vì ảnh hưởng lịch trực đã công bố.
+   */
+
+  function generateRequestId(prefix) {
+    return (prefix || 'req') + '_'
+      + Date.now().toString(36) + '_'
+      + Math.random().toString(36).slice(2, 8);
+  }
+
+  /** Ghi một node yêu cầu bằng ID token (ẩn danh cho sinh viên). */
+  async function putRequestNode(relPath, body, customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    // Sinh viên dùng phiên ẩn danh; cán bộ đã đăng nhập Google thì dùng phiên đó.
+    let token = await getAnonymousIdToken(cfg);
+    if (!token) {
+      try { token = await getAuthToken(cfg); } catch (e) { token = ''; }
+    }
+    if (!token) {
+      return {
+        success: false,
+        error: lastAnonymousAuthError
+          || 'Không tạo được phiên gửi yêu cầu. Hãy kiểm tra Firebase Authentication > Anonymous và Web API Key.'
+      };
+    }
+
+    const claims = decodeJwtPayload(token) || {};
+    const sdkUser = getCurrentAuthUser();
+    const uid = claims.user_id || claims.sub
+      || (sdkUser && sdkUser.uid)
+      || anonymousAuthCache.uid
+      || '';
+    const payload = Object.assign({}, body || {});
+    if (uid) payload.uid = uid;
+
+    const normalizedPath = String(relPath || '').replace(/^\/+/, '');
+    if (!normalizedPath) return { success: false, error: 'Thiếu đường dẫn yêu cầu.' };
+
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.requestsPath || 'tvts_requests') + '/' + normalizedPath,
+      token
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      let result = null;
+      try { result = await response.json(); } catch (e) { result = null; }
+      if (result && typeof result === 'object' && result.error) {
+        const detail = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
+        return { success: false, error: `Firebase từ chối ghi yêu cầu: ${detail}` };
+      }
+      return { success: true, uid, data: result };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
+   * Sinh viên gửi đăng ký ca rảnh cả tháng.
+   * Trạng thái 'registered' nghĩa là đã ghi nhận — cán bộ KHÔNG phải duyệt
+   * từng đăng ký; ca rảnh được gộp tự động khi cán bộ nhận dữ liệu.
+   * @param {string} mssv
+   * @param {object} payload { fullName, month:{month,year}, shifts:{1..4}, availableShifts }
+   */
+  async function submitRegistration(mssv, payload, customCfg) {
+    const id = String(mssv || '').trim();
+    if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
+      return { success: false, error: 'MSSV không hợp lệ để gửi lên Đám mây.' };
+    }
+    const body = Object.assign({}, sanitizePublicData(payload) || {});
+    body.mssv = id;
+    body.status = body.status || 'registered';
+    body.submittedAt = body.submittedAt || new Date().toISOString();
+
+    const res = await putRequestNode('registrations/' + encodeURIComponent(id), body, customCfg);
+    if (res.success) {
+      try {
+        window.dispatchEvent(new CustomEvent('ts:request-submitted', {
+          detail: { type: 'registration', mssv: id }
+        }));
+      } catch (e) {}
+    }
+    return res;
+  }
+
+  /** Sinh viên gửi đề xuất đổi ca / nhờ trực hộ. */
+  async function submitSwap(request, customCfg) {
+    const body = Object.assign({}, sanitizePublicData(request) || {});
+    body.id = body.id || generateRequestId('swap');
+    body.status = body.status || 'pending';
+    body.createdAt = body.createdAt || new Date().toISOString();
+
+    const res = await putRequestNode('swaps/' + encodeURIComponent(body.id), body, customCfg);
+    if (res.success) {
+      try {
+        window.dispatchEvent(new CustomEvent('ts:request-submitted', {
+          detail: { type: 'swap', id: body.id }
+        }));
+      } catch (e) {}
+    }
+    return res;
+  }
+
+  /**
+   * Cán bộ tải TOÀN BỘ yêu cầu (cần đăng nhập Google + UID trong /staff).
+   * GET ở node cha tvts_requests — Rules cho staff đọc cả nhánh.
+   */
+  async function pullRequests(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, error: authErr.message };
+    }
+    if (!token) {
+      return { success: false, error: 'Cần đăng nhập Google (cán bộ) để tải yêu cầu sinh viên.' };
+    }
+
+    const url = formatFirebaseUrl(cfg.databaseUrl, cfg.requestsPath || 'tvts_requests', token);
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      const data = await response.json();
+      if (data && typeof data === 'object' && data.error) {
+        const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        throw new Error(`Firebase từ chối đọc yêu cầu: ${detail}`);
+      }
+      return {
+        success: true,
+        data: (data && typeof data === 'object' && !Array.isArray(data)) ? data : {},
+        message: 'Đã tải yêu cầu từ sinh viên.'
+      };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
+   * Trang sinh viên tải danh sách đề xuất đổi ca đang công khai để xem lịch sử.
+   * Chỉ GET nhánh swaps (rules cho phép read: true).
+   */
+  async function pullPublicSwaps(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) return { success: false, error: 'Chưa cấu hình URL Firebase!' };
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.requestsPath || 'tvts_requests') + '/swaps',
+      ''
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      const data = await response.json();
+      if (data && typeof data === 'object' && data.error) {
+        return { success: false, error: 'Firebase từ chối đọc đề xuất đổi ca.' };
+      }
+      const remoteSwaps = (data && typeof data === 'object' && !Array.isArray(data))
+        ? Object.keys(data).map(key => Object.assign({ id: key }, data[key] || {}))
+        : [];
+      const localSwaps = readStorageJson(STORAGE_KEYS.SWAP_REQUESTS, []);
+      const merged = mergeSwapRequests(localSwaps, remoteSwaps);
+      localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(merged));
+      try {
+        window.dispatchEvent(new CustomEvent('ts:data-changed', {
+          detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] }
+        }));
+      } catch (e) {}
+      return { success: true, swaps: merged };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
+   * Gộp yêu cầu đổi ca từ Cloud vào danh sách cục bộ.
+   * Giữ trạng thái đã xử lý trên máy này; bản approved/rejected từ Cloud sẽ
+   * thắng bản pending để sinh viên thấy kết quả duyệt.
+   */
+  function mergeSwapRequests(localList, remoteList) {
+    const byId = new Map();
+    (Array.isArray(localList) ? localList : []).forEach(item => {
+      if (item && item.id) byId.set(String(item.id), Object.assign({}, item));
+    });
+    (Array.isArray(remoteList) ? remoteList : []).forEach(item => {
+      if (!item || !item.id) return;
+      const id = String(item.id);
+      const existing = byId.get(id);
+      if (!existing) {
+        byId.set(id, Object.assign({}, item));
+        return;
+      }
+      const localHandled = existing.status === 'approved' || existing.status === 'rejected';
+      const remoteHandled = item.status === 'approved' || item.status === 'rejected';
+      if (localHandled && !remoteHandled) return;
+      byId.set(id, Object.assign({}, existing, item, { id: existing.id || item.id }));
+    });
+    return Array.from(byId.values())
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+      .slice(0, 200);
+  }
+
+  /**
+   * Gộp yêu cầu đăng ký ca vào danh sách sinh viên cục bộ của cán bộ.
+   * Chỉ cập nhật người ĐÃ CÓ trong danh sách; không tự thêm MSSV lạ.
+   */
+  function mergeRegistrationRequests(localList, remoteMap) {
+    const students = Array.isArray(localList)
+      ? localList.map(s => Object.assign({}, s))
+      : [];
+    const indexByMssv = new Map();
+    students.forEach((s, idx) => {
+      if (s && s.studentId) indexByMssv.set(String(s.studentId).toLowerCase(), idx);
+    });
+
+    let mergedCount = 0;
+    Object.keys(remoteMap || {}).forEach(key => {
+      const req = remoteMap[key];
+      if (!req || typeof req !== 'object') return;
+      const mssv = String(req.mssv || key || '');
+      const idx = indexByMssv.get(mssv.toLowerCase());
+      if (idx === undefined) return;
+
+      const current = students[idx];
+      const currentStamp = Number(current.updatedAt) || 0;
+      const reqStamp = Date.parse(req.submittedAt || '') || 0;
+      if (reqStamp && reqStamp <= currentStamp) return;
+
+      students[idx] = Object.assign({}, current, {
+        monthlyAvailableShifts: req.shifts || current.monthlyAvailableShifts,
+        availableShifts: Array.isArray(req.availableShifts)
+          ? req.availableShifts
+          : current.availableShifts,
+        updatedAt: reqStamp || Date.now()
+      });
+      mergedCount++;
+    });
+
+    return { students, mergedCount };
+  }
+
+  /**
+   * Áp dụng yêu cầu đã tải từ Cloud vào LocalStorage của cán bộ.
+   * Ca rảnh được gộp NGAY, không cần duyệt từng yêu cầu; lịch trực vẫn chỉ
+   * được xếp khi cán bộ chủ động bấm nút xếp ca.
+   */
+  function applyRequestsPayload(data) {
+    const touchedKeys = [];
+    let mergedRegistrations = 0;
+    let mergedSwaps = 0;
+
+    try {
+      if (data && data.registrations && typeof data.registrations === 'object') {
+        const localStudents = readStorageJson(STORAGE_KEYS.STUDENTS, []);
+        const merged = mergeRegistrationRequests(localStudents, data.registrations);
+        if (merged.mergedCount > 0) {
+          localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(merged.students));
+          touchedKeys.push(STORAGE_KEYS.STUDENTS);
+          mergedRegistrations = merged.mergedCount;
+        }
+      }
+
+      if (data && data.swaps && typeof data.swaps === 'object') {
+        const remoteSwaps = Object.keys(data.swaps).map(key =>
+          Object.assign({ id: key }, data.swaps[key] || {})
+        );
+        const localSwaps = readStorageJson(STORAGE_KEYS.SWAP_REQUESTS, []);
+        const merged = mergeSwapRequests(localSwaps, remoteSwaps);
+        const changed = JSON.stringify(merged) !== JSON.stringify(localSwaps);
+        if (changed) {
+          localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(merged));
+          touchedKeys.push(STORAGE_KEYS.SWAP_REQUESTS);
+        }
+        mergedSwaps = remoteSwaps.length;
+      }
+
+      if (touchedKeys.length > 0) {
+        try {
+          window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: touchedKeys } }));
+        } catch (e) {}
+      }
+      return { success: true, mergedRegistrations, mergedSwaps, keys: touchedKeys };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  /** Cán bộ cập nhật trạng thái một đề xuất đổi ca trên Cloud. */
+  async function updateSwapRequest(swapId, patch, customCfg) {
+    const cfg = customCfg || getConfig();
+    const id = String(swapId || '').trim();
+    if (!id) return { success: false, error: 'Thiếu mã yêu cầu đổi ca.' };
+
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, error: authErr.message };
+    }
+    if (!token) {
+      return { success: false, error: 'Cần đăng nhập Google (cán bộ) để cập nhật yêu cầu.' };
+    }
+
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.requestsPath || 'tvts_requests') + '/swaps/' + encodeURIComponent(id),
+      token
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch || {})
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+      let result = null;
+      try { result = await response.json(); } catch (e) { result = null; }
+      if (result && typeof result === 'object' && result.error) {
+        return { success: false, error: 'Firebase từ chối cập nhật yêu cầu.' };
+      }
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
   // Đẩy dữ liệu từ LocalStorage lên Firebase Cloud (Push)
   async function pushToCloud(customCfg) {
     const cfg = customCfg || getConfig();
+    if (isStudentMode(cfg)) {
+      return { success: false, error: 'Trang sinh viên không có quyền đẩy dữ liệu riêng tư lên Cloud.' };
+    }
     if (!cfg.databaseUrl) {
       return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
     }
@@ -474,6 +1754,15 @@
     if (!url) {
       return { success: false, error: 'URL Firebase không hợp lệ!' };
     }
+
+    // Đăng nhập tài khoản đồng bộ (nếu đã cấu hình) để lấy ID token.
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, error: authErr.message };
+    }
+    const authedUrl = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, token);
 
     const payload = buildPayload();
 
@@ -488,7 +1777,7 @@
     //
     // PATCH chỉ cập nhật khoá được gửi lên, giữ nguyên phần còn lại.
     try {
-      const response = await fetch(url, {
+      const response = await fetch(authedUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -521,11 +1810,18 @@
       cfg.localUpdatedAt = 0;
       saveConfig(cfg);
 
+      // Cập nhật luôn nhánh công khai cho trang sinh viên (nếu là trang admin).
+      let publicResult = null;
+      if (shouldPublishPublic(cfg)) {
+        publicResult = await pushPublicToCloud(cfg);
+      }
+
       return {
         success: true,
         timestamp: cfg.lastSyncTime,
         message: 'Đã đẩy dữ liệu lên Đám mây thành công!',
-        data: result
+        data: result,
+        publicResult
       };
     } catch (err) {
       return {
@@ -547,8 +1843,17 @@
       return { success: false, error: 'URL Firebase không hợp lệ!' };
     }
 
+    // Đăng nhập tài khoản đồng bộ (nếu đã cấu hình) để lấy ID token.
+    let token = '';
     try {
-      const response = await fetch(url, {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, error: authErr.message };
+    }
+    const authedUrl = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, token);
+
+    try {
+      const response = await fetch(authedUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
@@ -643,11 +1948,19 @@
       return { success: false, message: 'URL Firebase không đúng định dạng!' };
     }
 
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { success: false, message: authErr.message };
+    }
+    const authedUrl = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, token);
+
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
 
-      const res = await fetch(url, {
+      const res = await fetch(authedUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
         signal: controller ? controller.signal : undefined
@@ -699,7 +2012,13 @@
     const cfg = getConfig();
     if (cfg.enabled && cfg.databaseUrl) {
       try {
-        await pullFromCloud(cfg);
+        if (isStudentMode(cfg)) {
+          // Trang sinh viên: chỉ kéo nhánh công khai + danh sách đề xuất đổi ca.
+          await pullPublicFromCloud(cfg);
+          await pullPublicSwaps(cfg);
+        } else {
+          await pullFromCloud(cfg);
+        }
       } catch (e) {
         console.warn('[CloudSync] Tự động kéo dữ liệu ban đầu không thành công:', e.message);
       }
@@ -710,6 +2029,8 @@
   let autoPushTimer = null;
   function triggerAutoPush() {
     const cfg = getConfig();
+    // Trang sinh viên TUYỆT ĐỐI không tự đẩy dữ liệu riêng tư lên Cloud.
+    if (isStudentMode(cfg)) return;
     if (!cfg.enabled || !cfg.databaseUrl || !cfg.autoSync) return;
 
     // Đánh dấu có thay đổi cục bộ chưa đẩy lên Cloud (phục vụ phát hiện xung đột)
@@ -754,10 +2075,40 @@
     pushToCloud,
     pullFromCloud,
     testConnection,
+    getAuthToken,
     triggerAutoPush,
     autoInit,
     safeSetItem,
-    estimateStorageUsage
+    estimateStorageUsage,
+
+    // ---- Dữ liệu công khai cho trang sinh viên ----
+    publicStudentRecord,
+    buildPublicPayload,
+    applyPublicPayload,
+    pushPublicToCloud,
+    pullPublicFromCloud,
+
+    // ---- Yêu cầu từ sinh viên ----
+    submitRegistration,
+    submitSwap,
+    putRequestNode,
+    pullRequests,
+    applyRequestsPayload,
+    pullPublicSwaps,
+    updateSwapRequest,
+    mergeRegistrationRequests,
+    mergeSwapRequests,
+
+    // ---- Xác thực: Google cho cán bộ, ẩn danh cho sinh viên ----
+    signInWithGoogle,
+    signOutFirebase,
+    getCurrentAuthUser,
+    encodeStaffEmailKey,
+    checkStaffAccess,
+    signInAnonymous,
+    getAnonymousIdToken,
+    isStudentMode,
+    shouldPublishPublic
   };
 
 })();
