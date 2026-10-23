@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-375%2F375%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-387%2F387%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -81,7 +81,7 @@ tvts/
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 12 bộ kiểm thử tự động — 375 test cases
+├── tests/                               # 12 bộ kiểm thử tự động — 387 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -216,7 +216,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (375/375 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (387/387 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -226,7 +226,7 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 170/170 |
+| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 182/182 |
 | 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
@@ -267,14 +267,15 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 | `tvts_public` | Mọi người (kể cả chưa đăng nhập) | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Bản rút gọn **không PII** + lịch công khai |
 | `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc `swaps` | Sinh viên tạo/sửa yêu cầu gắn `uid`; cán bộ nhận ca rảnh tự động, duyệt đổi ca | Đăng ký ca & đề xuất đổi ca |
 
-> `/staff` và `/staff_emails` chỉ ghi được trong Firebase Console (`.write: false`). Giá trị phải là boolean `true`.
+> `/staff` chỉ ghi được trong Firebase Console (`.write: false`). `/staff_emails` do **cán bộ đã có quyền** ghi ngay trong app (nút Cấp Quyền), giá trị phải là boolean `true`.
 > Email key phải viết thường và thay **tất cả** dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`.
 > Rules chỉ chấp nhận tài khoản Google đã xác thực email (`email_verified === true`, `sign_in_provider === 'google.com'`).
+> `database.rules.json` chứa `owner@example.com` — **thay bằng email Google của Trưởng ban** trước khi Publish. Đây là tài khoản khởi động duy nhất, sau đó cấp quyền cho người khác ngay trong app.
 
 ### 7.2 Đăng nhập
 
 - **Cán bộ:** đăng nhập **Google** ngay trên màn hình xác thực admin (nút **Đăng nhập bằng Google**, luôn mở bảng chọn tài khoản). Tài khoản phải có **UID trong `/staff`** hoặc **email trong `/staff_emails`** mới đọc/ghi được dữ liệu riêng tư. Không còn tài khoản Firebase Email/Password dùng chung trên UI.
-- **Cấp quyền trước bằng email:** thêm `staff_emails/<email đã mã hóa>: true` trong Firebase Console. Người được add chỉ cần đăng nhập Google bằng đúng email đó, **không cần lấy UID trước**. Email key viết thường, thay tất cả dấu chấm bằng `%2E` (ví dụ `ten@gmail%2Ecom`); giá trị phải là boolean `true`.
+- **Cấp quyền trong app (không cần Console):** `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email` → nhập email → **Cấp Quyền**. App ghi `staff_emails/<email đã mã hoá> = true`; người đó chỉ cần đăng nhập Google bằng đúng email ấy, không cần lấy UID. Danh sách bên dưới cho phép **thu hồi** (🗑️) bất cứ lúc nào.
 - **Sinh viên:** **không có trang đăng nhập**. Chỉ nhập MSSV; app tự tạo phiên **Anonymous** để gửi yêu cầu. Sinh viên không cần tài khoản Google/email.
 - **Ca rảnh không chờ duyệt:** sau khi cán bộ đăng nhập Google, app tự kéo `tvts_requests/registrations` và gộp ngay vào danh sách CTV; **không tự xếp lịch**. Cán bộ xem tổng **Lượt ca rảnh đã đăng ký** trên dashboard rồi bấm xếp ca khi sẵn sàng. Đề xuất đổi ca vẫn chờ cán bộ duyệt.
 - Tài khoản nội bộ của app (username/PIN) vẫn dùng để mở bảng quản trị trên máy trực; Google là lớp kiểm soát dữ liệu Cloud.

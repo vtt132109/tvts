@@ -1486,13 +1486,16 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   '12.13: Lưu cục bộ phải tôn trọng Cloud đang tắt, không tự gửi Firebase');
 
   const staffEmails = (r.staff_emails || {});
-  const emailReadRule = (staffEmails['$emailKey'] || {})['.read'] || '';
-  assert(staffEmails['.write'] === false
-    && /auth\.token\.email/.test(emailReadRule)
+  const emailReadRule = staffEmails['.read'] || '';
+  const emailWriteRule = staffEmails['.write'] || '';
+  assert(/auth\.token\.email/.test(emailReadRule)
     && emailReadRule.includes('auth.token.email_verified === true')
     && emailReadRule.includes("sign_in_provider === 'google.com'")
-    && emailReadRule.includes("replace('.', '%2E')"),
-  '12.14: /staff_emails chỉ cho tài khoản Google đã xác thực đọc đúng email của mình, không cho ghi');
+    && /auth\.token\.email/.test(emailWriteRule)
+    && emailWriteRule.includes('auth.token.email_verified === true')
+    && emailWriteRule.includes("sign_in_provider === 'google.com'")
+    && /isBoolean/.test((staffEmails['$emailKey'] || {})['.validate'] || ''),
+  '12.14: /staff_emails chỉ cho cán bộ Google đã xác thực cấp/thu quyền, giá trị phải là boolean');
 
   const productionReadRule = (r.tvts_production_data || {})['.read'] || '';
   assert(productionReadRule.includes('staff_emails')
@@ -1501,6 +1504,98 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && productionReadRule.includes("sign_in_provider === 'google.com'")
     && adminJsSrc.includes('checkStaffAccess(user.uid, user.email)'),
   '12.15: Dữ liệu riêng tư mở cho email Google đã cấp và admin phải truyền email khi kiểm tra');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 13: Cấp / Thu hồi quyền cán bộ theo email (nút trong trang admin)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 13] Cấp Quyền Cán Bộ Theo Email:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://staff-db.firebaseio.com',
+    syncPath: 'tvts_production_data',
+    apiKey: 'AIza_key',
+    authEmail: 'owner@tvts.local',
+    authPassword: 'matkhau'
+  });
+
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'TOKEN_X', expiresIn: '3600' }) };
+    }
+    if (options.method === 'DELETE') {
+      return { ok: true, status: 200, json: async () => null };
+    }
+    if (options.method === 'PUT') {
+      return { ok: true, status: 200, json: async () => true };
+    }
+    return {
+      ok: true, status: 200,
+      json: async () => ({ 'a%2Eb@gmail%2Ecom': true, 'da%2Exoa@gmail%2Ecom': false })
+    };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const bad = await csm.grantStaffEmail('khong-phai-email');
+  assert(bad.success === false && /không hợp lệ/i.test(bad.error || ''),
+    '13.1: Từ chối email sai định dạng (không gọi Firebase)');
+
+  const granted = await csm.grantStaffEmail('A.B@gmail.com');
+  assert(granted.success === true, `9.2: Cấp quyền thành công. Lỗi: ${granted.error}`);
+
+  const putCall = calls.find(c => c.method === 'PUT');
+  assert(putCall && putCall.url.includes('staff_emails/'),
+    '13.3: Ghi đúng nhánh /staff_emails');
+  // Email phải được mã hoá 2 lớp: %2E (thay dấu chấm) rồi encodeURIComponent.
+  assert(putCall.url.includes('a%252Eb%40gmail%252Ecom'),
+    `9.4: Khoá email phải mã hoá dấu chấm thành %2E. Thực tế: ${putCall.url}`);
+  assert(putCall.url.includes('auth=TOKEN_X'), '13.5: Request phải kèm ID token của cán bộ');
+  assert(putCall.body === 'true', `9.6: Giá trị phải là boolean true. Thực tế: ${putCall.body}`);
+
+  const listed = await csm.listStaffEmails();
+  assert(listed.success === true, '13.7: Đọc được danh sách email đã cấp quyền');
+  assert(listed.emails.length === 1 && listed.emails[0] === 'a.b@gmail.com',
+    `9.8: Giải mã %2E về dấu chấm và bỏ email đã thu hồi. Thực tế: ${JSON.stringify(listed.emails)}`);
+
+  const revoked = await csm.revokeStaffEmail('a.b@gmail.com');
+  assert(revoked.success === true, '13.9: Thu hồi quyền thành công');
+  const delCall = calls.find(c => c.method === 'DELETE');
+  assert(delCall && delCall.url.includes('a%252Eb%40gmail%252Ecom'),
+    '13.10: Thu hồi phải DELETE đúng node email');
+}
+
+{
+  // Tài khoản đang đăng nhập chưa có quyền -> Firebase trả 401
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://staff-db.firebaseio.com',
+    apiKey: 'AIza_key',
+    authEmail: 'nhanvien@tvts.local',
+    authPassword: 'matkhau'
+  });
+
+  env.window.fetch = async (url, options = {}) => {
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'TOKEN_Y', expiresIn: '3600' }) };
+    }
+    return { ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({ error: 'Permission denied' }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.grantStaffEmail('nguoi-moi@gmail.com');
+  assert(res.success === false, '13.11: Không có quyền thì cấp quyền phải thất bại');
+  assert(/chưa có quyền cấp quyền/i.test(res.error || ''),
+    `9.12: Thông báo phải chỉ rõ cần OWNER_EMAIL hoặc /staff. Thực tế: ${res.error}`);
 }
 
 // -----------------------------------------------------------------------------

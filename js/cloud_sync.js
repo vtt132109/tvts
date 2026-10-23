@@ -573,6 +573,150 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // QUẢN LÝ QUYỀN CÁN BỘ THEO EMAIL (dùng cho nút trong trang admin)
+  // ---------------------------------------------------------------------------
+  // Ghi /staff_emails/<email đã mã hoá> = true. Nhờ vậy không phải mở Firebase
+  // Console tạo node bằng tay: cán bộ đã có quyền cấp quyền cho người khác,
+  // sau đó người đó chỉ cần đăng nhập Google bằng đúng email ấy.
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  function normalizeStaffEmail(email) {
+    const raw = String(email || '').trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(raw)) {
+      return { ok: false, error: 'Email không hợp lệ: ' + (raw || '(trống)') };
+    }
+    return { ok: true, email: raw, key: encodeStaffEmailKey(raw) };
+  }
+
+  /** Chuẩn bị URL + token cho các thao tác trên /staff_emails. */
+  async function prepareStaffEmailsRequest(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { ok: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (authErr) {
+      return { ok: false, error: authErr.message };
+    }
+    if (!token) {
+      return { ok: false, error: 'Chưa có phiên đăng nhập Google hợp lệ. Hãy đăng nhập bằng Google trước.' };
+    }
+    return { ok: true, cfg, token };
+  }
+
+  /** Ghi một node bất kỳ và kiểm tra cả bẫy HTTP 200 + {"error": ...}. */
+  async function writeNode(relPath, value, customCfg) {
+    const prep = await prepareStaffEmailsRequest(customCfg);
+    if (!prep.ok) return { success: false, error: prep.error };
+
+    const url = formatFirebaseUrl(prep.cfg.databaseUrl, relPath, prep.token);
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(value)
+      });
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Firebase HTTP ${response.status}: `
+            + (data && data.error ? (data.error.message || JSON.stringify(data.error)) : response.statusText)
+        };
+      }
+      if (data && typeof data === 'object' && data.error) {
+        return { success: false, error: 'Firebase từ chối ghi: ' + (data.error.message || JSON.stringify(data.error)) };
+      }
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: 'Lỗi kết nối Firebase: ' + (err.message || err) };
+    }
+  }
+
+  /** Cấp quyền cán bộ cho một email. */
+  async function grantStaffEmail(email, customCfg) {
+    const norm = normalizeStaffEmail(email);
+    if (!norm.ok) return { success: false, error: norm.error };
+
+    const res = await writeNode('staff_emails/' + encodeURIComponent(norm.key), true, customCfg);
+    if (!res.success) {
+      if (/HTTP 401|HTTP 403|Permission denied/i.test(res.error || '')) {
+        return {
+          success: false,
+          error: 'Tài khoản đang đăng nhập chưa có quyền cấp quyền. '
+            + 'Cần thêm email của bạn vào Rules (OWNER_EMAIL) hoặc /staff trước.'
+        };
+      }
+      return res;
+    }
+    return { success: true, email: norm.email, key: norm.key };
+  }
+
+  /** Thu hồi quyền của một email. */
+  async function revokeStaffEmail(email, customCfg) {
+    const norm = normalizeStaffEmail(email);
+    if (!norm.ok) return { success: false, error: norm.error };
+
+    const prep = await prepareStaffEmailsRequest(customCfg);
+    if (!prep.ok) return { success: false, error: prep.error };
+
+    const url = formatFirebaseUrl(
+      prep.cfg.databaseUrl,
+      'staff_emails/' + encodeURIComponent(norm.key),
+      prep.token
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, { method: 'DELETE' });
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+      if (!response.ok) {
+        return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
+      }
+      if (data && typeof data === 'object' && data.error) {
+        return { success: false, error: 'Firebase từ chối xoá: ' + (data.error.message || JSON.stringify(data.error)) };
+      }
+      return { success: true, email: norm.email };
+    } catch (err) {
+      return { success: false, error: 'Lỗi kết nối Firebase: ' + (err.message || err) };
+    }
+  }
+
+  /** Đọc danh sách email đã được cấp quyền. */
+  async function listStaffEmails(customCfg) {
+    const prep = await prepareStaffEmailsRequest(customCfg);
+    if (!prep.ok) return { success: false, error: prep.error };
+
+    const url = formatFirebaseUrl(prep.cfg.databaseUrl, 'staff_emails', prep.token);
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
+      }
+      if (data && typeof data === 'object' && data.error) {
+        return { success: false, error: 'Firebase từ chối đọc: ' + (data.error.message || JSON.stringify(data.error)) };
+      }
+      const emails = Object.keys(data || {})
+        .filter(k => data[k] === true)
+        .map(k => k.replace(/%2E/gi, '.'))
+        .sort();
+      return { success: true, emails };
+    } catch (err) {
+      return { success: false, error: 'Lỗi kết nối Firebase: ' + (err.message || err) };
+    }
+  }
+
   // Danh sách tài khoản khởi tạo CHỈ dùng khi máy chưa có dữ liệu nào.
 // LƯU Ý BẢO MẬT: đây là thông tin công khai trong mã nguồn. Ban Tuyển Sinh
 // phải đổi mật khẩu & PIN ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
@@ -2105,6 +2249,9 @@
     getCurrentAuthUser,
     encodeStaffEmailKey,
     checkStaffAccess,
+    grantStaffEmail,
+    revokeStaffEmail,
+    listStaffEmails,
     signInAnonymous,
     getAnonymousIdToken,
     isStudentMode,
