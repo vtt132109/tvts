@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-387%2F387%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-400%2F400%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -81,7 +81,7 @@ tvts/
 │   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 12 bộ kiểm thử tự động — 387 test cases
+├── tests/                               # 12 bộ kiểm thử tự động — 400 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
@@ -216,7 +216,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (387/387 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (400/400 Tests PASS — 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -226,7 +226,7 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 182/182 |
+| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 195/195 |
 | 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
 | 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |

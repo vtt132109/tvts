@@ -7607,6 +7607,15 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
     async function refreshStaffEmails() {
       if (!window.CloudSyncManager || typeof window.CloudSyncManager.listStaffEmails !== 'function') return;
+      // Chưa đăng nhập Google thì không gọi Firebase (tránh hiện lỗi 401 khó hiểu).
+      const authUser = typeof window.CloudSyncManager.getCurrentAuthUser === 'function'
+        ? window.CloudSyncManager.getCurrentAuthUser()
+        : null;
+      if (!authUser || authUser.isAnonymous) {
+        renderStaffEmailList([]);
+        setStaffEmailStatus('Đăng nhập Google (cán bộ) để xem và cấp quyền.');
+        return;
+      }
       setStaffEmailStatus('Đang tải danh sách…');
       const res = await window.CloudSyncManager.listStaffEmails();
       if (res.success) {

@@ -702,6 +702,13 @@
       const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return {
+            success: false,
+            error: 'Chưa đăng nhập Google hoặc tài khoản chưa được cấp quyền cán bộ. '
+              + 'Hãy đăng nhập Google bằng email đã được cấp (hoặc email OWNER trong Rules).'
+          };
+        }
         return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
       }
       if (data && typeof data === 'object' && data.error) {
@@ -1598,6 +1605,78 @@
   }
 
   /**
+   * Giữ chỗ một MSSV cho uid đang đăng nhập (ghi được MỘT lần).
+   *
+   * Rules yêu cầu node `mssv_owner/<mssv> = <uid>` tồn tại trước khi ghi đăng ký.
+   * Nhờ vậy sinh viên A không thể PUT đè đăng ký của MSSV thuộc về B: lần ghi
+   * đầu tiên giữ chỗ, các lần sau chỉ đúng uid đó mới ghi tiếp được.
+   */
+  async function claimMssv(mssv, customCfg) {
+    const id = String(mssv || '').trim();
+    if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
+      return { success: false, error: 'MSSV không hợp lệ để gửi lên Đám mây.' };
+    }
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    let token = await getAnonymousIdToken(cfg);
+    if (!token) {
+      try { token = await getAuthToken(cfg); } catch (e) { token = ''; }
+    }
+    if (!token) {
+      return {
+        success: false,
+        error: lastAnonymousAuthError
+          || 'Không tạo được phiên gửi yêu cầu. Hãy kiểm tra Firebase Authentication > Anonymous và Web API Key.'
+      };
+    }
+
+    const claims = decodeJwtPayload(token) || {};
+    const sdkUser = getCurrentAuthUser();
+    const uid = claims.user_id || claims.sub
+      || (sdkUser && sdkUser.uid)
+      || anonymousAuthCache.uid
+      || '';
+    if (!uid) return { success: false, error: 'Không xác định được phiên người dùng.' };
+
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.requestsPath || 'tvts_requests') + '/mssv_owner/' + encodeURIComponent(id),
+      token
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uid)
+      });
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return {
+            success: false,
+            error: 'MSSV này đã được một phiên khác đăng ký trước. '
+              + 'Vui lòng liên hệ Ban Tuyển Sinh nếu cần cập nhật.'
+          };
+        }
+        return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
+      }
+      if (data && typeof data === 'object' && data.error) {
+        return { success: false, error: 'Firebase từ chối giữ chỗ MSSV.' };
+      }
+      return { success: true, uid };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
    * Sinh viên gửi đăng ký ca rảnh cả tháng.
    * Trạng thái 'registered' nghĩa là đã ghi nhận — cán bộ KHÔNG phải duyệt
    * từng đăng ký; ca rảnh được gộp tự động khi cán bộ nhận dữ liệu.
@@ -1609,6 +1688,11 @@
     if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
       return { success: false, error: 'MSSV không hợp lệ để gửi lên Đám mây.' };
     }
+
+    // Bước 1: giữ chỗ MSSV cho phiên này (chống ghi đè của MSSV khác).
+    const claim = await claimMssv(id, customCfg);
+    if (!claim.success) return claim;
+
     const body = Object.assign({}, sanitizePublicData(payload) || {});
     body.mssv = id;
     body.status = body.status || 'registered';
@@ -1629,7 +1713,9 @@
   async function submitSwap(request, customCfg) {
     const body = Object.assign({}, sanitizePublicData(request) || {});
     body.id = body.id || generateRequestId('swap');
-    body.status = body.status || 'pending';
+    // Luôn 'pending' khi sinh viên gửi — trạng thái duyệt chỉ do cán bộ đặt.
+    // (Rules cũng chỉ cho owner ghi status 'pending' khi tạo mới.)
+    body.status = 'pending';
     body.createdAt = body.createdAt || new Date().toISOString();
 
     const res = await putRequestNode('swaps/' + encodeURIComponent(body.id), body, customCfg);
@@ -1759,6 +1845,50 @@
    * Gộp yêu cầu đăng ký ca vào danh sách sinh viên cục bộ của cán bộ.
    * Chỉ cập nhật người ĐÃ CÓ trong danh sách; không tự thêm MSSV lạ.
    */
+  // ---- Kiểm tra dữ liệu yêu cầu trước khi gộp vào danh sách CTV -------------
+  // Yêu cầu đến từ client sinh viên nên KHÔNG đáng tin: Rules chỉ kiểm tra có
+  // trường, không kiểm tra nội dung. Mọi ca phải khớp mã ca chuẩn của app.
+  const WEEK_KEYS = ['1', '2', '3', '4'];
+  const MAX_SHIFTS_PER_WEEK = 10;
+
+  function getCanonicalShiftIds() {
+    const engine = (typeof window !== 'undefined' && window.SchedulerEngine) || {};
+    const list = Array.isArray(engine.SHIFTS) ? engine.SHIFTS : [];
+    return new Set(list.map(s => s && s.id).filter(Boolean));
+  }
+
+  /** Lọc một mảng mã ca: chuỗi, đúng định dạng, thuộc danh mục, tối đa 10. */
+  function sanitizeShiftIdList(value, validIds) {
+    if (!Array.isArray(value)) return null;
+    const out = [];
+    for (const raw of value) {
+      if (typeof raw !== 'string') continue;
+      const id = raw.trim();
+      if (!id || id.length > 12 || !/^[A-Za-z0-9_-]+$/.test(id)) continue;
+      if (validIds && validIds.size && !validIds.has(id)) continue;
+      if (!out.includes(id)) out.push(id);
+      if (out.length >= MAX_SHIFTS_PER_WEEK) break;
+    }
+    return out;
+  }
+
+  /** Lọc ca rảnh theo tuần: chỉ nhận khoá 1..4, mỗi tuần là mảng mã ca hợp lệ. */
+  function sanitizeWeeklyAvailability(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const validIds = getCanonicalShiftIds();
+    const out = {};
+    let hasAny = false;
+    WEEK_KEYS.forEach(week => {
+      const source = value[week] !== undefined ? value[week] : value[Number(week)];
+      const cleaned = sanitizeShiftIdList(source, validIds);
+      if (cleaned) {
+        out[week] = cleaned;
+        hasAny = true;
+      }
+    });
+    return hasAny ? out : null;
+  }
+
   function mergeRegistrationRequests(localList, remoteMap) {
     const students = Array.isArray(localList)
       ? localList.map(s => Object.assign({}, s))
@@ -1777,15 +1907,19 @@
       if (idx === undefined) return;
 
       const current = students[idx];
+      // Mốc thời gian do client gửi -> chặn tương lai để không "khoá" bản ghi
+      // vĩnh viễn (gửi năm 2030 thì mọi cập nhật sau đều bị coi là cũ).
+      const reqStampRaw = Date.parse(req.submittedAt || '') || 0;
+      const reqStamp = reqStampRaw ? Math.min(reqStampRaw, Date.now() + 60 * 1000) : 0;
       const currentStamp = Number(current.updatedAt) || 0;
-      const reqStamp = Date.parse(req.submittedAt || '') || 0;
       if (reqStamp && reqStamp <= currentStamp) return;
 
+      const safeShifts = sanitizeWeeklyAvailability(req.shifts);
+      const safeAvailable = sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
+
       students[idx] = Object.assign({}, current, {
-        monthlyAvailableShifts: req.shifts || current.monthlyAvailableShifts,
-        availableShifts: Array.isArray(req.availableShifts)
-          ? req.availableShifts
-          : current.availableShifts,
+        monthlyAvailableShifts: safeShifts || current.monthlyAvailableShifts,
+        availableShifts: safeAvailable || current.availableShifts,
         updatedAt: reqStamp || Date.now()
       });
       mergedCount++;
