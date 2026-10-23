@@ -1,10 +1,33 @@
 # 🔐 Bảo Mật — Trạng Thái, Sự Cố Đã Phát Hiện & Cách Khắc Phục
 
 > Tài liệu này ghi lại **kết quả kiểm tra ngày 2026-10-22** trên chính hệ thống đang chạy
-> (`https://vtt132109.github.io/tvts/`), không phải đánh giá lý thuyết.
+> (`https://vtt132109.github.io/tvts/`), không phải đánh giá lý thuyết. Cập nhật
+> **2026-10-23**: quy trình ca rảnh không chờ duyệt + đăng nhập Google ở màn hình admin
+> + cấp quyền trước bằng email qua `/staff_emails`.
 >
 > **Đọc mục 1 trước.** Có một sự cố đang mở cần xử lý bằng tay trong Firebase Console —
 > không thể sửa bằng code trong repo này.
+
+---
+
+## ✅ CẬP NHẬT KIẾN TRÚC (2026-10-22)
+
+Repo đã chuyển sang mô hình **3 nhánh dữ liệu Firebase + 2 node cấp quyền** và đăng nhập mới:
+
+| Nhánh | Đọc | Ghi | Dữ liệu |
+|---|---|---|---|
+| `tvts_production_data` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Đầy đủ: SĐT, email, ngân hàng, hash mật khẩu/PIN, sao lưu |
+| `tvts_public` | Mọi người | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Chỉ MSSV, họ tên, vai trò, ca rảnh, lịch — **không PII** |
+| `tvts_requests` | Cán bộ; sinh viên đọc `swaps` | Sinh viên ghi yêu cầu gắn `uid`; ca rảnh cán bộ nhận tự động, đổi ca cán bộ duyệt | Đăng ký ca & đề xuất đổi ca |
+
+- **Cán bộ:** Google Login ngay trên màn hình xác thực admin + UID trong `/staff` hoặc email trong `/staff_emails`. Không còn mật khẩu Firebase dùng chung.
+- **Cấp quyền trước bằng email:** chỉ cần thêm `staff_emails/<email đã mã hóa>: true`; người đó đăng nhập Google bằng đúng email là vào được, không cần UID trước. Email key viết thường, thay tất cả dấu chấm bằng `%2E` (ví dụ `ten@gmail%2Ecom`), giá trị phải là boolean `true`.
+- **Sinh viên:** không có trang đăng nhập; tự tạo phiên **Anonymous** khi gửi yêu cầu.
+- **Web API Key** là mã công khai, được công bố trong `tvts_public/clientConfig`.
+
+**Việc còn phải làm thủ công trong Firebase Console:** bật Google + Anonymous, thêm domain vào Authorized domains, thêm `staff/<UID>: true` và/hoặc `staff_emails/<email đã mã hóa>: true`, Publish `database.rules.json`, nhập Web API Key trong admin và Đẩy Lên Cloud một lần. Xem mục 2.
+
+> Các mục 1 và 3 ghi lại **sự cố lịch sử** (database từng mở công khai, file mật khẩu từng bị commit). Mục 4 đã được thay bằng kiến trúc Google/Anonymous ở trên.
 
 ---
 
@@ -53,24 +76,23 @@ mật khẩu + PIN. **Lịch sử git vẫn còn file này** — xem mục 3.
 
 ## 2. ✅ Việc phải làm ngay (theo thứ tự)
 
-### Bước 1 — Chặn rò rỉ trong 2 phút (làm trước, nghĩ sau)
+### Bước 1 — Publish Rules đầy đủ (bắt buộc)
 
-Firebase Console → **Realtime Database → Rules**, dán tạm:
+Firebase Console → **Realtime Database → Rules** → dán toàn bộ file `database.rules.json` trong repo → **Publish**. Rules này:
 
-```json
-{
-  "rules": {
-    ".read": false,
-    ".write": false
-  }
-}
-```
+- `tvts_production_data`: chỉ tài khoản có UID trong `/staff` hoặc email trong `/staff_emails` được đọc/ghi.
+- `tvts_public`: mọi người được đọc; chỉ cán bộ trong `/staff` hoặc `/staff_emails` được ghi.
+- `tvts_requests`: sinh viên ẩn danh chỉ ghi yêu cầu gắn với `uid` của mình; cán bộ đọc toàn bộ. Ca rảnh được **gộp tự động** (không duyệt từng yêu cầu); đề xuất đổi ca vẫn chờ cán bộ duyệt.
+- `staff`: mỗi tài khoản đã đăng nhập chỉ được đọc đúng `staff/<uid>` của mình, đủ để app xác minh quyền cán bộ mà không mở cả danh sách `/staff`. Ghi vào `/staff` chỉ làm được trong Firebase Console (Rules đặt `.write: false`).
+- `staff_emails`: mỗi tài khoản Google chỉ được đọc đúng key email của mình; UID staff được đọc cả danh sách để quản trị. Ghi vào `/staff_emails` chỉ làm được trong Firebase Console (`.write: false`). Giá trị phải là boolean `true`; key email viết thường và thay tất cả dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`. Rules chỉ chấp nhận token Google đã xác thực email (`email_verified === true` và `sign_in_provider === 'google.com'`), không nhận email/password hay token chưa xác thực.
 
-Publish. Kiểm tra lại bằng lệnh ở mục 1: phải nhận **401/403 thay vì 200**.
+Kiểm tra lại bằng lệnh ở mục 1: `tvts_production_data` phải nhận **401/403 thay vì 200**.
 
-> Đánh đổi: ứng dụng sẽ báo lỗi đồng bộ đám mây (có thông báo rõ trong UI), nhưng
-> dữ liệu trên máy vẫn nguyên và dùng bình thường. Đây là trạng thái an toàn để
-> chờ làm bước 2.
+> Nếu chưa kịp cấu hình Google, có thể dán tạm rules **deny-all** dưới đây để chặn rò rỉ ngay, rồi làm Bước 2-4 và quay lại Rules đầy đủ:
+>
+> ```json
+> { "rules": { ".read": false, ".write": false } }
+> ```
 
 ### Bước 2 — Đổi toàn bộ mật khẩu & PIN đã bị lộ
 
@@ -93,12 +115,17 @@ Xoá node: tvts_production_data/adminUsers
 ```
 
 Ứng dụng sẽ tự dựng lại danh sách từ `DEFAULT_ADMIN_USERS` ở máy đầu tiên đăng nhập
-(không còn tài khoản thật nào trong đó).
+(không còn tài khoản thật nào trong đó). Nếu muốn giữ tài khoản cán bộ thật, đổi mật khẩu
+trên một máy sạch rồi đẩy lại Cloud: payload mới chỉ chứa **hash có muối**, không còn plaintext.
 
-### Bước 4 — Bật xác thực thật cho database (khuyến nghị)
+### Bước 4 — Bật Google + Anonymous (code đã hỗ trợ)
 
-Xem mục 4. Đây là thay đổi kiến trúc, cần chủ dự án quyết định vì ảnh hưởng tới
-luồng "đăng nhập bằng PIN trên máy mới".
+1. **Authentication → Sign-in method:** bật **Google** và **Anonymous**.
+2. **Authentication → Settings → Authorized domains:** thêm tên miền GitHub Pages (ví dụ `vtt132109.github.io`).
+3. **Realtime Database → Data:** thêm `staff/<UID Google của quản trị chính>: true`. Để cấp quyền trước cho người khác, thêm `staff_emails/<email đã mã hóa>: true` (email viết thường, thay tất cả dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`). Chỉ dùng boolean `true`.
+4. **Admin → ☁️ Cloud:** nhập Web API Key → Lưu Cấu Hình. Sau đó bấm **Đăng nhập bằng Google** ngay ở màn hình xác thực admin (hoặc trong modal Cloud) → chọn đúng tài khoản cán bộ → **Đẩy Lên Cloud** một lần để tạo `tvts_public`.
+
+Sinh viên **không cần tài khoản**: trang sinh viên tự tạo phiên ẩn danh khi gửi yêu cầu.
 
 ---
 
@@ -135,14 +162,14 @@ Bất kỳ ai cũng có thể:
 2. Hoặc đọc `localStorage` để lấy mật khẩu/PIN của người khác.
 
 Đây là giới hạn cố hữu của web tĩnh, **không phải bug có thể vá bằng vài dòng code**.
-Nếu dữ liệu tuyển sinh là dữ liệu thật của trường, cần một trong hai hướng:
+**Trạng thái mới (2026-10-23):** dữ liệu Cloud đã được bảo vệ bằng Firebase Auth — Google cho cán bộ, Anonymous cho sinh viên, Rules 3 nhánh dữ liệu + `/staff`/`/staff_emails`. Tài khoản PIN nội bộ vẫn chỉ là lớp mở dashboard phía client và **không bảo vệ dữ liệu Cloud**.
 
 | Hướng | Cách làm | Đánh đổi |
 |---|---|---|
-| **A. Firebase Auth (khuyến nghị)** | Bật Email/Password, tạo tài khoản cán bộ, đăng nhập qua REST Auth API, Rules chỉ cho UID trong `/staff` đọc/ghi | Phải tạo tài khoản trên Firebase Console; bỏ được "PIN dùng ngay trên máy mới" trừ khi vẫn giữ PIN cục bộ |
+| **A. Firebase Auth (đã triển khai)** | Google Login ngay trên màn hình xác thực admin + UID trong `/staff` hoặc email trong `/staff_emails`; Rules 3 nhánh dữ liệu; sinh viên dùng Anonymous + `tvts_requests` | Cần cấu hình Firebase Console một lần; dashboard nội bộ vẫn dùng PIN cục bộ |
 | **B. Không dùng cloud, chỉ file** | Tắt `DEFAULT_CONFIG.enabled`, đồng bộ bằng xuất/nhập JSON thủ công | Mất đồng bộ đa thiết bị, nhưng không còn bề mặt tấn công nào |
 
-Nếu chọn A, có thể dùng file `database.rules.json` ở thư mục gốc:
+Rules đã có trong `database.rules.json`; deploy bằng:
 
 ```bash
 firebase deploy --only database --project <project-id>
@@ -167,21 +194,29 @@ firebase deploy --only database --project <project-id>
 | Mật khẩu/PIN lưu plaintext ngay trên máy | **Đã sửa:** băm SHA-256 + salt ngẫu nhiên + 3.000 vòng lặp; tài khoản cũ tự nâng cấp sau lần đăng nhập đầu + test vector FIPS `auth.test.js` |
 | Dò mật khẩu/PIN không giới hạn | **Đã sửa:** khoá 60 giây sau 5 lần sai đúng định dạng + test trong `auth.test.js` |
 | Phiên đăng nhập tồn tại vô hạn trong tab | **Đã sửa:** tự hết hạn sau 12 giờ + test |
-| Mật khẩu/PIN mặc định `0000/9999` trong JS được deploy | **CHƯA sửa** — cần quyết định kiến trúc ở mục 4 |
+| Mật khẩu/PIN mặc định `0000/9999` trong JS được deploy | **Một phần:** vẫn dùng cho dashboard nội bộ phía client; dữ liệu Cloud đã chuyển sang Google + `/staff`, không còn phụ thuộc mật khẩu mặc định |
+| Dữ liệu công khai chứa SĐT/email/số tài khoản/hash | **Đã sửa:** `tvts_public` chỉ nhận `id`, `studentId`, `fullName`, `role`, `faculty`, `className`, ca rảnh, lịch; **lịch/sự kiện được quét sạch PII ở mọi cấp**; test `9.1-9.32`, `10.17-10.20` chặn tái diễn |
+| Cán bộ dùng chung tài khoản Firebase Email/Password | **Đã sửa:** UI admin dùng **Google Login**; quyền Cloud kiểm tra UID trong `/staff` hoặc email trong `/staff_emails`; Email/Password chỉ còn fallback trong code/test |
+| Sinh viên phải có tài khoản mới đăng ký/đổi ca được | **Đã sửa:** không có trang đăng nhập; app tự tạo phiên **Anonymous** và gửi vào `tvts_requests` |
+| Yêu cầu đăng ký/đổi ca không đến được cán bộ | **Đã sửa:** cán bộ đăng nhập Google là app tự kéo và gộp ca rảnh ngay (nút **📥 Kéo Ca Rảnh & Yêu Cầu** khi cần kéo tay); **không tự xếp lịch, không tự đẩy** Cloud. Đề xuất đổi ca vẫn chờ duyệt |
+| Rules cũ chỉ có một node, không phân quyền sinh viên | **Đã có:** `database.rules.json` 3 nhánh dữ liệu + `/staff`/`/staff_emails`; **cần Publish thủ công** trên Firebase Console (mục 2, Bước 1) |
 
-> ⚠️ **Hệ quả của việc đồng bộ hash:** máy có thể **tạo tài khoản từ Cloud**, nên nếu Firebase Rules còn cho ghi công khai thì kẻ tấn công có thể chèn tài khoản của họ vào node `adminUsers`. **Bắt buộc** siết Rules (mục 2, Bước 1) trước khi dùng tính năng này trên môi trường thật.
+> ⚠️ **Hệ quả của việc đồng bộ hash:** máy cán bộ có thể **tạo tài khoản từ Cloud**, nên nếu Firebase Rules còn cho ghi công khai thì kẻ tấn công có thể chèn tài khoản vào `tvts_production_data/adminUsers`. **Bắt buộc** Publish `database.rules.json` (mục 2, Bước 1) trước khi dùng tính năng này trên môi trường thật.
 
 ---
 
 ## 6. 🔎 Cách tự kiểm tra định kỳ
 
 ```powershell
-# 1. Database còn mở công khai không? (mong đợi 401/403)
+# 1. Database riêng tư còn mở công khai không? (mong đợi 401/403)
 curl.exe -s -o NUL -w "%{http_code}`n" "https://vtt123-76e07-default-rtdb.firebaseio.com/tvts_production_data.json?shallow=true"
 
-# 2. Có file PII/tài khoản nào bị track lại không? (mong đợi rỗng)
+# 2. Nhánh công khai phải KHÔNG chứa PII (mong đợi rỗng)
+curl.exe -s "https://vtt123-76e07-default-rtdb.firebaseio.com/tvts_public.json" | Select-String -Pattern 'phone|email|bankAccount|passwordHash|pinHash'
+
+# 3. Có file PII/tài khoản nào bị track lại không? (mong đợi rỗng)
 git ls-files | Select-String -Pattern '\.(csv|xlsx|xls)$|admin_accounts'
 
-# 3. Bộ test hồi quy (mong đợi 269/269)
+# 4. Bộ test hồi quy (mong đợi 375/375)
 node tests/run_all_tests.js
 ```

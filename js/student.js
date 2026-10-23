@@ -571,6 +571,10 @@ function paintSlotAvailability() {
         renderCommonSchedule();
         if (currentLookupStudent) handleLookupMySchedule();
       }
+      if (touched(STORAGE_KEYS.STUDENTS)) {
+        // Dữ liệu công khai vừa tải xong: mở khoá ma trận nếu sinh viên đã gõ MSSV.
+        handleMssvAutoDetect();
+      }
       if (touched(STORAGE_KEYS.REG_CONFIG)) evaluateRegistrationWindow();
       if (touched(STORAGE_KEYS.SWAP_REQUESTS) && elements.swapModal?.classList.contains('active')) {
         openSwapModal(null, null, currentLookupStudent?.studentId || null);
@@ -1115,8 +1119,9 @@ function paintSlotAvailability() {
       elements.inputFullName.value = student.fullName;
     }
 
-    if (elements.inputPhone && student.phone) {
-      elements.inputPhone.value = student.phone;
+    // KHÔNG điền SĐT: trang sinh viên không được nhận PII từ nhánh công khai.
+    if (elements.inputPhone) {
+      elements.inputPhone.value = '';
     }
 
     // Nạp lại ca rảnh theo từng tuần (monthlyAvailableShifts)
@@ -1226,13 +1231,12 @@ function paintSlotAvailability() {
           updatedAt: Date.now()
         };
         localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-        if (window.CloudSyncManager) {
-          if (typeof window.CloudSyncManager.pushToCloud === 'function') {
-            window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
-          } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-            window.CloudSyncManager.triggerAutoPush();
-          }
-        }
+        submitRegistrationRequestToCloud(
+          students[existingIndex],
+          studentId,
+          { 1: [], 2: [], 3: [], 4: [] },
+          []
+        );
         handleMssvAutoDetect();
       }
     }
@@ -1525,6 +1529,47 @@ function paintSlotAvailability() {
   }
 
   /**
+   * Gửi đăng ký ca rảnh lên nhánh công khai tvts_requests.
+   *
+   * Trang sinh viên KHÔNG ghi trực tiếp dữ liệu riêng tư của Ban Tổ Chức
+   * (trước đây pushToCloud() đẩy cả danh sách có SĐT/email/ngân hàng). Ca rảnh
+   * được cán bộ nhận và gộp TỰ ĐỘNG — sinh viên không phải chờ duyệt.
+   */
+  function submitRegistrationRequestToCloud(existingStudent, studentId, shifts, availableShifts) {
+    if (!window.CloudSyncManager
+      || typeof window.CloudSyncManager.submitRegistration !== 'function') {
+      return;
+    }
+    const activeM = getActiveMonth();
+    const cleanShifts = {
+      1: [...((shifts && shifts[1]) || [])],
+      2: [...((shifts && shifts[2]) || [])],
+      3: [...((shifts && shifts[3]) || [])],
+      4: [...((shifts && shifts[4]) || [])]
+    };
+    window.CloudSyncManager.submitRegistration(studentId, {
+      fullName: (existingStudent && existingStudent.fullName) || '',
+      month: { month: activeM.month, year: activeM.year },
+      shifts: cleanShifts,
+      availableShifts: [...(availableShifts || [])],
+      submittedAt: new Date().toISOString(),
+      status: 'registered'
+    }).then(res => {
+      if (res && res.success) {
+        showToast('☁️ Đã gửi ca rảnh. Ban Điều Hành sẽ thấy và xếp lịch sau — không cần chờ duyệt.', 'success', 5000);
+      } else {
+        showToast(
+          '⚠️ Chưa gửi được đăng ký lên Đám mây: ' + ((res && res.error) || 'không rõ nguyên nhân'),
+          'warning',
+          7000
+        );
+      }
+    }).catch(err => {
+      console.warn('[Student] Gửi đăng ký lên Cloud thất bại:', err && err.message);
+    });
+  }
+
+  /**
    * Xử lý lưu đăng ký sinh viên trọn tháng (Section 9 API Contract)
    * Cho phép đăng ký với 0 ca rảnh (nghỉ tháng này / tuần thi) (Task 3)
    * Tuyệt đối KHÔNG tự ý tạo mới sinh viên khi MSSV không có trong danh sách CTV!
@@ -1591,20 +1636,21 @@ function paintSlotAvailability() {
     };
 
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-    if (window.CloudSyncManager) {
-      if (typeof window.CloudSyncManager.pushToCloud === 'function') {
-        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
-      } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
-        window.CloudSyncManager.triggerAutoPush();
-      }
-    }
+    // Gửi ca rảnh lên Cloud để cán bộ nhận tự động — KHÔNG đẩy toàn bộ danh
+    // sách (có PII) từ máy sinh viên lên nhánh dữ liệu riêng tư.
+    submitRegistrationRequestToCloud(
+      students[existingIndex],
+      studentId,
+      monthlyAvailableShifts,
+      availableShifts
+    );
 
     if (totalMonthShifts === 0) {
-      showSuccessBanner(`Đã cập nhật: Bạn đã đăng ký <strong>0 ca rảnh (nghỉ tháng này)</strong> cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
+      showSuccessBanner(`Đã cập nhật: Bạn đã đăng ký <strong>0 ca rảnh (nghỉ tháng này)</strong> cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>). Ban Điều Hành sẽ thấy đăng ký này và xếp lịch sau — <strong>không cần chờ duyệt</strong>.`);
       showToast('🎉 Đã ghi nhận đăng ký của bạn: 0 ca rảnh (nghỉ tháng này)!', 'success');
     } else {
       const activeM = getActiveMonth();
-      showSuccessBanner(`Cập nhật thành công! Đã lưu <strong>${totalMonthShifts} ca rảnh trong ${escapeHtml(formatMonthLabel(activeM.month, activeM.year))}</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>).`);
+      showSuccessBanner(`Cập nhật thành công! Đã lưu <strong>${totalMonthShifts} ca rảnh trong ${escapeHtml(formatMonthLabel(activeM.month, activeM.year))}</strong> (T1: ${c1}, T2: ${c2}, T3: ${c3}, T4: ${c4}) cho CTV: <strong>${escapeHtml(existingStudent.fullName)}</strong> (MSSV: <strong>${escapeHtml(studentId)}</strong>). Ban Điều Hành sẽ thấy ca rảnh và xếp lịch sau — <strong>không cần chờ duyệt</strong>.`);
       showToast(`Đã cập nhật ${totalMonthShifts} ca rảnh của bạn trong tháng thành công!`, 'success');
     }
 
@@ -2032,7 +2078,6 @@ function paintSlotAvailability() {
             <div class="shift-card-partner">
               👥 Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>
               ${s.partnerMssv ? `(${escapeHtml(s.partnerMssv)})` : ''}
-              ${s.partnerPhone ? `<span style="margin-left: 0.35rem; color: var(--text-muted);">📞 ${escapeHtml(s.partnerPhone)}</span>` : ''}
             </div>
             ${isCurrent ? `
               <button type="button" class="btn btn-secondary btn-sm btn-swap-shift-trigger" onclick="window.studentOpenSwapForShift('${s.shiftId}', ${s.weekNum})" title="Đề xuất đổi hoặc nhờ trực thay ca này">
@@ -2103,7 +2148,7 @@ function paintSlotAvailability() {
           <!-- Body Thẻ -->
           <div class="personal-card-body">
             
-            <!-- Hồ Sơ CTV (Chỉ hiển thị Họ tên, MSSV, SĐT - KHÔNG có dòng phân loại vai trò) -->
+            <!-- Hồ Sơ CTV (Chỉ hiển thị Họ tên & MSSV - KHÔNG có PII) -->
             <div class="personal-profile-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
               <div>
                 <div class="profile-field-label">Họ và Tên</div>
@@ -2112,10 +2157,6 @@ function paintSlotAvailability() {
               <div>
                 <div class="profile-field-label">Mã Số Sinh Viên</div>
                 <div class="profile-field-value">🆔 ${escapeHtml(student.studentId)}</div>
-              </div>
-              <div>
-                <div class="profile-field-label">Số Điện Thoại / Zalo</div>
-                <div class="profile-field-value">📞 ${escapeHtml(student.phone || 'Chưa cập nhật')}</div>
               </div>
             </div>
 
@@ -2202,7 +2243,6 @@ function paintSlotAvailability() {
     const lines = [
       `🎓 LỊCH TRỰC CỘNG TÁC VIÊN TƯ VẤN TUYỂN SINH`,
       `👤 CTV: ${currentLookupStudent.fullName} (MSSV: ${currentLookupStudent.studentId})`,
-      `📞 SĐT: ${currentLookupStudent.phone || 'N/A'}`,
       `📅 Tổng số: ${currentLookupShifts.length} ca trực trong tháng`,
       `---------------------------------------`,
       ...currentLookupShifts.map(s => 
@@ -2525,6 +2565,22 @@ function paintSlotAvailability() {
 
     allSwaps.unshift(newRequest);
     localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(allSwaps));
+
+    // Gửi yêu cầu lên Cloud để cán bộ duyệt (trang sinh viên không ghi dữ liệu riêng tư).
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.submitSwap === 'function') {
+      window.CloudSyncManager.submitSwap(newRequest).then(res => {
+        if (!res || !res.success) {
+          showToast(
+            '⚠️ Đã lưu trên máy này nhưng chưa gửi được lên Đám mây: '
+              + ((res && res.error) || 'không rõ nguyên nhân'),
+            'warning',
+            7000
+          );
+        }
+      }).catch(err => {
+        console.warn('[Student] Gửi đề xuất đổi ca lên Cloud thất bại:', err && err.message);
+      });
+    }
 
     // Thông báo đồng bộ sang trang Admin
 window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] } }));

@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f8fafc">
+  <!-- Trang sinh viên: chỉ đọc dữ liệu công khai + gửi yêu cầu, KHÔNG đẩy dữ liệu riêng tư. -->
+  <meta name="tvts-cloud-role" content="student">
   <title>Cổng Sinh Viên - Đăng Ký Ca Rảnh & Xem Lịch Trực Ban Tuyển Sinh</title>
   <meta name="description" content="Trang dành cho sinh viên và cộng tác viên đăng ký ca rảnh và tra cứu lịch trực văn phòng tư vấn tuyển sinh.">
   
@@ -732,11 +734,14 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261022_1725"></script>
-<script src="js/cloud_sync.js?v=20261022_1725"></script>
-  <script src="js/month_calendar.js?v=20261022_1725"></script>
-  <script src="js/scheduler.js?v=20261022_1725"></script>
-  <script src="js/roster.js?v=20261022_1725"></script>
-  <script src="js/student.js?v=20261022_1725"></script>
+  <script src="js/a11y_modal.js?v=20261023_1345"></script>
+  <!-- Firebase Auth: sinh viên dùng phiên ẨN DANH (không hiện giao diện đăng nhập) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="js/cloud_sync.js?v=20261023_1345"></script>
+  <script src="js/month_calendar.js?v=20261023_1345"></script>
+  <script src="js/scheduler.js?v=20261023_1345"></script>
+  <script src="js/roster.js?v=20261023_1345"></script>
+  <script src="js/student.js?v=20261023_1345"></script>
 </body>
 </html>

@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0f172a">
+  <!-- Trang admin: sau khi đẩy dữ liệu riêng tư thành công, tự cập nhật nhánh công khai. -->
+  <meta name="tvts-publish-public" content="true">
   <title>Bảng Điều Hành Quản Trị & Xếp Ca - Tư Vấn Tuyển Sinh</title>
   <meta name="description" content="Trang quản trị dành riêng cho ban điều hành văn phòng tư vấn tuyển sinh để quản lý thông tin sinh viên và tự động xếp lịch trực.">
   
@@ -158,6 +160,27 @@
         <p class="auth-subtitle">Khu vực bảo mật dành riêng cho Ban Điều Hành Tuyển Sinh. Vui lòng xác thực danh tính cán bộ để tiếp tục.</p>
       </div>
       <div class="auth-body">
+        <!-- Đăng nhập Google: bảng chọn tài khoản (prompt=select_account).
+             Cán bộ phải có UID trong node /staff mới được mở dashboard. -->
+        <button type="button" id="btn-admin-google-login" class="btn btn-block" style="display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 0.8rem; font-size: 0.95rem; font-weight: 700; background: #fff; color: #1f2937; border: 1px solid #cbd5e1; border-radius: var(--radius-md); cursor: pointer; box-shadow: var(--shadow-sm);">
+          <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          <span>Đăng nhập bằng Google</span>
+        </button>
+        <div id="admin-google-auth-status" role="status" aria-live="polite" style="font-size: 0.76rem; color: var(--text-muted, #64748b); text-align: center; margin-top: 0.45rem; min-height: 1.1em;">
+          Chọn tài khoản Google của cán bộ để tiếp tục.
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 0.25rem; color: var(--text-muted, #64748b); font-size: 0.76rem; font-weight: 600;">
+          <span style="flex: 1; height: 1px; background: var(--border-color, #e2e8f0);"></span>
+          <span>hoặc dùng tài khoản cán bộ</span>
+          <span style="flex: 1; height: 1px; background: var(--border-color, #e2e8f0);"></span>
+        </div>
+
         <div class="auth-tabs">
           <button type="button" class="auth-tab-btn active" id="tab-auth-pwd">🔑 Tài Khoản & Mật Khẩu</button>
           <button type="button" class="auth-tab-btn" id="tab-auth-pin">⚡ Mã PIN Nhanh</button>
@@ -348,7 +371,14 @@
         <div class="value" id="count-new-students">0</div>
       </div>
     </div>
-    <!-- Thẻ thứ 4. #count-filled-shifts do js/admin.js renderSummary() (dòng ~1811) ghi
+    <div class="summary-card">
+      <div class="summary-icon primary">🗓️</div>
+      <div class="summary-info">
+        <div class="label">Lượt ca rảnh đã đăng ký</div>
+        <div class="value" id="count-availability-shifts">0</div>
+      </div>
+    </div>
+    <!-- Thẻ thứ 5. #count-filled-shifts do js/admin.js renderSummary() (dòng ~1811) ghi
          textContent nên không đổi được ở đây. Thay vào đó ta thêm:
            - .summary-note  : giải thích cách tính (luôn đúng, không phụ thuộc trạng thái)
            - #summary-state-not-scheduled : chỉ hiện khi CHƯA có ca nào được xếp,
@@ -1825,6 +1855,9 @@
             <button type="button" class="btn btn-primary btn-sm" id="btn-cloud-modal-push" style="font-size: 0.82rem;">
               <span>⬆️ Đẩy Lên Cloud</span>
             </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-pull-requests" style="font-size: 0.82rem;" title="Ca rảnh được gộp tự động, không cần duyệt từng yêu cầu; đề xuất đổi ca vẫn chờ duyệt.">
+              <span>📥 Kéo Ca Rảnh &amp; Yêu Cầu</span>
+            </button>
           </div>
         </div>
 
@@ -1858,9 +1891,40 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="cloud-input-key" style="font-weight: 600; font-size: 0.85rem;">
-                Khóa Xác Thực / Database Secret (tùy chọn)
+                Web API Key (Firebase)
               </label>
-              <input type="password" id="cloud-input-key" class="form-input" placeholder="Để trống nếu đặt Rules là public test mode" style="font-size: 0.88rem;">
+              <input type="password" id="cloud-input-key" class="form-input" placeholder="AIza..." style="font-size: 0.88rem; font-family: monospace;">
+              <div class="form-hint" style="font-size: 0.72rem;">Project settings → General → Web API Key. Cần thiết để đăng nhập tài khoản đồng bộ.</div>
+            </div>
+          </div>
+
+          <!-- Đăng nhập Google cho cán bộ: không dùng mật khẩu dùng chung -->
+          <div style="background: var(--bg-subtle); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem; margin-bottom: 0.85rem;">
+            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.5rem;">
+              🔐 Quyền Ghi Dữ Liệu (Đăng Nhập Google)
+            </div>
+            <div class="form-hint" style="font-size: 0.75rem; margin-bottom: 0.6rem;">
+              Tài khoản Google phải có <strong>UID trong <code>/staff</code></strong> hoặc
+              <strong>email trong <code>/staff_emails</code></strong> mới đọc/ghi được dữ liệu riêng tư.
+              Sinh viên không cần đăng nhập — trang sinh viên chỉ nhập MSSV.
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-cloud-google-login">
+                <span>🔐 Đăng Nhập Google</span>
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-google-logout" style="display: none;">
+                <span>Đăng Xuất Google</span>
+              </button>
+              <span id="cloud-google-auth-status" style="font-size: 0.8rem; color: var(--text-muted);">
+                ⛔ Chưa đăng nhập Google — chưa thể đọc/ghi dữ liệu riêng tư.
+              </span>
+            </div>
+            <div class="form-hint" style="font-size: 0.72rem; margin-top: 0.5rem;">
+              Cấp quyền trong Firebase Console:<br>
+              • Quản trị chính: <code>staff/&lt;UID&gt;: true</code><br>
+              • Người được add trước: <code>staff_emails/&lt;email&gt;: true</code><br>
+              Email phải viết thường và thay dấu chấm bằng <code>%2E</code>, ví dụ
+              <code>ten@gmail%2Ecom</code>.
             </div>
           </div>
 
@@ -1882,15 +1946,22 @@
           </div>
         </div>
 
-        <!-- Hướng dẫn 3 bước cực dễ cho Tris -->
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: #166534; line-height: 1.6;">
-          <div style="font-weight: 700; margin-bottom: 0.4rem; font-size: 0.88rem;">📖 Hướng dẫn nhanh tạo Firebase Database (100% miễn phí):</div>
+        <!-- Hướng dẫn cấu hình đồng bộ an toàn -->
+        <div style="background: var(--success-bg); border: 1px solid var(--success); border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: var(--text-main); line-height: 1.65;">
+          <div style="font-weight: 700; margin-bottom: 0.4rem; font-size: 0.88rem;">📖 Bật đồng bộ an toàn (Google cho cán bộ, ẩn danh cho sinh viên):</div>
           <ol style="margin-left: 1.25rem; margin-bottom: 0;">
-            <li>Truy cập <strong><a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color: #15803d; text-decoration: underline;">console.firebase.google.com</a></strong> và đăng nhập bằng tài khoản Google.</li>
-            <li>Bấm <strong>"Thêm dự án" (Add project)</strong> ➔ Đặt tên tùy ý (vd: <code>tuyen-sinh-2026</code>) ➔ Bấm Tiếp tục.</li>
-            <li>Ở menu bên trái, chọn <strong>"Realtime Database"</strong> ➔ Bấm <strong>"Tạo cơ sở dữ liệu" (Create Database)</strong> ➔ Chọn vị trí <code>Singapore (asia-southeast1)</code> ➔ Chọn <strong>"Bắt đầu ở chế độ thử nghiệm" (Start in test mode)</strong> ➔ Bấm Bật.</li>
-            <li>Sao chép đường dẫn URL hiển thị ở đầu bảng (dạng <code>https://tuyen-sinh-2026-default-rtdb.asia-southeast1.firebasedatabase.app</code>) dán vào ô bên trên và bấm <strong>"Lưu Cấu Hình"</strong> là xong! Mọi máy tính và tab ẩn danh sẽ tự động đồng bộ ngay lập tức!</li>
+            <li>Vào <strong>console.firebase.google.com</strong> → dự án → <strong>Authentication</strong> → <strong>Sign-in method</strong>: bật <strong>Google</strong> và <strong>Anonymous</strong>.</li>
+            <li><strong>Authentication → Settings → Authorized domains</strong>: thêm tên miền trang web (ví dụ <code>vtt132109.github.io</code>).</li>
+            <li><strong>Project settings → General → Web API Key</strong>: dán vào ô “Web API Key” ở trên rồi bấm <strong>Lưu Cấu Hình</strong>.</li>
+            <li>Bấm <strong>Đăng Nhập Google</strong>, sao chép UID hiện ra và thêm vào <strong>Realtime Database → Data</strong>:
+              <code>staff/&lt;UID&gt;: true</code> (node <code>staff</code> chỉ cán bộ được đọc/ghi).
+            </li>
+            <li><strong>Realtime Database → Rules</strong>: dán nội dung file <code>database.rules.json</code> trong repo (3 nhánh: <code>tvts_production_data</code> riêng tư, <code>tvts_public</code> công khai, <code>tvts_requests</code> cho sinh viên gửi yêu cầu).</li>
           </ol>
+          <div style="margin-top: 0.5rem; font-size: 0.78rem;">
+            ⚠️ Đừng dùng “test mode” (mở công khai) — dữ liệu tuyển sinh từng bị lộ vì chế độ đó.
+            Sinh viên không cần tài khoản: trang sinh viên tự tạo phiên ẩn danh để gửi yêu cầu, không hiện giao diện đăng nhập.
+          </div>
         </div>
       </div>
 
@@ -1907,11 +1978,14 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261022_1725"></script>
-<script src="js/cloud_sync.js?v=20261022_1725"></script>
-  <script src="js/month_calendar.js?v=20261022_1725"></script>
-  <script src="js/scheduler.js?v=20261022_1725"></script>
-  <script src="js/roster.js?v=20261022_1725"></script>
-  <script src="js/admin.js?v=20261022_1725"></script>
+  <script src="js/a11y_modal.js?v=20261023_1345"></script>
+  <!-- Firebase Auth: Google cho cán bộ -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="js/cloud_sync.js?v=20261023_1345"></script>
+  <script src="js/month_calendar.js?v=20261023_1345"></script>
+  <script src="js/scheduler.js?v=20261023_1345"></script>
+  <script src="js/roster.js?v=20261023_1345"></script>
+  <script src="js/admin.js?v=20261023_1345"></script>
 </body>
 </html>
