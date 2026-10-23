@@ -21,11 +21,12 @@ Repo đã chuyển sang mô hình **3 nhánh dữ liệu Firebase + 2 node cấp
 | `tvts_requests` | Cán bộ; sinh viên đọc `swaps` | Sinh viên ghi yêu cầu gắn `uid`; ca rảnh cán bộ nhận tự động, đổi ca cán bộ duyệt | Đăng ký ca & đề xuất đổi ca |
 
 - **Cán bộ:** Google Login ngay trên màn hình xác thực admin + UID trong `/staff` hoặc email trong `/staff_emails`. Không còn mật khẩu Firebase dùng chung.
-- **Cấp quyền trước bằng email:** chỉ cần thêm `staff_emails/<email đã mã hóa>: true`; người đó đăng nhập Google bằng đúng email là vào được, không cần UID trước. Email key viết thường, thay tất cả dấu chấm bằng `%2E` (ví dụ `ten@gmail%2Ecom`), giá trị phải là boolean `true`.
+- **Cấp quyền trước bằng email:** ngay trong app — `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email`. App ghi `staff_emails/<email đã mã hóa>: true`; người đó đăng nhập Google bằng đúng email là vào được, không cần UID trước. Có nút thu hồi (🗑️) trong danh sách.
+- **Tài khoản khởi động (bootstrap):** `database.rules.json` chứa `owner@example.com`. **Phải thay bằng email Google của Trưởng ban trước khi Publish** — người này là người duy nhất cấp quyền được khi `/staff_emails` còn trống. Sau khi tự cấp quyền cho mình (hoặc thêm đồng nghiệp), mọi thao tác tiếp theo làm trong app.
 - **Sinh viên:** không có trang đăng nhập; tự tạo phiên **Anonymous** khi gửi yêu cầu.
 - **Web API Key** là mã công khai, được công bố trong `tvts_public/clientConfig`.
 
-**Việc còn phải làm thủ công trong Firebase Console:** bật Google + Anonymous, thêm domain vào Authorized domains, thêm `staff/<UID>: true` và/hoặc `staff_emails/<email đã mã hóa>: true`, Publish `database.rules.json`, nhập Web API Key trong admin và Đẩy Lên Cloud một lần. Xem mục 2.
+**Việc còn phải làm thủ công trong Firebase Console:** bật Google + Anonymous, thêm domain vào Authorized domains, Publish `database.rules.json` (đã thay `owner@example.com`), nhập Web API Key trong admin. Sau đó cấp quyền cho các cán bộ khác ngay trong app. Xem mục 2.
 
 > Các mục 1 và 3 ghi lại **sự cố lịch sử** (database từng mở công khai, file mật khẩu từng bị commit). Mục 4 đã được thay bằng kiến trúc Google/Anonymous ở trên.
 

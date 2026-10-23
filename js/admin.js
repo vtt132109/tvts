@@ -7507,6 +7507,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       updateGoogleAuthStatus();
       modal.style.display = 'flex';
       modal.classList.add('active');
+      if (typeof refreshStaffEmails === 'function') refreshStaffEmails();
     };
 
     window.adminCloseCloudSyncModal = function() {
@@ -7545,6 +7546,104 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         updateGoogleAuthStatus();
       }
     });
+
+    // ---- Cấp quyền cán bộ theo email -------------------------------------
+    // Ghi trực tiếp /staff_emails/<email> = true qua Firebase, nên không phải
+    // mở Console tạo node bằng tay. Điều kiện: tài khoản đang đăng nhập phải
+    // có quyền (OWNER_EMAIL trong Rules hoặc đã nằm trong /staff, /staff_emails).
+    const staffEmailListEl = document.getElementById('staff-email-list');
+    const staffEmailStatusEl = document.getElementById('staff-email-status');
+
+    function setStaffEmailStatus(text, isError) {
+      if (!staffEmailStatusEl) return;
+      staffEmailStatusEl.textContent = text || '';
+      staffEmailStatusEl.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+    }
+
+    function renderStaffEmailList(emails) {
+      if (!staffEmailListEl) return;
+      staffEmailListEl.innerHTML = '';
+      if (!emails || emails.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'Chưa cấp quyền cho email nào khác.';
+        li.style.cssText = 'font-size:0.8rem;color:var(--text-muted);font-style:italic;';
+        staffEmailListEl.appendChild(li);
+        return;
+      }
+      emails.forEach(email => {
+        const li = document.createElement('li');
+        li.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;'
+          + 'font-size:.84rem;background:var(--bg-subtle);border:1px solid var(--border-color);'
+          + 'border-radius:8px;padding:.4rem .6rem;';
+
+        const span = document.createElement('span');
+        span.textContent = email; // email là dữ liệu từ Cloud -> dùng textContent, không chèn HTML
+        span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-action delete';
+        btn.textContent = '🗑️';
+        btn.title = 'Thu hồi quyền của ' + email;
+        btn.setAttribute('aria-label', 'Thu hồi quyền của ' + email);
+        btn.addEventListener('click', async () => {
+          if (!confirm(`Thu hồi quyền truy cập dữ liệu Cloud của "${email}"?`)) return;
+          btn.disabled = true;
+          const res = await window.CloudSyncManager.revokeStaffEmail(email);
+          if (res.success) {
+            showToast(`Đã thu hồi quyền của ${email}.`, 'info');
+            await refreshStaffEmails();
+          } else {
+            showToast('Không thu hồi được: ' + res.error, 'error');
+            btn.disabled = false;
+          }
+        });
+
+        li.appendChild(span);
+        li.appendChild(btn);
+        staffEmailListEl.appendChild(li);
+      });
+    }
+
+    async function refreshStaffEmails() {
+      if (!window.CloudSyncManager || typeof window.CloudSyncManager.listStaffEmails !== 'function') return;
+      setStaffEmailStatus('Đang tải danh sách…');
+      const res = await window.CloudSyncManager.listStaffEmails();
+      if (res.success) {
+        renderStaffEmailList(res.emails);
+        setStaffEmailStatus(`Có ${res.emails.length} email được cấp quyền.`);
+      } else {
+        renderStaffEmailList([]);
+        setStaffEmailStatus(res.error || 'Không tải được danh sách.', true);
+      }
+    }
+
+    document.getElementById('btn-grant-staff-email')?.addEventListener('click', async () => {
+      if (!window.CloudSyncManager || typeof window.CloudSyncManager.grantStaffEmail !== 'function') return;
+      const input = document.getElementById('staff-email-input');
+      const email = input ? input.value.trim() : '';
+      if (!email) {
+        showToast('Vui lòng nhập email cần cấp quyền!', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-grant-staff-email');
+      if (btn) btn.disabled = true;
+      setStaffEmailStatus('Đang cấp quyền…');
+      const res = await window.CloudSyncManager.grantStaffEmail(email);
+      if (btn) btn.disabled = false;
+
+      if (res.success) {
+        showToast(`Đã cấp quyền cho ${res.email}. Người này chỉ cần đăng nhập Google bằng email đó.`, 'success');
+        if (input) input.value = '';
+        await refreshStaffEmails();
+      } else {
+        setStaffEmailStatus(res.error || 'Cấp quyền thất bại.', true);
+        showToast('Cấp quyền thất bại: ' + res.error, 'error');
+      }
+    });
+
+    document.getElementById('btn-refresh-staff-emails')?.addEventListener('click', refreshStaffEmails);
 
     // Nút Kiểm Tra Kết Nối
     document.getElementById('btn-cloud-test-conn')?.addEventListener('click', async () => {

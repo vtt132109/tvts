@@ -16,7 +16,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261023_2255">
+  <link rel="stylesheet" href="css/style.css?v=20261023_2310">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -1946,17 +1946,44 @@
           </div>
         </div>
 
-        <!-- Hướng dẫn cấu hình đồng bộ an toàn -->
+        <!-- Cấp quyền cán bộ theo email (không cần vào Firebase Console) -->
+        <div style="border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 1rem; margin-bottom: 1rem;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>👥 Cấp Quyền Cán Bộ Theo Email</span>
+          </h3>
+          <p class="form-hint" style="font-size: 0.76rem; margin-bottom: 0.6rem;">
+            Người được cấp chỉ cần mở trang này và bấm <strong>Đăng nhập bằng Google</strong> bằng đúng email đó —
+            không phải tạo node trong Firebase Console.
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <input type="email" id="staff-email-input" class="form-input" placeholder="ten@gmail.com"
+                   autocomplete="off" style="flex: 1; min-width: 220px; font-size: 0.88rem;" aria-label="Email cán bộ cần cấp quyền">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-grant-staff-email" style="white-space: nowrap; font-weight: 700;">
+              <span>＋ Cấp Quyền</span>
+            </button>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.85rem;">
+            <strong style="font-size: 0.82rem; color: var(--text-main);">Danh sách đã cấp quyền</strong>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-staff-emails" style="font-size: 0.78rem;">
+              <span>↻ Tải Lại</span>
+            </button>
+          </div>
+          <ul id="staff-email-list" style="list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem;"></ul>
+          <div id="staff-email-status" role="status" aria-live="polite" style="font-size: 0.76rem; color: var(--text-muted); margin-top: 0.35rem;"></div>
+        </div>
+
         <div style="background: var(--success-bg); border: 1px solid var(--success); border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: var(--text-main); line-height: 1.65;">
           <div style="font-weight: 700; margin-bottom: 0.4rem; font-size: 0.88rem;">📖 Bật đồng bộ an toàn (Google cho cán bộ, ẩn danh cho sinh viên):</div>
           <ol style="margin-left: 1.25rem; margin-bottom: 0;">
             <li>Vào <strong>console.firebase.google.com</strong> → dự án → <strong>Authentication</strong> → <strong>Sign-in method</strong>: bật <strong>Google</strong> và <strong>Anonymous</strong>.</li>
             <li><strong>Authentication → Settings → Authorized domains</strong>: thêm tên miền trang web (ví dụ <code>vtt132109.github.io</code>).</li>
             <li><strong>Project settings → General → Web API Key</strong>: dán vào ô “Web API Key” ở trên rồi bấm <strong>Lưu Cấu Hình</strong>.</li>
-            <li>Bấm <strong>Đăng Nhập Google</strong>, sao chép UID hiện ra và thêm vào <strong>Realtime Database → Data</strong>:
-              <code>staff/&lt;UID&gt;: true</code> (node <code>staff</code> chỉ cán bộ được đọc/ghi).
-            </li>
-            <li><strong>Realtime Database → Rules</strong>: dán nội dung file <code>database.rules.json</code> trong repo (3 nhánh: <code>tvts_production_data</code> riêng tư, <code>tvts_public</code> công khai, <code>tvts_requests</code> cho sinh viên gửi yêu cầu).</li>
+            <li><strong>Realtime Database → Rules</strong>: dán nội dung file <code>database.rules.json</code> trong repo và
+              <strong>thay <code>owner@example.com</code> bằng chính email Google của bạn</strong> (xuất hiện 6 chỗ). Đây là "chìa khoá khởi động": người này cấp quyền cho những người còn lại ngay trong app.</li>
+            <li>Bấm <strong>Đăng Nhập Google</strong> bằng email vừa điền, rồi dùng khung
+              <strong>👥 Cấp Quyền Cán Bộ Theo Email</strong> ở trên để thêm đồng nghiệp —
+              <em>không cần vào tab Data tạo node bằng tay</em>.</li>
           </ol>
           <div style="margin-top: 0.5rem; font-size: 0.78rem;">
             ⚠️ Đừng dùng “test mode” (mở công khai) — dữ liệu tuyển sinh từng bị lộ vì chế độ đó.
@@ -1978,14 +2005,14 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261023_2255"></script>
+  <script src="js/a11y_modal.js?v=20261023_2310"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261023_2255"></script>
-  <script src="js/month_calendar.js?v=20261023_2255"></script>
-  <script src="js/scheduler.js?v=20261023_2255"></script>
-  <script src="js/roster.js?v=20261023_2255"></script>
-  <script src="js/admin.js?v=20261023_2255"></script>
+  <script src="js/cloud_sync.js?v=20261023_2310"></script>
+  <script src="js/month_calendar.js?v=20261023_2310"></script>
+  <script src="js/scheduler.js?v=20261023_2310"></script>
+  <script src="js/roster.js?v=20261023_2310"></script>
+  <script src="js/admin.js?v=20261023_2310"></script>
 </body>
 </html>
