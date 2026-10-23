@@ -3,7 +3,7 @@
 > Tài liệu này ghi lại **kết quả kiểm tra ngày 2026-10-22** trên chính hệ thống đang chạy
 > (`https://vtt132109.github.io/tvts/`), không phải đánh giá lý thuyết. Cập nhật
 > **2026-10-23**: quy trình ca rảnh không chờ duyệt + đăng nhập Google ở màn hình admin
-> + cấp quyền trước bằng email qua `/staff_emails`.
+> + cấp quyền trước bằng email qua `/staff_emails`. Cập nhật **2026-10-23 (đợt 2)**: chặn sinh viên tự duyệt đổi ca, chặn ghi đè đăng ký của MSSV khác (`mssv_owner`), lọc mã ca & mốc thời gian do client gửi.
 >
 > **Đọc mục 1 trước.** Có một sự cố đang mở cần xử lý bằng tay trong Firebase Console —
 > không thể sửa bằng code trong repo này.
@@ -218,6 +218,6 @@ curl.exe -s "https://vtt123-76e07-default-rtdb.firebaseio.com/tvts_public.json" 
 # 3. Có file PII/tài khoản nào bị track lại không? (mong đợi rỗng)
 git ls-files | Select-String -Pattern '\.(csv|xlsx|xls)$|admin_accounts'
 
-# 4. Bộ test hồi quy (mong đợi 375/375)
+# 4. Bộ test hồi quy (mong đợi 400/400)
 node tests/run_all_tests.js
 ```

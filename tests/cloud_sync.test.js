@@ -1059,6 +1059,10 @@ console.log('\n▶ [GROUP 10] Sinh Viên Gửi Yêu Cầu Bằng Phiên Ẩn Dan
   const put = calls.find(c => c.method === 'PUT'
     && c.url.includes('/tvts_requests/registrations/SV001.json'));
   assert(Boolean(put), `10.3: Phải PUT đúng node registrations/SV001. URL: ${calls.map(c => c.url).join(' | ')}`);
+  const claimPut = calls.find(c => c.method === 'PUT'
+    && c.url.includes('/tvts_requests/mssv_owner/SV001.json'));
+  assert(Boolean(claimPut) && JSON.parse(claimPut.body) === 'ANON_UID_1',
+    '10.3b: Phải giữ chỗ MSSV (mssv_owner) bằng uid trước khi ghi đăng ký');
   assert(put && /[?&]auth=ID_TOKEN_ANON/.test(put.url),
     '10.4: Request phải kèm ID token ẩn danh');
   const body = put ? JSON.parse(put.body) : {};
@@ -1219,6 +1223,26 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
   });
   assert(unknown.mergedCount === 0 && unknown.students.length === 1,
     '11.4: Không tự thêm MSSV lạ vào danh sách CTV');
+
+  // Dữ liệu yêu cầu đến từ client sinh viên -> phải lọc trước khi gộp.
+  env.window.SchedulerEngine = { SHIFTS: [{ id: 'T2_S' }, { id: 'T3_C' }] };
+  const dirty = csm.mergeRegistrationRequests(local, {
+    SV001: {
+      mssv: 'SV001',
+      submittedAt: '2030-01-01T00:00:00.000Z',
+      shifts: { 1: ['T2_S', '<img onerror=alert(1)>', 'T9_X'], 2: 'khong-phai-mang', 5: ['T2_S'] },
+      availableShifts: ['T2_S', 'T2_S', 'X', 123]
+    }
+  });
+  assert(dirty.mergedCount === 1, '11.5: Yêu cầu mới vẫn được gộp');
+  assert(JSON.stringify(dirty.students[0].monthlyAvailableShifts[1]) === JSON.stringify(['T2_S']),
+    `11.6: Chỉ giữ mã ca hợp lệ. Thực tế: ${JSON.stringify(dirty.students[0].monthlyAvailableShifts)}`);
+  assert(dirty.students[0].monthlyAvailableShifts[5] === undefined,
+    '11.7: Bỏ khoá tuần nằm ngoài 1..4');
+  assert(JSON.stringify(dirty.students[0].availableShifts) === JSON.stringify(['T2_S']),
+    `11.8: Lọc trùng & phần tử không phải chuỗi. Thực tế: ${JSON.stringify(dirty.students[0].availableShifts)}`);
+  assert(dirty.students[0].updatedAt <= Date.now() + 120000,
+    '11.9: Mốc thời gian tương lai phải bị chặn (không cho khoá bản ghi vĩnh viễn)');
 }
 
 {
@@ -1504,6 +1528,28 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && productionReadRule.includes("sign_in_provider === 'google.com'")
     && adminJsSrc.includes('checkStaffAccess(user.uid, user.email)'),
   '12.15: Dữ liệu riêng tư mở cho email Google đã cấp và admin phải truyền email khi kiểm tra');
+
+  // Chống ghi đè đăng ký của MSSV người khác
+  const regRule = ((r.tvts_requests || {}).registrations || {})['$mssv'] || {};
+  assert(/mssv_owner/.test(regRule['.write'] || ''),
+    '12.16: Ghi đăng ký phải phụ thuộc mssv_owner (chống ghi đè đăng ký của MSSV khác)');
+  const ownerRule = ((r.tvts_requests || {}).mssv_owner || {})['$mssv'] || {};
+  assert(/!data\.exists\(\)/.test(ownerRule['.write'] || '')
+    && /auth\.uid/.test(ownerRule['.write'] || ''),
+  '12.17: mssv_owner chỉ giữ chỗ MỘT lần cho đúng uid');
+
+  // Sinh viên không được tự duyệt đề xuất đổi ca
+  const swapRule = ((r.tvts_requests || {}).swaps || {})['$swapId'] || {};
+  const swapWrite = swapRule['.write'] || '';
+  assert(swapWrite.includes("newData.child('status').val() === 'pending'")
+    && swapWrite.includes("data.child('status').val() === 'pending'")
+    && swapWrite.includes("newData.child('status').val() === 'cancelled'"),
+  '12.18: Sinh viên chỉ tạo được status pending và chỉ huỷ được yêu cầu đang pending');
+  assert(!/newData\.child\('status'\)\.val\(\) === 'approved'/.test(swapWrite),
+    '12.19: Không có nhánh nào cho sinh viên tự đặt status approved');
+  assert(/cancelled/.test(swapRule['.validate'] || '')
+    && /approved/.test(swapRule['.validate'] || ''),
+  '12.20: Validate chặn giá trị status lạ');
 }
 
 // -----------------------------------------------------------------------------
@@ -1595,7 +1641,34 @@ console.log('\n▶ [GROUP 13] Cấp Quyền Cán Bộ Theo Email:');
   const res = await csm.grantStaffEmail('nguoi-moi@gmail.com');
   assert(res.success === false, '13.11: Không có quyền thì cấp quyền phải thất bại');
   assert(/chưa có quyền cấp quyền/i.test(res.error || ''),
-    `9.12: Thông báo phải chỉ rõ cần OWNER_EMAIL hoặc /staff. Thực tế: ${res.error}`);
+    `13.12: Thông báo phải chỉ rõ cần OWNER_EMAIL hoặc /staff. Thực tế: ${res.error}`);
+}
+
+{
+  // Chưa đăng nhập / chưa được cấp quyền -> đọc danh sách phải báo dễ hiểu, không phải "HTTP 401"
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://staff-db.firebaseio.com',
+    apiKey: 'AIza_key',
+    authEmail: 'nhanvien@tvts.local',
+    authPassword: 'matkhau'
+  });
+
+  env.window.fetch = async (url) => {
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'TOKEN_Z', expiresIn: '3600' }) };
+    }
+    return { ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({ error: 'Permission denied' }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.listStaffEmails();
+  assert(res.success === false, '13.13: Chưa có quyền thì không đọc được danh sách');
+  assert(/Đăng nhập Google|chưa được cấp quyền/i.test(res.error || ''),
+    `13.14: Thông báo 401 phải hướng dẫn đăng nhập/cấp quyền. Thực tế: ${res.error}`);
 }
 
 // -----------------------------------------------------------------------------
