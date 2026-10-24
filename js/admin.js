@@ -3202,6 +3202,15 @@ function renderStudentTable() {
     const activeWeekCalendar = calendarWeeks[currentWeekIdx] || null;
 
     let gridHtml = '';
+    if (state.students.length === 0) {
+      gridHtml += `
+        <div style="grid-column: 1 / -1; background: #fff7ed; border: 1.5px dashed #f59e0b; border-radius: var(--radius-md); padding: 0.9rem 1rem; color: #9a3412; font-size: 0.85rem; line-height: 1.55;">
+          ⚠️ <strong>Chưa có CTV nào trong danh sách</strong> nên chưa thể xếp ca.
+          Hãy <button type="button" onclick="document.getElementById('btn-open-import-modal')?.click()" style="background:none;border:none;color:#c2410c;font-weight:800;text-decoration:underline;cursor:pointer;padding:0;">📥 Nhập CSV</button>
+          hoặc đăng nhập Google trong <strong>☁️ Đồng Bộ Cloud</strong> để kéo danh sách 58 CTV.
+        </div>
+      `;
+    }
 
     const weekRangeLabel = activeWeekCalendar ? ` (${activeWeekCalendar.startDateStr} - ${activeWeekCalendar.endDateStr})` : '';
     gridHtml += `
@@ -3448,7 +3457,20 @@ function renderStudentTable() {
     return state.monthSchedule;
   }
 
+  /** Mở nhập CSV khi danh sách CTV rỗng. */
+  function promptImportRosterIfEmpty() {
+    if (state.students && state.students.length > 0) return false;
+    const msg = 'Chưa có CTV nào trong danh sách nên không thể gán ca.\n\n'
+      + 'Hãy bấm OK để mở Nhập CSV, hoặc đăng nhập Google trong ☁️ Đồng Bộ Cloud để kéo danh sách 58 CTV.';
+    const go = typeof window.confirm === 'function' ? window.confirm(msg) : false;
+    if (go) {
+      try { document.getElementById('btn-open-import-modal')?.click(); } catch (e) {}
+    }
+    return true;
+  }
+
   window.adminCreateBlankMonth = function() {
+    if (promptImportRosterIfEmpty()) return;
     ensureBlankMonthSchedule();
     saveSchedule(true);
     renderAll();
@@ -3468,6 +3490,7 @@ function renderStudentTable() {
   };
 
   window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
+    if (promptImportRosterIfEmpty()) return;
     const effectiveWeek = weekNumber || state.viewWeek || 1;
     let targetSchedule = state.monthSchedule?.weeks?.[effectiveWeek - 1] || state.currentSchedule;
 
@@ -4095,6 +4118,14 @@ window.adminDeleteStudent = async function(studentId) {
           <button type="button" class="btn btn-secondary" onclick="window.adminCreateBlankMonth && window.adminCreateBlankMonth()" style="margin-left: 0.5rem;">
             <span>🧩 Tạo Lịch Trống &amp; Xếp Tay</span>
           </button>
+          ${state.students.length === 0 ? `
+            <p style="font-size:0.82rem; color:#b45309; margin-top:0.75rem;">
+              ⚠️ Danh sách CTV đang rỗng — hãy nhập CSV hoặc đăng nhập Google để kéo 58 CTV trước.
+            </p>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('btn-open-import-modal')?.click()" style="margin-top:0.35rem;">
+              📥 Nhập Danh Sách CTV
+            </button>
+          ` : ''}
         </div>
       `;
       return;

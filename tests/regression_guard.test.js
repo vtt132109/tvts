@@ -1636,6 +1636,8 @@ runTest('3.16: Tạo lịch trống để xếp tay mọi ngày/CTV', () => {
     'Ô ca trống phải bấm được để mở modal gán tay');
   assert.ok(/id="btn-admin-manual-schedule"/.test(adminHtml),
     'admin.html phải có nút Xếp thủ công');
+  assert.ok(/promptImportRosterIfEmpty/.test(adminJs) && /Chưa có CTV nào/.test(adminJs),
+    'Khi danh sách CTV rỗng phải hướng dẫn nhập CSV/kéo Cloud thay vì mở modal trống');
 });
 
 // -----------------------------------------------------------------------------
