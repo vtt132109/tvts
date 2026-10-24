@@ -1303,6 +1303,38 @@ console.log('\n▶ [GROUP 10] Sinh Viên Gửi Yêu Cầu Bằng Phiên Ẩn Dan
     '10.16: Trang sinh viên không được đẩy dữ liệu riêng tư');
 }
 
+{
+  // Hồi quy thực tế: index.html lưu role 'student' vào localStorage dùng chung;
+  // admin.html từng đọc lại và tự coi mình là trang sinh viên -> chặn push.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  env.localStorage.setItem(K.CLOUD_CONFIG, JSON.stringify({
+    role: 'student',
+    enabled: false,
+    databaseUrl: 'https://sync-db.firebaseio.com'
+  }));
+  env.sandbox.document.querySelector = (sel) =>
+    (String(sel).indexOf('tvts-cloud-role') !== -1 ? { content: 'admin' } : null);
+
+  const cfg = csm.getConfig();
+  assert(cfg.role === 'admin',
+    '10.17: Meta admin phải thắng role student cũ trong localStorage');
+  assert(csm.isStudentMode(cfg) === false,
+    '10.18: Trang admin không được coi là student chỉ vì config cũ');
+
+  const saved = csm.saveConfig({
+    role: 'student',
+    enabled: false,
+    databaseUrl: 'https://sync-db.firebaseio.com'
+  });
+  const raw = JSON.parse(env.localStorage.getItem(K.CLOUD_CONFIG));
+  assert(!('role' in raw),
+    '10.19: saveConfig KHÔNG được lưu role vào localStorage dùng chung');
+  assert(saved.config.role === 'admin',
+    '10.20: Config trả về vẫn giữ role admin của trang hiện tại');
+}
+
 // -----------------------------------------------------------------------------
 // GROUP 11: Gộp yêu cầu & cập nhật trạng thái đổi ca
 // -----------------------------------------------------------------------------
@@ -1617,6 +1649,8 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     '12.3: Không dùng biến window trong HTML (tránh guard dead-selector)');
   assert(/<meta\s+name="tvts-publish-public"\s+content="true"/.test(adminHtml),
     '12.4: Trang admin phải bật cờ tự đẩy nhánh công khai bằng thẻ meta');
+  assert(/<meta\s+name="tvts-cloud-role"\s+content="admin"/.test(adminHtml),
+    '12.4b: Trang admin phải khai báo role admin để không bị config student ghi đè');
   assert(adminHtml.includes('btn-cloud-google-login')
     && adminHtml.includes('btn-cloud-pull-requests'),
   '12.5: Admin phải có nút Đăng nhập Google và nút nhận ca rảnh');
