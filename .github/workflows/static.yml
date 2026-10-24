@@ -63,7 +63,10 @@ jobs:
           # Chỉ những file JS thực sự được nạp bởi trang.
           # roster thay cho sample30: danh sách 58 CTV nạp từ CSV, không nhúng
           # danh sách mẫu trong mã nguồn.
-          for f in cloud_sync month_calendar scheduler roster a11y_modal; do
+          # common/audit/store: tiện ích dùng chung (#16), nhật ký thao tác
+          # (#10), lớp lưu trữ IndexedDB (#16) — thiếu 1 file là trang chết
+          # ngay từ dòng script đầu, nên bước kiểm tra bên dưới sẽ chặn deploy.
+          for f in cloud_sync month_calendar scheduler roster a11y_modal common audit store; do
             cp "js/$f.js" _site/js/
           done
           cp js/admin.js   _site/js/
