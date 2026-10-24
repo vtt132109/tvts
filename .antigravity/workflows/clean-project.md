@@ -17,7 +17,7 @@ Khi người dùng kích hoạt lệnh `/clean-project`, Agent thực hiện tu�
 ### Bước 1: Rà Soát Cú Pháp & Dead Code
 Kiểm tra cú pháp của toàn bộ các tệp JavaScript trọng yếu:
 ```powershell
-node -c js/scheduler.js ; node -c js/student.js ; node -c js/admin.js ; node -c js/sample30.js
+node -c js/scheduler.js ; node -c js/student.js ; node -c js/admin.js
 ```
 - Quét các biến khai báo bằng `const`/`let` nhưng không bao giờ được đọc hay gán lại.
 - Phát hiện các hàm khai báo nội bộ trong IIFE nhưng không được gọi và không được xuất ra API.

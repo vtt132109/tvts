@@ -4,7 +4,7 @@
  * ============================================================================
  * Kiểm định các yêu cầu từ Tris:
  * 1. Nhập sai MSSV -> Báo lỗi, không được tự động thêm vào danh sách sinh viên.
- * 2. Danh sách 30 CTV HCM-UTE luôn được bảo toàn và nạp sẵn cố định.
+ * 2. Danh sách 30 CTV kiểm thử luôn được bảo toàn và nạp sẵn cố định.
  * 3. Khi nhập đúng MSSV -> Giữ nguyên Họ và tên, MSSV, Ca trực của tháng.
  * 4. Cho phép đăng ký 0 ca rảnh (nghỉ tháng này).
  *
@@ -41,10 +41,9 @@ function runTest(name, fn) {
   }
 }
 
-console.log('--- KIỂM THỬ XÁC THỰC MSSV & BẢO TOÀN DANH SÁCH 30 CTV HCM-UTE ---');
+console.log('--- KIỂM THỬ XÁC THỰC MSSV & BẢO TOÀN DANH SÁCH 30 CTV KIỂM THỬ ---');
 
-const defaultStudentsPath = path.resolve(__dirname, '../data/default_students.json');
-const defaultStudents = JSON.parse(fs.readFileSync(defaultStudentsPath, 'utf8'));
+const { TEST_STUDENTS: testStudents } = require('./fixtures/test_students');
 const studentJsPath = path.resolve(__dirname, '../js/student.js');
 
 /**
@@ -190,21 +189,21 @@ function getStorageStudents(store) {
 }
 
 // ===========================================================================
-// TEST 1: Danh sách 30 CTV HCM-UTE chuẩn chính
+// TEST 1: Bộ dữ liệu kiểm thử có đủ 30 CTV
 // ===========================================================================
-runTest('Danh sách nạp sẵn có đúng 30 CTV và chứa đầy đủ MSSV Vũ Tiến Tài (25161393)', () => {
-  assert.strictEqual(defaultStudents.length, 30, 'Phải có đúng 30 CTV');
-  const tai = defaultStudents.find(s => s.studentId === '25161393');
-  assert.ok(tai, 'Phải tìm thấy sinh viên Vũ Tiến Tài với MSSV 25161393');
-  assert.strictEqual(tai.fullName, 'Vũ Tiến Tài', 'Họ và tên phải chính xác là Vũ Tiến Tài');
-  assert.strictEqual(tai.major, 'Điện tử viễn thông', 'Ngành phải là Điện tử viễn thông');
+runTest('Bộ dữ liệu kiểm thử có đúng 30 CTV và chứa MSSV mẫu (2302001)', () => {
+  assert.strictEqual(testStudents.length, 30, 'Phải có đúng 30 CTV');
+  const sv = testStudents.find(s => s.studentId === '2302001');
+  assert.ok(sv, 'Phải tìm thấy CTV mẫu với MSSV 2302001');
+  assert.strictEqual(sv.fullName, 'Hoàng Lan Anh', 'Họ và tên phải khớp fixture');
+  assert.strictEqual(sv.role, 'new', 'Vai trò phải khớp fixture');
 });
 
 // ===========================================================================
 // TEST 2: NẠP ĐƯỢC js/student.js THẬT (chống hồi quy về bản sao trong test)
 // ===========================================================================
 runTest('js/student.js nạp được thành công và export hàm đăng ký thật', () => {
-  const { window: w } = bootStudentPortal(defaultStudents);
+  const { window: w } = bootStudentPortal(testStudents);
   assert.ok(w, 'Sandbox window phải tồn tại');
   assert.ok(w.studentTestHelper, 'js/student.js phải export window.studentTestHelper cho test');
   assert.strictEqual(typeof w.studentTestHelper.register, 'function',
@@ -257,24 +256,24 @@ runTest('Đăng ký 4 tuần hợp nhất thành availableShifts và KHÔNG mấ
 // TEST 5: Cho phép đăng ký 0 ca (nghỉ tháng) — phải không bị chặn
 // ===========================================================================
 runTest('Đăng ký 0 ca rảnh KHÔNG bị chặn (cho phép nghỉ tháng)', () => {
-  const { store, window: w } = bootStudentPortal(defaultStudents);
+  const { store, window: w } = bootStudentPortal(testStudents);
 
-  const res = w.studentTestHelper.register('25161393', { 1: [], 2: [], 3: [], 4: [] });
+  w.studentTestHelper.register('2302001', { 1: [], 2: [], 3: [], 4: [] });
 
   assert.strictEqual(getStorageStudents(store).length, 30,
     'Đăng ký 0 ca vẫn phải giữ nguyên 30 CTV');
-  const tai = getStorageStudents(store).find(s => s.studentId === '25161393');
-  assert.ok(tai, 'Hồ sơ phải còn sau khi đăng ký 0 ca');
-  assert.strictEqual((tai.availableShifts || []).length, 0,
-    'availableShifts phải rỗng — nghĉ tháng');
-  assert.ok(tai.monthlyAvailableShifts, 'vẫn phải ghi 4 tuần (đều rỗng)');
+  const sv = getStorageStudents(store).find(s => s.studentId === '2302001');
+  assert.ok(sv, 'Hồ sơ phải còn sau khi đăng ký 0 ca');
+  assert.strictEqual((sv.availableShifts || []).length, 0,
+    'availableShifts phải rỗng — nghỉ tháng');
+  assert.ok(sv.monthlyAvailableShifts, 'vẫn phải ghi 4 tuần (đều rỗng)');
 });
 
 // ===========================================================================
 // TEST 6: MSSV sai / đúng — chạy hàm thật trong sandbox
 // ===========================================================================
 runTest('MSSV sai (9999999) bị chặn và KHÔNG làm tăng số lượng sinh viên', () => {
-  const { store, window: w } = bootStudentPortal(defaultStudents);
+  const { store, window: w } = bootStudentPortal(testStudents);
   assert.strictEqual(getStorageStudents(store).length, 30, 'Danh sách phải có 30 CTV trước khi thử');
 
   w.studentTestHelper.register('9999999', { 1: ['T2_S'], 2: ['T3_S'], 3: [], 4: [] });
@@ -286,10 +285,10 @@ runTest('MSSV sai (9999999) bị chặn và KHÔNG làm tăng số lượng sinh
     'Không được tạo hồ sơ cho MSSV không tồn tại');
 });
 
-runTest('MSSV đúng (25161393) cập nhật ca rảnh, giữ nguyên họ tên và tổng 30 CTV', () => {
-  const { store, window: w } = bootStudentPortal(defaultStudents);
+runTest('MSSV đúng (2302001) cập nhật ca rảnh, giữ nguyên họ tên và tổng 30 CTV', () => {
+  const { store, window: w } = bootStudentPortal(testStudents);
 
-  w.studentTestHelper.register('25161393', {
+  w.studentTestHelper.register('2302001', {
     1: ['T2_S', 'T2_C'], 2: ['T4_S'], 3: ['T5_C'], 4: []
   });
 
@@ -297,24 +296,23 @@ runTest('MSSV đúng (25161393) cập nhật ca rảnh, giữ nguyên họ tên 
   assert.strictEqual(after.length, 30,
     `Tổng số sinh viên phải vẫn đúng 30, thực tế ${after.length}`);
 
-  const tai = after.find(s => s.studentId === '25161393');
-  assert.ok(tai, 'Hồ sơ Vũ Tiến Tài phải còn trong danh sách');
-  assert.strictEqual(tai.fullName, 'Vũ Tiến Tài', 'Họ tên phải được giữ nguyên — không được ghi đè');
-  assert.strictEqual(tai.major, 'Điện tử viễn thông', 'Ngành phải được giữ nguyên');
-  assert.ok(tai.monthlyAvailableShifts, 'Phải ghi được ca rảnh theo từng tuần');
+  const sv = after.find(s => s.studentId === '2302001');
+  assert.ok(sv, 'Hồ sơ CTV mẫu phải còn trong danh sách');
+  assert.strictEqual(sv.fullName, 'Hoàng Lan Anh', 'Họ tên phải được giữ nguyên — không được ghi đè');
+  assert.ok(sv.monthlyAvailableShifts, 'Phải ghi được ca rảnh theo từng tuần');
 
-  const week1 = tai.monthlyAvailableShifts[1] || tai.monthlyAvailableShifts['1'] || [];
+  const week1 = sv.monthlyAvailableShifts[1] || sv.monthlyAvailableShifts['1'] || [];
   assert.strictEqual(week1.length, 2, `Tuần 1 phải có 2 ca, thực tế ${week1.length}`);
-  const week2 = tai.monthlyAvailableShifts[2] || tai.monthlyAvailableShifts['2'] || [];
+  const week2 = sv.monthlyAvailableShifts[2] || sv.monthlyAvailableShifts['2'] || [];
   assert.strictEqual(week2.length, 1, 'Tuần 2 phải có 1 ca');
-  const week4 = tai.monthlyAvailableShifts[4] || tai.monthlyAvailableShifts['4'] || [];
+  const week4 = sv.monthlyAvailableShifts[4] || sv.monthlyAvailableShifts['4'] || [];
   assert.strictEqual(week4.length, 0, 'Tuần 4 phải có 0 ca');
 
-  assert.ok(Array.isArray(tai.availableShifts), 'Phải có availableShifts hợp nhất');
+  assert.ok(Array.isArray(sv.availableShifts), 'Phải có availableShifts hợp nhất');
   // T2_S, T2_C (T1) + T4_S (T2) + T5_C (T3) = 4 ca khác nhau
-  assert.strictEqual(tai.availableShifts.length, 4,
-    `availableShifts phải hợp nhất 4 ca, thực tế ${tai.availableShifts.length}`);
-  assert.deepStrictEqual([...tai.availableShifts].sort(),
+  assert.strictEqual(sv.availableShifts.length, 4,
+    `availableShifts phải hợp nhất 4 ca, thực tế ${sv.availableShifts.length}`);
+  assert.deepStrictEqual([...sv.availableShifts].sort(),
     ['T2_C', 'T2_S', 'T4_S', 'T5_C'],
     'availableShifts phải đúng 4 ca đã đăng ký');
 });

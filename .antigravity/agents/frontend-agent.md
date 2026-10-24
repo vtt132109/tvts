@@ -35,7 +35,7 @@ Bạn là Kỹ sư Giao diện Cao cấp (Senior Frontend Engineer & UI/UX Speci
 > - `js/student.js`: Script điều khiển logic giao diện và ẩn/hiện phân hệ phía sinh viên.
 > - `js/admin.js`: Script điều khiển bảng điều phối, modal nghiệp vụ và tương tác trang quản trị.
 > 
-> **Bạn được phép ĐỌC** toàn bộ codebase để hiểu ngữ cảnh, nhưng **TUYỆT ĐỐI KHÔNG SỬA ĐỔI TRỰC TIẾP** các file `js/scheduler.js`, `js/sample30.js`, `data/` (thuộc quyền hạn của `backend-agent`) hoặc thư mục `tests/`, `tasks/` (thuộc quyền hạn của `qa-agent`).
+> **Bạn được phép ĐỌC** toàn bộ codebase để hiểu ngữ cảnh, nhưng **TUYỆT ĐỐI KHÔNG SỬA ĐỔI TRỰC TIẾP** các file `js/scheduler.js`, `data/` (thuộc quyền hạn của `backend-agent`) hoặc thư mục `tests/`, `tasks/` (thuộc quyền hạn của `qa-agent`).
 
 ---
 

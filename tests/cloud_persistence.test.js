@@ -57,7 +57,16 @@ assert.strictEqual(reloaded.length, 2);
 assert.strictEqual(reloaded[0].fullName, 'Nguyễn Văn Test');
 console.log('✓ PASS: applyPayload bảo toàn 100% sinh viên mới từ Cloud');
 
-console.log('--- TEST 3: Kiểm tra code student.js và admin.js không còn điều kiện ghi đè ---');
+console.log('--- TEST 3: Không đẩy tài khoản cán bộ mặc định/fallback ---');
+// Máy chưa có tài khoản cán bộ: payload phải BỎ khoá adminUsers thay vì gửi
+// danh sách mặc định (PATCH sẽ giữ nguyên tài khoản thật trên Cloud).
+assert.ok(!storage['ts_scheduler_admin_users'], 'Máy test không có tài khoản cán bộ');
+const payloadNoAdmin = global.CloudSyncManager.buildPayload();
+assert.ok(!Object.prototype.hasOwnProperty.call(payloadNoAdmin, 'adminUsers'),
+  'Payload không được chứa adminUsers khi máy chưa có tài khoản');
+console.log('✓ PASS: buildPayload không gửi tài khoản cán bộ fallback');
+
+console.log('--- TEST 4: Kiểm tra code student.js và admin.js không còn điều kiện ghi đè ---');
 const adminCode = fs.readFileSync(path.join(__dirname, '../js/admin.js'), 'utf8');
 const studentCode = fs.readFileSync(path.join(__dirname, '../js/student.js'), 'utf8');
 
@@ -66,11 +75,11 @@ assert.ok(!adminCode.includes('!hasOfficial'), 'admin.js không được chứa 
 assert.ok(!studentCode.includes('!hasOfficial'), 'student.js không được chứa điều kiện ghi đè !hasOfficial');
 console.log('✓ PASS: Đã triệt tiêu hoàn toàn logic ghi đè trong cả admin.js và student.js');
 
-console.log('--- TEST 4: Kiểm tra export window.adminForceSyncCloud ---');
+console.log('--- TEST 5: Kiểm tra export window.adminForceSyncCloud ---');
 assert.ok(adminCode.includes('window.adminForceSyncCloud = async function'), 'admin.js phải xuất window.adminForceSyncCloud');
 console.log('✓ PASS: window.adminForceSyncCloud đã được xuất hợp lệ');
 
 console.log('\n=========================================');
-console.log('📊 TỔNG KẾT KIỂM THỬ: 4/4 TESTS ĐẠT CHUẨN (100%)');
+console.log('📊 TỔNG KẾT KIỂM THỬ: 5/5 TESTS ĐẠT CHUẨN (100%)');
 console.log('🎉 TẤT CẢ CÁC BÀI KIỂM THỬ BẢO TOÀN DỮ LIỆU ĐỀU ĐẠT 100%!');
 console.log('=========================================');

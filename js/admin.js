@@ -42,34 +42,10 @@
     AVAILABILITY_MONTH: 'ts_scheduler_availability_month_v1'
   };
 
-  // Danh sách tài khoản cán bộ mặc định.
-  // ⚠️ BẢO MẬT: Thông tin này nằm trong mã nguồn công khai. Sau lần đăng nhập
-  // đầu tiên, hệ thống BẮT BUỘC hiển thị cảnh báo yêu cầu đổi mật khẩu & PIN.
-  // Tài khoản thật KHÔNG được commit vào kho công khai.
-  const DEFAULT_ADMIN_USERS = [
-    {
-      id: 'usr_admin',
-      username: 'admin',
-      password: '0000',
-      pin: '9999',
-      fullName: 'Trưởng Ban Tuyển Sinh',
-      role: 'Trưởng ban điều hành',
-      mustChangePassword: true,
-      createdAt: Date.now() - 500000
-    },
-    {
-      id: 'usr_diephoi',
-      username: 'diephoi',
-      password: '0000',
-      pin: '8888',
-      fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
-      role: 'Điều phối viên tuyển sinh',
-      mustChangePassword: true,
-      createdAt: Date.now() - 300000
-    }
-  ];
-
-  // Đã gỡ WEAK_DEFAULT_PASSWORDS cùng cảnh báo bảo mật — xem warnIfWeakCredentials.
+  // KHÔNG có tài khoản cán bộ mặc định trong mã nguồn.
+  // Danh sách cán bộ do người dùng tạo ở màn "Thiết lập lần đầu" (khi máy trống)
+  // hoặc nhận từ Cloud / bản sao lưu JSON. Tài khoản thật không bao giờ được
+  // commit vào kho công khai.
 
   const state = {
     students: [],
@@ -100,6 +76,10 @@
   // Cờ chống bind trùng sự kiện & timer đếm ngược (xem unlockAdminDashboard)
   let dashboardEventsBound = false;
   let regLiveStatusTimer = null;
+
+  // Báo cáo gần nhất của parseStudentsCsv() — analyzeStudentsCsv() đọc lại
+  // để trả về errors/warnings/stats mà không phải parse lần hai.
+  let lastCsvReport = null;
 
   /**
    * Escape một ô theo chuẩn RFC 4180 + chống CSV injection.
@@ -273,6 +253,29 @@
     return changed;
   }
 
+  // Tài khoản mặc định cũ từng nằm trong mã nguồn công khai (admin/0000,
+  // PIN 9999; diephoi/0000, PIN 8888). Máy đã dùng app có thể vẫn còn chúng
+  // trong localStorage — kể cả khi đã được băm thành hash. Phải vô hiệu hoá
+  // ngay khi nạp để không tiếp tục là cửa hậu.
+  const LEGACY_DEFAULT_ACCOUNTS = [
+    { username: 'admin', password: '0000', pin: '9999' },
+    { username: 'diephoi', password: '0000', pin: '8888' }
+  ];
+
+  function accountUsesSecret(user, field, expected) {
+    if (!user || expected === undefined) return false;
+    if (user[field + 'Hash']) return verifyUserSecret(user, field, expected);
+    return user[field] !== undefined && String(user[field]) === String(expected);
+  }
+
+  function isLegacyDefaultAdmin(user) {
+    if (!user || !user.username) return false;
+    const username = String(user.username).toLowerCase();
+    return LEGACY_DEFAULT_ACCOUNTS.some(def => username === def.username
+      && (accountUsesSecret(user, 'password', def.password)
+        || accountUsesSecret(user, 'pin', def.pin)));
+  }
+
   function findUserByPassword(username, password) {
     const target = String(username || '').trim().toLowerCase();
     if (!target) return null;
@@ -313,6 +316,16 @@
       dashboardContainer: document.getElementById('admin-dashboard-container'),
       tabAuthPwd: document.getElementById('tab-auth-pwd'),
       tabAuthPin: document.getElementById('tab-auth-pin'),
+      authTabs: document.getElementById('admin-auth-tabs'),
+      authDivider: document.getElementById('admin-auth-divider'),
+      adminFirstRun: document.getElementById('admin-first-run'),
+      formAdminFirstRun: document.getElementById('form-admin-first-run'),
+      firstRunFullName: document.getElementById('first-run-fullname'),
+      firstRunUsername: document.getElementById('first-run-username'),
+      firstRunPassword: document.getElementById('first-run-password'),
+      firstRunPasswordConfirm: document.getElementById('first-run-password-confirm'),
+      firstRunPin: document.getElementById('first-run-pin'),
+      firstRunPinConfirm: document.getElementById('first-run-pin-confirm'),
       formAuthCredentials: document.getElementById('form-auth-credentials'),
       formAuthPin: document.getElementById('form-auth-pin'),
       inputAuthUsername: document.getElementById('auth-input-username'),
@@ -481,6 +494,7 @@
       importPreviewTbody: document.getElementById('import-preview-tbody'),
       importPreviewCountLabel: document.getElementById('import-preview-count-label'),
       importFileNameLabel: document.getElementById('import-file-name-label'),
+      importValidationBox: document.getElementById('import-validation-box'),
 
       // Theme toggle elements
       btnThemeLight: document.getElementById('btn-theme-light'),
@@ -560,6 +574,7 @@
     cacheDOMElements();
     initThemeToggle();
     loadAdminUsers();
+    renderAuthMode();
     // Trước khi vẽ dữ liệu: nếu localStorage bị mất (hết dung lượng, "Clear site
     // data"), khôi phục từ bản mirror IndexedDB rồi tải lại trang 1 lần.
     bootstrapIndexedDbRecovery();
@@ -845,6 +860,54 @@
     }, 900);
   }
 
+  /**
+   * Nút "Kéo Dữ Liệu Mới Nhất Từ Cloud" trên màn đăng nhập.
+   * Phải chạy được TRƯỚC khi đăng nhập (đặc biệt khi máy trống), nên không
+   * nằm trong bindCloudSyncEvents() vốn chỉ chạy sau khi mở dashboard.
+   */
+  async function adminTriggerAuthCloudPull() {
+    const statusBox = document.getElementById('auth-cloud-sync-status');
+    if (statusBox) {
+      statusBox.style.display = 'block';
+      statusBox.textContent = '⏳ Đang kết nối Đám mây kéo tài khoản & dữ liệu mới nhất…';
+      statusBox.style.color = '#0284c7';
+    }
+
+    if (!window.CloudSyncManager) {
+      if (statusBox) statusBox.textContent = '⚠️ Module Cloud Sync chưa sẵn sàng.';
+      return;
+    }
+
+    const cfg = window.CloudSyncManager.getConfig();
+    if (!cfg.databaseUrl) {
+      const msg = 'Chưa cấu hình Firebase URL. Hãy đăng nhập Google (cán bộ) hoặc khôi phục từ bản sao lưu JSON.';
+      if (statusBox) {
+        statusBox.textContent = 'ℹ️ ' + msg;
+        statusBox.style.color = '#f59e0b';
+      }
+      showToast(msg, 'info');
+      return;
+    }
+
+    const res = await window.CloudSyncManager.pullFromCloud();
+    if (res.success) {
+      loadAdminUsers();
+      renderAuthMode();
+      if (statusBox) {
+        statusBox.textContent = '✅ Đã đồng bộ tài khoản & dữ liệu mới nhất từ Cloud! Bạn có thể đăng nhập ngay.';
+        statusBox.style.color = '#16a34a';
+      }
+      showToast('Đã đồng bộ dữ liệu mới nhất từ Cloud!', 'success');
+    } else {
+      if (statusBox) {
+        statusBox.textContent = '✕ Lỗi đồng bộ: ' + res.error;
+        statusBox.style.color = '#ef4444';
+      }
+    }
+  }
+
+  window.adminTriggerAuthCloudPull = adminTriggerAuthCloudPull;
+
   function unlockAdminDashboard() {
     if (elements.authScreen) elements.authScreen.style.display = 'none';
     if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'block';
@@ -905,23 +968,53 @@
       const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
       if (raw) {
         const list = JSON.parse(raw);
-        state.adminUsers = Array.isArray(list) ? list : [];
-      } else if (!Array.isArray(state.adminUsers) || state.adminUsers.length === 0) {
-        state.adminUsers = [...DEFAULT_ADMIN_USERS];
-        saveAdminUsers();
+        const safeList = (Array.isArray(list) ? list : []).filter(user => !isLegacyDefaultAdmin(user));
+        const purgedCount = (Array.isArray(list) ? list.length : 0) - safeList.length;
+        state.adminUsers = safeList;
+        if (purgedCount > 0) {
+          // Không auto-push ở đây: máy có thể chưa đăng nhập Cloud. Người dùng
+          // sẽ thấy form Thiết lập lần đầu (nếu không còn tài khoản nào khác).
+          try {
+            localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(safeList));
+          } catch (e) {}
+          console.warn(`[Security] Đã vô hiệu hoá ${purgedCount} tài khoản dùng mật khẩu/PIN mặc định cũ.`);
+          auditLog('SECURITY_PURGE', `Vô hiệu hoá ${purgedCount} tài khoản dùng mật khẩu/PIN mặc định cũ`);
+        }
+      } else {
+        // KHÔNG seed tài khoản mặc định. Máy trống nghĩa là chưa thiết lập:
+        // renderAuthMode() sẽ hiện form "Thiết lập lần đầu" để tạo Trưởng ban.
+        state.adminUsers = [];
       }
-
-      // KHÔNG tự thêm tài khoản mặc định vào danh sách đã có, rồi đẩy lên Cloud.
-      //
-      // Lỗi này đã xảy ra thật: tài khoản thật (đã đổi mật khẩu) bị thêm bản mặc
-      // định trong mã nguồn vào cùng danh sách, rồi saveAdminUsers() đẩy ngược
-      // lên Firebase — ghi đè cấu hình tài khoản thật trên Cloud.
-      //
-      // Máy này thiếu tài khoản nào thì quản trị viên tự thêm trong màn
-      // "Cấp Quyền & Đổi MK" — không tự ý nhét tài khoản mặc định vào.
     } catch (err) {
-      state.adminUsers = [...DEFAULT_ADMIN_USERS];
+      // Dữ liệu hỏng cũng coi như chưa thiết lập — tuyệt đối không rơi về
+      // một tài khoản mặc định nào trong mã nguồn.
+      state.adminUsers = [];
     }
+    renderAuthMode();
+  }
+
+  /**
+   * Chuyển màn xác thực giữa hai chế độ:
+   *  - Có tài khoản cục bộ: hiện tab + form đăng nhập như bình thường.
+   *  - Chưa có tài khoản nào: ẩn tab/form đăng nhập, hiện form thiết lập lần đầu.
+   * Google login và nút kéo Cloud luôn hiển thị để còn đường khôi phục.
+   */
+  function renderAuthMode() {
+    const hasLocalAdmin = Array.isArray(state.adminUsers) && state.adminUsers.length > 0;
+    const pinTabActive = !!(elements.tabAuthPin && elements.tabAuthPin.classList.contains('active'));
+
+    if (elements.authTabs) elements.authTabs.style.display = hasLocalAdmin ? '' : 'none';
+    if (elements.authDivider) elements.authDivider.style.display = hasLocalAdmin ? 'flex' : 'none';
+    if (elements.formAuthCredentials) {
+      elements.formAuthCredentials.style.display = hasLocalAdmin && !pinTabActive ? 'block' : 'none';
+    }
+    if (elements.formAuthPin) {
+      elements.formAuthPin.style.display = hasLocalAdmin && pinTabActive ? 'block' : 'none';
+    }
+    if (elements.adminFirstRun) {
+      elements.adminFirstRun.style.display = hasLocalAdmin ? 'none' : 'block';
+    }
+    if (!hasLocalAdmin) hideAuthError();
   }
 
   function saveAdminUsers() {
@@ -1059,7 +1152,78 @@
     return typeof value === 'string' && value.trim().length >= 3;
   }
 
+  /**
+   * Tạo tài khoản Trưởng ban đầu tiên trên máy chưa có cấu hình.
+   * Không có mật khẩu/PIN mặc định: người dùng tự đặt ngay tại đây.
+   */
+  function handleFirstRunSubmit(e) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+
+    const fullName = elements.firstRunFullName ? elements.firstRunFullName.value.trim() : '';
+    const username = elements.firstRunUsername ? elements.firstRunUsername.value.trim().toLowerCase() : '';
+    const password = elements.firstRunPassword ? elements.firstRunPassword.value : '';
+    const passwordConfirm = elements.firstRunPasswordConfirm ? elements.firstRunPasswordConfirm.value : '';
+    const pin = elements.firstRunPin ? elements.firstRunPin.value.trim() : '';
+    const pinConfirm = elements.firstRunPinConfirm ? elements.firstRunPinConfirm.value.trim() : '';
+
+    if (!fullName) {
+      showAuthError('Vui lòng nhập họ và tên của Trưởng ban.');
+      return;
+    }
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      showAuthError('Tên đăng nhập phải dài 3–32 ký tự, chỉ gồm chữ thường, số, dấu chấm, gạch dưới hoặc gạch ngang.');
+      return;
+    }
+    if (state.adminUsers.some(u => u && String(u.username || '').toLowerCase() === username)) {
+      showAuthError(`Tên đăng nhập "${username}" đã tồn tại. Vui lòng chọn tên khác.`);
+      return;
+    }
+    if (typeof password !== 'string' || password.length < 8) {
+      showAuthError('Mật khẩu phải có ít nhất 8 ký tự.');
+      return;
+    }
+    if (password !== passwordConfirm) {
+      showAuthError('Mật khẩu xác nhận không khớp.');
+      return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+      showAuthError('Mã PIN phải gồm đúng 6 chữ số.');
+      return;
+    }
+    if (pin !== pinConfirm) {
+      showAuthError('Mã PIN xác nhận không khớp.');
+      return;
+    }
+
+    const user = {
+      id: 'usr_' + Date.now(),
+      username,
+      fullName,
+      role: 'Trưởng ban điều hành',
+      createdAt: Date.now()
+    };
+    setUserSecret(user, 'password', password);
+    setUserSecret(user, 'pin', pin);
+
+    state.adminUsers.push(user);
+    saveAdminUsers();
+    auditLog('USER_CREATE', `Tạo tài khoản Trưởng ban đầu tiên "${username}"`);
+    if (elements.formAdminFirstRun && typeof elements.formAdminFirstRun.reset === 'function') {
+      elements.formAdminFirstRun.reset();
+    }
+    renderAuthMode();
+    authenticateSuccess(user);
+    showToast(
+      'Đã tạo tài khoản Trưởng ban trên máy này. Nếu Cloud đã có dữ liệu, hãy đăng nhập Google và kéo dữ liệu trước khi đẩy lên Cloud.',
+      'info',
+      7000
+    );
+  }
+
   function bindAuthEvents() {
+    // Thiết lập lần đầu khi máy chưa có tài khoản cán bộ nào.
+    elements.formAdminFirstRun?.addEventListener('submit', handleFirstRunSubmit);
+
     // Đăng nhập Google: luôn mở bảng chọn tài khoản (prompt=select_account)
     elements.btnAdminGoogleLogin?.addEventListener('click', handleAdminGoogleLogin);
 
@@ -1361,6 +1525,7 @@
       state.adminUsers.push(newUser);
       saveAdminUsers();
       elements.formAddAdminUser.reset();
+      renderAuthMode();
       showToast(`Đã cấp quyền truy cập thành công cho cán bộ ${fullName}!`, 'success');
       switchUserMgmtTab('list');
     });
@@ -1442,7 +1607,6 @@
 
     state.adminUsers.forEach((user, index) => {
       const tr = document.createElement('tr');
-      const isRoot = user.username === 'admin';
       const isCurrent = state.currentUser && state.currentUser.username === user.username;
 
       tr.innerHTML = `
@@ -1455,7 +1619,7 @@
           ${user.pin ? `<button type="button" class="btn-action btn-reveal-pin" data-uid="${escapeHtml(user.id)}" title="Hiện/ẩn mã PIN" aria-label="Hiện hoặc ẩn mã PIN của ${escapeHtml(user.fullName)}">👁️</button>` : ''}
         </td>
         <td>
-          ${isRoot ? '<span style="font-size:0.75rem; color:#94a3b8;">Mặc định</span>' : `
+          ${isCurrent ? '<span style="font-size:0.75rem; color:#94a3b8;">Đang dùng</span>' : `
             <button type="button" class="btn-action delete btn-delete-user" data-uid="${escapeHtml(user.id)}" title="Thu hồi quyền truy cập">🗑️</button>
           `}
         </td>
@@ -1472,6 +1636,7 @@
         if (confirm(`Bạn có chắc muốn thu hồi quyền truy cập của cán bộ "${target.fullName}" (${target.username}) không?`)) {
           state.adminUsers = state.adminUsers.filter(u => u.id !== uid);
           saveAdminUsers();
+          renderAuthMode();
           renderUserMgmtTable();
           showToast(`Đã thu hồi quyền của cán bộ ${target.fullName}!`, 'info');
         }
@@ -2293,6 +2458,45 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     0
   );
 
+  /**
+   * Đẩy Cloud có bước xác nhận khi guard phát hiện xung đột / thu nhỏ bất thường.
+   * Chỉ force sau khi người dùng gõ từ khoá xác nhận; auto-push KHÔNG dùng hàm này.
+   */
+  async function pushCloudWithOverridePrompt() {
+    if (!window.CloudSyncManager || typeof window.CloudSyncManager.pushToCloud !== 'function') {
+      return { success: false, error: 'Cloud Sync chưa sẵn sàng.' };
+    }
+    let res = await window.CloudSyncManager.pushToCloud();
+    if (!res || res.success || (!res.guard && !res.conflict)) return res;
+
+    const details = [];
+    if (res.conflict) {
+      details.push('Cloud có thay đổi mới hơn từ thiết bị khác.');
+    } else {
+      details.push('Danh sách trên máy đang ít hơn bất thường so với Cloud.');
+      if (Number.isFinite(res.localCount) && Number.isFinite(res.remoteCount)) {
+        details.push(`CTV trên máy: ${res.localCount} — trên Cloud: ${res.remoteCount}.`);
+      }
+      if (Number.isFinite(res.localAdminCount)) {
+        details.push(`Tài khoản cán bộ trên máy: ${res.localAdminCount} — trên Cloud: ${res.remoteAdminCount}.`);
+      }
+    }
+    const ok = await confirmDangerAction({
+      title: res.conflict ? 'Xung đột dữ liệu Cloud' : 'Cảnh báo an toàn dữ liệu',
+      message: `${res.error || 'Cloud có dữ liệu khác với máy này.'}\n\nChỉ ghi đè nếu bạn đã kiểm tra và chắc chắn.`,
+      losses: details,
+      keyword: 'GHI DE CLOUD',
+      confirmLabel: 'Ghi Đè Cloud'
+    });
+    if (!ok) return res;
+
+    res = await window.CloudSyncManager.pushToCloud(null, { force: true });
+    if (res && res.success) {
+      auditLog('CLOUD_OVERWRITE', 'Người dùng xác nhận ghi đè Cloud sau cảnh báo an toàn dữ liệu');
+    }
+    return res;
+  }
+
   function bindEvents() {
     bindMonthNavigatorEvents();
     elements.tabButtons.forEach(btn => {
@@ -2551,11 +2755,11 @@ elements.btnBulkClearShifts?.addEventListener('click', async () => {
         return;
       }
       const dcclrMany = await confirmDangerAction({
-        title: "Xóa ca rảnh của CTV đã chọn",
-        message: "${selectedIds.length} CTV đã chọn sẽ bị xóa sạch toàn bộ ca rảnh, đưa về 0 ca.",
-        losses: ["Toàn bộ ca rảnh của ${selectedIds.length} CTV đã chọn", "Hồ sơ CTV: GIỮ NGUYÊN"],
+        title: 'Xóa ca rảnh của CTV đã chọn',
+        message: `${selectedIds.length} CTV đã chọn sẽ bị xóa sạch toàn bộ ca rảnh, đưa về 0 ca.`,
+        losses: [`Toàn bộ ca rảnh của ${selectedIds.length} CTV đã chọn`, 'Hồ sơ CTV: GIỮ NGUYÊN'],
         keyword: 'XOA CA RANH',
-        confirmLabel: "Xóa ca rảnh của ${selectedIds.length} CTV",
+        confirmLabel: `Xóa ca rảnh của ${selectedIds.length} CTV`,
       });
       if (!dcclrMany) {
         return;
@@ -2581,11 +2785,11 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
         return;
       }
       const dcdelMany = await confirmDangerAction({
-        title: "Xóa CTV đã chọn khỏi danh sách",
-        message: "${selectedIds.length} CTV đã chọn sẽ bị xóa khỏi danh sách. Thao tác này không thể hoàn tác.",
-        losses: ["${selectedIds.length} hồ sơ CTV đã chọn", "Toàn bộ ca rảnh và lịch trực của họ"],
+        title: 'Xóa CTV đã chọn khỏi danh sách',
+        message: `${selectedIds.length} CTV đã chọn sẽ bị xóa khỏi danh sách. Thao tác này không thể hoàn tác.`,
+        losses: [`${selectedIds.length} hồ sơ CTV đã chọn`, 'Toàn bộ ca rảnh và lịch trực của họ'],
         keyword: 'XOA NTV',
-        confirmLabel: "Xóa ${selectedIds.length} CTV",
+        confirmLabel: `Xóa ${selectedIds.length} CTV`,
       });
       if (!dcdelMany) {
         return;
@@ -3902,6 +4106,10 @@ window.adminDeleteStudent = async function(studentId) {
     state.importedCandidates = [];
     if (elements.importPreviewSection) elements.importPreviewSection.style.display = 'none';
     if (elements.importPreviewTbody) elements.importPreviewTbody.innerHTML = '';
+    if (elements.importValidationBox) {
+      elements.importValidationBox.style.display = 'none';
+      elements.importValidationBox.innerHTML = '';
+    }
     if (elements.btnConfirmImport) {
       elements.btnConfirmImport.disabled = true;
       elements.btnConfirmImport.style.opacity = '0.6';
@@ -3935,6 +4143,41 @@ window.adminDeleteStudent = async function(studentId) {
     showToast('Đã tải xuống file mẫu CSV chuẩn UTF-8!', 'success');
   }
 
+  /** Vẽ hộp lỗi/cảnh báo của lần phân tích CSV gần nhất. */
+  function renderImportValidation(report) {
+    const box = elements.importValidationBox;
+    if (!box) return;
+    const errors = (report && report.errors) || [];
+    const warnings = (report && report.warnings) || [];
+    if (errors.length === 0 && warnings.length === 0) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    const stats = (report && report.stats) || {};
+    const summary = `Đã đọc ${stats.totalRows || 0} dòng: ${stats.validRows || 0} hợp lệ, `
+      + `${stats.duplicateRows || 0} trùng MSSV, ${stats.ignoredRows || 0} bị bỏ qua`
+      + `${stats.roleColumnFound === false ? ', không thấy cột vai trò' : ''}.`;
+
+    const errorsHtml = errors.length
+      ? `<div style="font-weight:800; color:#b91c1c; margin-bottom:0.3rem;">🚫 ${errors.length} lỗi chặn nhập:</div>
+         <ul style="margin:0 0 0.5rem 1.1rem; padding:0; color:#7f1d1d; font-size:0.82rem; line-height:1.5;">
+           ${errors.map(msg => `<li>${escapeHtml(msg)}</li>`).join('')}
+         </ul>`
+      : '';
+    const warningsHtml = warnings.length
+      ? `<div style="font-weight:800; color:#92400e; margin-bottom:0.3rem;">⚠️ ${warnings.length} cảnh báo (vẫn có thể nhập):</div>
+         <ul style="margin:0 0 0 1.1rem; padding:0; color:#78350f; font-size:0.82rem; line-height:1.5;">
+           ${warnings.map(msg => `<li>${escapeHtml(msg)}</li>`).join('')}
+         </ul>`
+      : '';
+
+    box.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">${escapeHtml(summary)}</div>`
+      + errorsHtml + warningsHtml;
+    box.style.display = 'block';
+  }
+
   function handleImportFileSelect(file) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
@@ -3946,25 +4189,70 @@ window.adminDeleteStudent = async function(studentId) {
     reader.onload = (e) => {
       const text = e.target?.result;
       if (typeof text === 'string') {
-        const parsed = parseStudentsCsv(text);
-        if (parsed.length === 0) {
+        // Phân tích đầy đủ TRƯỚC khi bật nút xác nhận: lỗi (trùng MSSV,
+        // thiếu cột Họ tên/MSSV…) phải chặn nhập, cảnh báo thì vẫn cho nhập.
+        const report = analyzeStudentsCsv(text);
+        renderImportValidation(report);
+
+        if (report.errors.length > 0) {
+          state.importedCandidates = [];
+          if (elements.importPreviewSection) elements.importPreviewSection.style.display = 'none';
+          if (elements.importPreviewTbody) elements.importPreviewTbody.innerHTML = '';
+          if (elements.btnConfirmImport) {
+            elements.btnConfirmImport.disabled = true;
+            elements.btnConfirmImport.style.opacity = '0.6';
+          }
+          showToast(`File CSV có ${report.errors.length} lỗi. Vui lòng sửa file rồi chọn lại!`, 'error', 6500);
+          return;
+        }
+
+        if (report.candidates.length === 0) {
+          if (elements.btnConfirmImport) {
+            elements.btnConfirmImport.disabled = true;
+            elements.btnConfirmImport.style.opacity = '0.6';
+          }
           showToast('Không đọc được dữ liệu sinh viên nào từ file. Vui lòng kiểm tra lại cấu trúc file!', 'error');
           return;
         }
-        state.importedCandidates = parsed;
-        renderImportPreview(parsed, file.name);
+
+        state.importedCandidates = report.candidates;
+        renderImportPreview(report.candidates, file.name);
       }
     };
     reader.readAsText(file, 'UTF-8');
   }
 
+  /**
+   * Phân tích CSV danh sách CTV.
+   *
+   * VẪN trả về mảng candidates như hợp đồng cũ: khoi_phuc_58.js trích thân
+   * hàm này và tìm đúng chuỗi `return candidates;`. Báo cáo chi tiết được
+   * gắn vào lastCsvReport để analyzeStudentsCsv() đọc lại.
+   */
   function parseStudentsCsv(csvText) {
-    if (!csvText || typeof csvText !== 'string') return [];
+    const candidates = [];
+    const errors = [];
+    const warnings = [];
+    const stats = {
+      totalRows: 0,
+      validRows: 0,
+      duplicateRows: 0,
+      ignoredRows: 0,
+      roleColumnFound: false
+    };
+    lastCsvReport = { candidates, errors, warnings, stats };
+
+    if (!csvText || typeof csvText !== 'string') {
+      errors.push('Nội dung CSV rỗng hoặc không phải văn bản.');
+      return [];
+    }
     const cleanText = csvText.replace(/^\uFEFF/, '');
     const lines = cleanText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    if (lines.length < 2) return [];
+    if (lines.length < 2) {
+      errors.push('File CSV phải có dòng tiêu đề và ít nhất một dòng dữ liệu.');
+      return [];
+    }
 
-    const candidates = [];
     const validShiftIds = (SHIFTS || []).map(s => s.id);
 
     function parseCsvRow(lineStr) {
@@ -3986,42 +4274,69 @@ window.adminDeleteStudent = async function(studentId) {
       return row.map(v => v.replace(/^"|"$/g, '').trim());
     }
 
-    let headerRow = parseCsvRow(lines[0]);
-    let colIdx = {
-      fullName: -1,
-      studentId: -1,
-      phone: -1,
-      role: -1,
-      shifts: -1
+    const headerRowFor = (lineStr) => {
+      const idx = { fullName: -1, studentId: -1, phone: -1, role: -1, shifts: -1 };
+      parseCsvRow(lineStr).forEach((col, i) => {
+        const h = col.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Ô email không bao giờ là tiêu đề cột; bỏ qua để tránh chuỗi
+        // "…ten@example.com" bị nhận nhầm thành cột "Tên".
+        if (h.includes('@')) return;
+        if (idx.fullName === -1 && (h.includes('ho ten') || h.includes('ho va ten') || h.includes('ten') || h.includes('fullname') || h.includes('name'))) {
+          idx.fullName = i;
+        } else if (idx.studentId === -1 && (h.includes('mssv') || h.includes('ma so sinh vien') || h.includes('ma sv') || h.includes('student id') || h.includes('studentid') || h === 'id')) {
+          idx.studentId = i;
+        } else if (idx.phone === -1 && (h.includes('sdt') || h.includes('dien thoai') || h.includes('phone') || h.includes('so dien thoai') || h.includes('mobile'))) {
+          idx.phone = i;
+        } else if (idx.role === -1 && (h.includes('vai tro') || h.includes('phan loai') || h.includes('doi tuong') || h.includes('loai') || h.includes('role'))) {
+          idx.role = i;
+        } else if (idx.shifts === -1 && (h.includes('ca') || h.includes('shift') || h.includes('dang ky'))) {
+          idx.shifts = i;
+        }
+      });
+      return idx;
     };
 
-    headerRow.forEach((col, idx) => {
-      const h = col.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (colIdx.fullName === -1 && (h.includes('ho ten') || h.includes('ho va ten') || h.includes('ten') || h.includes('fullname') || h.includes('name'))) {
-        colIdx.fullName = idx;
-      } else if (colIdx.studentId === -1 && (h.includes('mssv') || h.includes('ma so sinh vien') || h.includes('ma sv') || h.includes('student id') || h.includes('studentid') || h === 'id')) {
-        colIdx.studentId = idx;
-      } else if (colIdx.phone === -1 && (h.includes('sdt') || h.includes('dien thoai') || h.includes('phone') || h.includes('so dien thoai') || h.includes('mobile'))) {
-        colIdx.phone = idx;
-      } else if (colIdx.role === -1 && (h.includes('vai tro') || h.includes('phan loai') || h.includes('doi tuong') || h.includes('loai') || h.includes('role'))) {
-        colIdx.role = idx;
-      } else if (colIdx.shifts === -1 && (h.includes('ca') || h.includes('shift') || h.includes('dang ky'))) {
-        colIdx.shifts = idx;
+    // Dòng tiêu đề KHÔNG nhất thiết nằm ở dòng 1: file xuất Google Sheets
+    // thường có dòng tiêu đề lớn ("DANH SÁCH CTV TVTS") + dòng trống phía trên.
+    // Quét tối đa 10 dòng không trống đầu tiên để tìm dòng có cột Họ tên/MSSV.
+    let headerLineIndex = -1;
+    let colIdx = { fullName: -1, studentId: -1, phone: -1, role: -1, shifts: -1 };
+    let scannedRows = 0;
+    for (let r = 0; r < lines.length && scannedRows < 10; r++) {
+      const ln = lines[r].trim();
+      if (!ln) continue;
+      scannedRows++;
+      const detected = headerRowFor(ln);
+      const score = (detected.fullName !== -1 ? 1 : 0) + (detected.studentId !== -1 ? 1 : 0);
+      if (score === 2) {
+        headerLineIndex = r;
+        colIdx = detected;
+        break;
       }
-    });
+      if (score === 1 && headerLineIndex === -1) {
+        headerLineIndex = r;
+        colIdx = detected;
+      }
+    }
 
-    let startIndex = 1;
-    if (colIdx.fullName === -1 && colIdx.studentId === -1) {
-      colIdx = { fullName: 0, studentId: 1, phone: 2, role: 3, shifts: 4 };
-      if (/^\d{6,10}$/.test(headerRow[1]) || /^\d{6,10}$/.test(headerRow[0])) {
-        startIndex = 0;
-      }
+    // Không nhận ra cả cột Họ tên lẫn MSSV -> chỉ còn cách đoán theo VỊ TRÍ.
+    // Việc đoán này chỉ hợp lý khi dữ liệu thật sự trông giống [Họ tên, MSSV].
+    const positionalMode = headerLineIndex === -1;
+    let startIndex = 0;
+    if (positionalMode) {
+      const firstDataLine = lines.findIndex(ln => ln.trim());
+      const baseIndex = firstDataLine >= 0 ? firstDataLine : 0;
+      const firstRow = parseCsvRow(lines[baseIndex] || '');
+      colIdx = { fullName: 0, studentId: 1, phone: 2, role: -1, shifts: 4 };
+      const looksLikeData = /^\d{5,15}$/.test(firstRow[1] || '') || /^\d{5,15}$/.test(firstRow[0] || '');
+      startIndex = looksLikeData ? baseIndex : baseIndex + 1;
     } else {
       if (colIdx.fullName === -1) colIdx.fullName = 0;
       if (colIdx.studentId === -1) colIdx.studentId = 1;
       if (colIdx.phone === -1) colIdx.phone = 2;
       if (colIdx.role === -1) colIdx.role = -1;
       if (colIdx.shifts === -1) colIdx.shifts = -1;
+      startIndex = headerLineIndex + 1;
     }
 
     // ⚠️ NẾU TIÊU ĐỀ CỘT VAI TRÒ TRỐNG, PHẢI ĐOÁN THEO NỘI DUNG CHỨ KHÔNG
@@ -4064,12 +4379,22 @@ window.adminDeleteStudent = async function(studentId) {
         }
       }
     }
+    stats.roleColumnFound = colIdx.role !== -1;
+
+    const seenStudentIds = new Set();
+    const unknownShiftTokens = new Set();
+    const ignoredLineNumbers = [];
 
     for (let i = startIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
       const row = parseCsvRow(line);
+      // Excel/Google Sheets hay để lại hàng trăm dòng ",,,,,,," ở cuối file.
+      // Đó không phải dòng dữ liệu lỗi — bỏ qua hẳn, không tính ignoredRows.
+      if (row.every(cell => !cell)) continue;
+      stats.totalRows++;
+
       let fullName = (row[colIdx.fullName] || '').trim();
       let studentId = (row[colIdx.studentId] || '').trim();
       const phone = (row[colIdx.phone] || '').trim();
@@ -4082,7 +4407,27 @@ window.adminDeleteStudent = async function(studentId) {
         studentId = tmp;
       }
 
-      if (!fullName || !studentId) continue;
+      if (!fullName || !studentId) {
+        stats.ignoredRows++;
+        if (ignoredLineNumbers.length < 8) ignoredLineNumbers.push(i + 1);
+        continue;
+      }
+
+      // Chế độ đoán theo vị trí chỉ đáng tin khi MSSV trông như MSSV thật và
+      // cột 1 không phải email/số điện thoại.
+      if (positionalMode && (!/^\d{5,15}$/.test(studentId) || /@/.test(fullName))) {
+        stats.ignoredRows++;
+        if (ignoredLineNumbers.length < 8) ignoredLineNumbers.push(i + 1);
+        continue;
+      }
+
+      const idKey = studentId.toLowerCase();
+      if (seenStudentIds.has(idKey)) {
+        stats.duplicateRows++;
+        errors.push(`MSSV "${studentId}" bị trùng trong file (dòng ${i + 1}); dòng trùng đã bị bỏ qua.`);
+        continue;
+      }
+      seenStudentIds.add(idKey);
 
       // So khớp CẢ GIÁ TRỊ, không dùng includes() rời.
       // Trước đây `roleRaw.includes('cu')` khớp trúng bất kỳ chuỗi nào có
@@ -4096,8 +4441,11 @@ window.adminDeleteStudent = async function(studentId) {
       const shiftTokens = shiftsRaw.split(/[,;\s]+/).map(t => t.trim().toUpperCase().replace('-', '_'));
 
       shiftTokens.forEach(token => {
+        if (!token) return;
         if (validShiftIds.includes(token)) {
           if (!availableShifts.includes(token)) availableShifts.push(token);
+        } else if (colIdx.shifts !== -1) {
+          unknownShiftTokens.add(token);
         }
       });
 
@@ -4113,7 +4461,48 @@ window.adminDeleteStudent = async function(studentId) {
       });
     }
 
+    if (!stats.roleColumnFound && candidates.length > 0) {
+      warnings.push('Không tìm thấy cột vai trò (Cũ/Mới). Tất cả được mặc định là Tập Sự (Người mới).');
+    }
+    if (stats.ignoredRows > 0) {
+      const shown = ignoredLineNumbers.join(', ');
+      const more = stats.ignoredRows > ignoredLineNumbers.length ? '…' : '';
+      warnings.push(`Đã bỏ qua ${stats.ignoredRows} dòng thiếu Họ tên hoặc MSSV (dòng ${shown}${more}).`);
+    }
+    if (unknownShiftTokens.size > 0) {
+      const tokens = [...unknownShiftTokens];
+      warnings.push(`Có ${tokens.length} mã ca không nhận diện được và đã bị bỏ qua: ${tokens.slice(0, 8).join(', ')}${tokens.length > 8 ? '…' : ''}.`);
+    }
+
+    if (candidates.length === 0) {
+      if (positionalMode) {
+        errors.push('Không nhận diện được cột Họ tên/MSSV trong dòng tiêu đề và cũng không có dữ liệu vị trí hợp lệ (cột 1 = Họ tên, cột 2 = MSSV) để nhập.');
+      } else {
+        errors.push('Không đọc được dòng dữ liệu sinh viên hợp lệ nào từ file.');
+      }
+    }
+
+    stats.validRows = candidates.length;
     return candidates;
+  }
+
+  /**
+   * Phân tích CSV kèm báo cáo lỗi/cảnh báo/thống kê theo hợp đồng 11D.
+   * @returns {{candidates: Array, errors: string[], warnings: string[], stats: Object}}
+   */
+  function analyzeStudentsCsv(csvText) {
+    const candidates = parseStudentsCsv(csvText);
+    const report = lastCsvReport || {
+      errors: [],
+      warnings: [],
+      stats: { totalRows: 0, validRows: 0, duplicateRows: 0, ignoredRows: 0, roleColumnFound: false }
+    };
+    return {
+      candidates,
+      errors: report.errors.slice(),
+      warnings: report.warnings.slice(),
+      stats: Object.assign({}, report.stats)
+    };
   }
 
   function renderImportPreview(candidates, filename) {
@@ -6416,6 +6805,13 @@ async function handleDeleteEvent(id) {
     getState: () => ({ ...state })
   };
 
+  // Chẩn đoán & kiểm thử nhập CSV: giữ đúng chữ ký parseStudentsCsv() cũ
+  // (trả về mảng) và bổ sung analyzer có báo cáo lỗi/cảnh báo/thống kê.
+  window.csvImportTestHelper = {
+    parseStudentsCsv,
+    analyzeStudentsCsv
+  };
+
   window.EventManager = EventManager;
   window.PayrollCalculator = PayrollCalculator;
   window.WebBackupManager = {
@@ -7970,7 +8366,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     document.getElementById('btn-cloud-modal-push')?.addEventListener('click', async () => {
       if (!window.CloudSyncManager) return;
       showToast('Đang đẩy dữ liệu lên Firebase Đám mây…', 'info');
-      const res = await window.CloudSyncManager.pushToCloud();
+      const res = await pushCloudWithOverridePrompt();
       if (res.success) {
         showToast('Đẩy toàn bộ dữ liệu lên Đám mây thành công!', 'success');
         notifyPublicSyncResult(res);
@@ -7987,6 +8383,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       const res = await window.CloudSyncManager.pullFromCloud();
       if (res.success) {
         loadAdminUsers();
+        renderAuthMode();
         loadData();
         renderAll();
         renderUserMgmtTable();
@@ -7998,45 +8395,9 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       }
     });
 
-    // Xử lý Quick Cloud Pull ở màn hình đăng nhập (Tab Ẩn Danh)
-    window.adminTriggerAuthCloudPull = async function() {
-      const statusBox = document.getElementById('auth-cloud-sync-status');
-      if (statusBox) {
-        statusBox.style.display = 'block';
-        statusBox.textContent = '⏳ Đang kết nối Đám mây kéo mã PIN & tài khoản…';
-        statusBox.style.color = '#0284c7';
-      }
-
-      if (!window.CloudSyncManager) {
-        if (statusBox) statusBox.textContent = '⚠️ Module Cloud Sync chưa sẵn sàng.';
-        return;
-      }
-
-      const cfg = window.CloudSyncManager.getConfig();
-      if (!cfg.databaseUrl) {
-        if (statusBox) {
-          statusBox.textContent = 'ℹ️ Chưa cấu hình Firebase URL. Vui lòng đăng nhập bằng PIN 9999 để cấu hình.';
-          statusBox.style.color = '#f59e0b';
-        }
-        showToast('Chưa cấu hình Firebase URL. Đăng nhập bằng PIN 9999 để cấu hình.', 'info');
-        return;
-      }
-
-      const res = await window.CloudSyncManager.pullFromCloud();
-      if (res.success) {
-        loadAdminUsers();
-        if (statusBox) {
-          statusBox.textContent = '✅ Đã đồng bộ mã PIN mới nhất! Bạn có thể nhập mã PIN ngay.';
-          statusBox.style.color = '#16a34a';
-        }
-        showToast('Đã đồng bộ mã PIN mới nhất từ Cloud!', 'success');
-      } else {
-        if (statusBox) {
-          statusBox.textContent = '✕ Lỗi đồng bộ: ' + res.error;
-          statusBox.style.color = '#ef4444';
-        }
-      }
-    };
+    // Xử lý Quick Cloud Pull ở màn hình đăng nhập (Tab Ẩn Danh).
+    // window.adminTriggerAuthCloudPull đã được gán ở phạm vi module để nút
+    // hoạt động cả trước khi đăng nhập; không gán lại ở đây.
 
     // Đồng bộ tức thì lên Cloud qua các nút bấm ☁️ Lưu Lên Cloud
     window.adminForceSyncCloud = async function() {
@@ -8048,7 +8409,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       try {
         saveStudents(true);
         saveSchedule(true);
-        const res = await window.CloudSyncManager.pushToCloud();
+        const res = await pushCloudWithOverridePrompt();
         if (res && res.success) {
           showToast('☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Dữ liệu đã an toàn trên mọi thiết bị và không bị mất khi tải lại trang.', 'success', 5000);
           notifyPublicSyncResult(res);

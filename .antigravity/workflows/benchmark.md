@@ -55,25 +55,7 @@ Agent rà soát 3 loại điểm nghẽn phổ biến trong ứng dụng Client-
 
 ## 🚀 3. Kịch Bản Đo Kiểm Tự Động (Automated Benchmark Runner)
 
-Để đo lường thực tế thời gian thực thi (Execution Time) với mẫu $N = 30$, $N = 300$, $N = 3000$ sinh viên, chạy script đo kiểm:
-
-```powershell
-node -e "
-const { generateSchedule } = require('./js/scheduler.js');
-const { sampleStudents } = require('./js/sample30.js');
-
-// Benchmark 1: Tập dữ liệu 30 sinh viên
-console.time('Scheduler_N30');
-generateSchedule(sampleStudents, 4);
-console.timeEnd('Scheduler_N30');
-
-// Benchmark 2: Tập dữ liệu mở rộng 300 sinh viên
-const sample300 = Array.from({ length: 10 }, () => sampleStudents).flat().map((s, idx) => ({ ...s, id: s.id + '_' + idx }));
-console.time('Scheduler_N300');
-generateSchedule(sample300, 4);
-console.timeEnd('Scheduler_N300');
-"
-```
+Để đo lường thực tế thời gian thực thi (Execution Time) với mẫu $N = 30$, $N = 300$, $N = 3000$ sinh viên, dùng bộ dữ liệu tự chứa `tests/fixtures/test_students.js` và nạp scheduler theo đúng cách trong `tests/scheduler.test.js` (sandbox có `window`), rồi bọc `console.time` quanh `solveMultiWeekSchedule`.
 
 ---
 

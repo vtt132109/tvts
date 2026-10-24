@@ -20,22 +20,26 @@ console.log('================================================================');
 
 // 1. Kiểm tra cú pháp JS
 console.log('\n[1/4] Kiểm tra cú pháp JavaScript:');
+// Toàn bộ file JS runtime được nạp bởi index.html / admin.html.
+// Thiếu file nào trong danh sách này là file đó không được kiểm tra cú pháp.
 const jsFiles = [
-  'js/scheduler.js',
-  'js/student.js',
-  'js/admin.js',
   'js/cloud_sync.js',
   'js/month_calendar.js',
+  'js/scheduler.js',
   'js/roster.js',
   'js/a11y_modal.js',
-  'scripts/seed_mock_data.js'
+  'js/common.js',
+  'js/audit.js',
+  'js/store.js',
+  'js/student.js',
+  'js/admin.js'
 ];
 
 jsFiles.forEach(file => {
   const fullPath = path.join(__dirname, '..', file);
   if (fs.existsSync(fullPath)) {
     try {
-      execSync(`node -c "${fullPath}"`);
+      execSync(`node --check "${fullPath}"`);
       console.log(`  ✓ [Cú pháp hợp lệ] ${file}`);
     } catch (e) {
       console.error(`  ❌ [Lỗi cú pháp] ${file}: ${e.message}`);

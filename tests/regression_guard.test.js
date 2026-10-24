@@ -652,64 +652,76 @@ runTest('5.4: Lịch trực phải có bản AGENDA cho điện thoại (không 
 group('GROUP 6: Bảo mật — không hardcode bí mật trong mã nguồn');
 // -----------------------------------------------------------------------------
 
-runTest('6.1: Chỉ chứa tài khoản mặc định, không tài khoản thật', () => {
-  // LƯU Ý QUAN TRỌNG: file test này được deploy công khai cùng cả repo.
-  // TUYỆT ĐỐI KHÔNG ghi bí mật đã biết vào đây — làm vậy sẽ RÒ LẠI đúng
-  // thứ cần xóa. Thay vào đó kiểm tra CẤU TRÚC dữ liệu.
-  const ALLOWED_USERNAMES = ['admin', 'diephoi'];
-  const DEFAULT_WEAK_PW = ['123', '1234', '12345', '123456', '0000', 'admin', 'password'];
-  const DEFAULT_PINS = ['9999', '8888', '1234', '0000', '1111', '7777'];
+runTest('6.1: Không còn tài khoản mặc định được seed; chỉ còn chữ ký purge', () => {
+  // Bảo mật: bất kỳ tài khoản mặc định nào trong mã nguồn công khai đều là
+  // cửa hậu. Máy trống phải đi qua form "Thiết lập lần đầu", không seed ngầm.
+  //
+  // Ngoại lệ DUY NHẤT: LEGACY_DEFAULT_ACCOUNTS — danh sách chữ ký để phát
+  // hiện và vô hiệu hoá tài khoản cũ còn dùng credential mặc định. Khối này
+  // không được dùng để tạo/seed tài khoản.
+  const legacyBlock = adminJs.match(/const LEGACY_DEFAULT_ACCOUNTS\s*=\s*\[[\s\S]*?\];/);
+  assert.ok(legacyBlock,
+    'Thiếu LEGACY_DEFAULT_ACCOUNTS để purge tài khoản mặc định cũ');
+  assert.ok(/isLegacyDefaultAdmin/.test(adminJs)
+    && /filter\(user => !isLegacyDefaultAdmin\(user\)\)/.test(adminJs),
+  'Phải purge tài khoản dùng credential mặc định khi loadAdminUsers()');
+  assert.ok(!/state\.adminUsers\s*=\s*(?:\[\.\.\.)?LEGACY_DEFAULT_ACCOUNTS/.test(adminJs),
+    'KHÔNG được seed state.adminUsers từ LEGACY_DEFAULT_ACCOUNTS');
 
-  const sources = [adminJs, studentJs, schedulerJs, cloudJs];
-  try { sources.push(readSrc('data/admin_accounts.json')); } catch (e) { /* đã xóa */ }
-  const all = sources.join('\n');
+  const adminScanSrc = adminJs.replace(legacyBlock[0], '');
+  const sources = [
+    ['js/admin.js', adminScanSrc],
+    ['js/cloud_sync.js', cloudJs]
+  ];
 
-  // 1) username khai báo phải nằm trong allowlist mặc định
-  const users = [...new Set([...all.matchAll(/username:\s*'([^']+)'/g)].map(m => m[1]))];
-  const odd = users.filter(u => !ALLOWED_USERNAMES.includes(u));
-  assert.strictEqual(odd.length, 0,
-    `Tài khoản ngoài danh sách mặc định được phép: ${odd.join(', ')}`);
+  for (const [name, src] of sources) {
+    assert.ok(!/DEFAULT_ADMIN_USERS|FALLBACK_ADMIN_USERS/.test(src),
+      `${name} vẫn còn khối tài khoản mặc định`);
+    assert.ok(!/\busername\s*:\s*['"][^'"]+['"]/.test(src),
+      `${name} còn username hardcode`);
+    assert.ok(!/\bpassword\s*:\s*['"][^'"]*['"]/.test(src),
+      `${name} còn password hardcode`);
+    assert.ok(!/\bpin\s*:\s*['"][^'"]*['"]/.test(src),
+      `${name} còn PIN hardcode`);
+  }
 
-  // 2) mọi mật khẩu phải là nhóm mặc định yếu (không phải MK thật bị hardcode)
-  const pws = [...all.matchAll(/password:\s*'([^']*)'/g)].map(m => m[1]).filter(Boolean);
-  const realPw = pws.filter(p => !DEFAULT_WEAK_PW.includes(p));
-  assert.strictEqual(realPw.length, 0,
-    `Có ${realPw.length} mật khẩu không thuộc nhóm mặc định (nghi vấn MK thật)`);
-
-  // 3) PIN phải thuộc nhóm PIN mặc định
-  const pins = [...all.matchAll(/pin:\s*'(\d{4,})'/g)].map(m => m[1]);
-  const realPin = pins.filter(p => !DEFAULT_PINS.includes(p));
-  assert.strictEqual(realPin.length, 0,
-    `Có ${realPin.length} PIN không thuộc nhóm mặc định (nghi vấn PIN thật)`);
-
-  // 4) không có id tài khoản sinh từ Date.now() (dấu hiệu account thật từng thêm)
-  assert.ok(!/usr_\d{10,}/.test(all),
-    'Phát hiện id dạng usr_<timestamp> — dấu hiệu tài khoản thật từng được hardcode');
+  // loadAdminUsers() phải để danh sách RỖNG khi storage trống hoặc dữ liệu hỏng.
+  const emptyBranches = adminJs.match(/state\.adminUsers\s*=\s*\[\]/g) || [];
+  assert.ok(emptyBranches.length >= 2,
+    'loadAdminUsers() phải gán state.adminUsers = [] cho cả nhánh storage trống và catch');
+  assert.ok(!/state\.adminUsers\s*=\s*\[\.\.\.[A-Z_]+\]/.test(adminJs),
+    'Không được fallback sang một mảng tài khoản hardcode');
 });
 
-runTest('6.1b: fullName của tài khoản là CHỨC DANH, không phải tên cá nhân', () => {
-  // fullName hợp lệ phải là CHỨC DANH ("Trưởng Ban", "Cán Bộ", "Điều phối"...)
-  // Chỉ soi CÁC KHỐI KHAI BÁO TÀI KHOẢN QUẢN TRỊ, không soi danh sách
-  // sinh viên mẫu (đó là dữ liệu giả lập hợp lệ, không phải rò rỉ tài khoản).
-  const blocks = [
-    adminJs.match(/const DEFAULT_ADMIN_USERS\s*=\s*\[[\s\S]*?\];/),
-    cloudJs.match(/const FALLBACK_ADMIN_USERS\s*=\s*\[[\s\S]*?\];/),
-    // data/admin_accounts.json đã bị xoá: không mã nào đọc, và nó chứa
-    // thông tin tài khoản trong khi trước đây bị deploy công khai.
-    (() => { try { return readSrc('data/admin_accounts.json'); } catch (e) { return null; } })()
-  ].filter(Boolean).map(m => m[0]);
+runTest('6.1b: admin.html có đầy đủ form Thiết lập lần đầu và không còn copy tài khoản mặc định', () => {
+  const requiredIds = [
+    'admin-first-run',
+    'form-admin-first-run',
+    'first-run-fullname',
+    'first-run-username',
+    'first-run-password',
+    'first-run-password-confirm',
+    'first-run-pin',
+    'first-run-pin-confirm',
+    'import-validation-box'
+  ];
+  requiredIds.forEach(id => {
+    assert.ok(new RegExp(`id="${id}"`).test(adminHtml),
+      `admin.html thiếu phần tử #${id}`);
+  });
 
-  assert.ok(blocks.length > 0, 'Không tìm thấy khối tài khoản nào để kiểm tra');
+  // Panel phải ẩn mặc định; admin.js bật khi danh sách cán bộ rỗng.
+  const panelTag = adminHtml.match(/<div[^>]*id="admin-first-run"[^>]*>/);
+  assert.ok(panelTag && /display:\s*none/.test(panelTag[0]),
+    '#admin-first-run phải ẩn mặc định (display: none)');
 
-  const names = blocks.flatMap(b => [...b.matchAll(/fullName"?\s*:\s*["']([^"']+)["']/g)].map(m => m[1]));
-  assert.ok(names.length > 0, 'Không tìm thấy fullName nào trong khối tài khoản');
+  assert.ok(/formAdminFirstRun/.test(adminJs) && /function renderAuthMode\s*\(/.test(adminJs),
+    'admin.js phải bind form thiết lập lần đầu và có renderAuthMode()');
 
-  const ROLE_WORDS = ['Trưởng', 'Cán', 'Điều', 'Ban', 'Phó', 'Chủ', 'Giám', 'Cộng', 'Tác', 'Viên', 'Tuyển', 'Sinh', 'Khoa'];
-  const suspicious = names.filter(n =>
-    n.split(/\s+/).length >= 2 && !ROLE_WORDS.some(w => n.includes(w))
-  );
-  assert.strictEqual(suspicious.length, 0,
-    `fullName trong khối tài khoản trông như tên cá nhân thay vì chức danh: ${suspicious.join(', ')}`);
+  assert.ok(!/admin hoặc diephoi/i.test(adminHtml),
+    'Placeholder đăng nhập vẫn nhắc tài khoản mặc định cũ');
+  assert.ok(!/PIN\s*9999/i.test(adminHtml),
+    'admin.html vẫn còn copy hướng dẫn PIN mặc định cũ');
 });
 
 runTest('6.5: CSS không tham chiếu @keyframes chưa định nghĩa', () => {
@@ -825,7 +837,8 @@ runTest('6.3: .gitignore chặn file chứa PII', () => {
 runTest('6.9: KHÔNG file JSON nào trong data/ chứa thông tin tài khoản', () => {
   // data/admin_accounts.json từng được commit và bị deploy công khai
   // (admin/123, PIN 9999). Không một dòng mã nào đọc nó -> đã xoá.
-  // data/default_students.json là danh sách CTV công khai HCM-UTE, hợp lệ.
+  // Các file JSON mẫu (default_students, mock_seed_data) cũng đã xoá;
+  // data/ hiện chỉ còn CSV cục bộ (gitignored), không có JSON tài khoản.
   const SENSITIVE_KEYS = ['"pin"', '"password"', '"username"', 'mustChangePassword'];
 
   if (fs.existsSync(path.join(ROOT, 'data'))) {
@@ -917,8 +930,8 @@ runTest('6.12: Mọi lần ghi phiên đăng nhập phải đi qua persistCurren
 
 runTest('6.13: data/*.json không chứa số tài khoản ngân hàng', () => {
   // data/default_students.json từng chứa bankName + bankAccount của 30 CTV và
-  // được track trong repo CÔNG KHAI. Không dòng mã nào đọc hai trường này
-  // (thanh toán vẫn làm ngoài hệ thống), nên đã bỏ khỏi dữ liệu công khai.
+  // được track trong repo CÔNG KHAI. File đã bị xoá; nếu ai đó thêm lại JSON
+  // chứa thông tin ngân hàng, test này phải đỏ.
   const dir = path.join(ROOT, 'data');
   if (!fs.existsSync(dir)) return;
   const hits = [];
@@ -1549,6 +1562,21 @@ runTest('8.3: Mã định danh trùng được ghi nhận cảnh báo', () => {
   const res = S.runMonthSchedule(dup, 2026, 10);
   assert.ok(/trùng/i.test(res.warnings.join(' | ')),
     'Phải cảnh báo mã định danh trùng');
+});
+
+runTest('6.14: Ghi đè Cloud chỉ được force sau khi người dùng xác nhận từ khoá', () => {
+  const block = adminJs.match(/async function pushCloudWithOverridePrompt\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(block, 'Thiếu pushCloudWithOverridePrompt() trong admin.js');
+  assert.ok(/confirmDangerAction/.test(block[0]),
+    'Phải hỏi xác nhận trước khi ghi đè');
+  assert.ok(/GHI DE CLOUD/.test(block[0]),
+    'Phải yêu cầu gõ từ khoá xác nhận');
+  assert.ok(/pushToCloud\(null,\s*\{\s*force:\s*true\s*\}\)/.test(block[0]),
+    'Chỉ được gọi pushToCloud với force sau xác nhận');
+  assert.ok(adminJs.includes('pushCloudWithOverridePrompt()'),
+    'Ít nhất nút đẩy Cloud thủ công phải dùng helper có xác nhận');
+  assert.ok(!/setTimeout\([^)]*pushToCloud\([^)]*force/.test(adminJs),
+    'Auto-push không được tự động force');
 });
 
 // -----------------------------------------------------------------------------

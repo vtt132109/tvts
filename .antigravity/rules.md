@@ -71,7 +71,7 @@ Hệ thống quy chuẩn điều phối tự trị cao cấp (Advanced Autonomou
 2. **Khởi Chạy Song Song Không Xung Đột (Race-Free Concurrency):**
    - Khi yêu cầu chạm vào từ 2 mảng nghiệp vụ trở lên, Parent Agent gọi `invoke_subagent` một lần duy nhất chứa mảng các Subagent.
    - Mỗi Subagent chỉ thao tác trong `allowed_paths` của mình:
-     - `backend-agent`: `js/scheduler.js`, `js/sample30.js`, `data/`
+     - `backend-agent`: `js/scheduler.js`, `data/`
      - `frontend-agent`: `index.html`, `admin.html`, `css/`, `js/student.js`, `js/admin.js`
      - `qa-agent`: `tests/`, `tasks/`, `scripts/`
 3. **Tổng Hợp & Hợp Nhất Đồng Bộ (Verification Gate):**

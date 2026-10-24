@@ -193,6 +193,17 @@ console.log('\n▶ [GROUP 2] Đóng Gói Dữ Liệu LocalStorage (buildPayload)
     '2.8: Hash PIN được đồng bộ');
   assert(!('password' in hashedRec) && !('pin' in hashedRec),
     '2.9: Payload chỉ có hash, không có plaintext');
+
+  // Không còn tài khoản fallback: máy chưa có danh sách thì phải BỎ khoá
+  // adminUsers để PATCH giữ nguyên tài khoản đang có trên Cloud.
+  env.localStorage.removeItem('ts_scheduler_admin_users');
+  const noAdminPayload = csm.buildPayload();
+  assert(!('adminUsers' in noAdminPayload),
+    '2.10: Không có tài khoản cục bộ thì KHÔNG gửi adminUsers (không dùng tài khoản mặc định)');
+  env.localStorage.setItem('ts_scheduler_admin_users', '[]');
+  const emptyAdminPayload = csm.buildPayload();
+  assert(!('adminUsers' in emptyAdminPayload),
+    '2.11: Danh sách cán bộ rỗng cũng không được gửi lên Cloud');
 })();
 
 // -----------------------------------------------------------------------------
@@ -319,6 +330,17 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
     syncPath: 'test_path'
   });
 
+  // Máy cán bộ thật luôn có ít nhất một tài khoản đã tạo. Không còn tài khoản
+  // fallback trong mã nguồn nên test phải tự tạo dữ liệu này.
+  env.localStorage.setItem('ts_scheduler_admin_users', JSON.stringify([{
+    id: 'usr_test_admin',
+    username: 'test_admin',
+    fullName: 'Cán Bộ Kiểm Thử',
+    role: 'Điều phối viên tuyển sinh',
+    passwordHash: 'a'.repeat(64),
+    passwordSalt: 'salt-test'
+  }]));
+
   // Test Push
   const pushRes = await csm.pushToCloud();
   assert(pushRes.success === true, '4.1: pushToCloud gửi yêu cầu ghi thành công');
@@ -327,7 +349,13 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
   assert(lastFetchMethod === 'PATCH',
     `4.2: phải dùng PATCH để không xoá khoá vắng mặt. Thực tế: ${lastFetchMethod}`);
   assert(lastFetchUrl === 'https://test-cloud.firebaseio.com/test_path.json', '4.3: URL đích khớp chuẩn Firebase REST endpoint');
-  assert(lastFetchBody && Array.isArray(lastFetchBody.adminUsers), '4.4: Body chứa payload hoàn chỉnh');
+  assert(lastFetchBody && Array.isArray(lastFetchBody.adminUsers)
+    && lastFetchBody.adminUsers.length === 1
+    && lastFetchBody.adminUsers[0].username === 'test_admin',
+  '4.4: Body chứa payload hoàn chỉnh (kèm tài khoản cán bộ đã seed)');
+  assert(lastFetchBody && !('password' in lastFetchBody.adminUsers[0])
+    && !('pin' in lastFetchBody.adminUsers[0]),
+  '4.4b: Tài khoản cán bộ trong body chỉ có hash, không có plaintext');
 
   // Test Pull
   const pullRes = await csm.pullFromCloud();
@@ -336,8 +364,10 @@ console.log('\n▶ [GROUP 4] Kiểm Thử Push & Pull Hai Chiều (Mock Fetch):'
   
   const adminsAfterPullRaw = env.localStorage.getItem('ts_scheduler_admin_users');
   const adminsAfterPull = adminsAfterPullRaw ? JSON.parse(adminsAfterPullRaw) : [];
-  assert(adminsAfterPull.length === 0,
-    '4.7: Cloud KHÔNG được tạo tài khoản/PIN trên máy (credential chỉ đến từ máy)');
+  assert(adminsAfterPull.length === 1
+    && adminsAfterPull[0].username === 'test_admin'
+    && !adminsAfterPull.some(u => u.username === 'admin'),
+  '4.7: Cloud KHÔNG được tạo tài khoản/PIN trên máy (credential chỉ đến từ máy)');
 }
 
 // -----------------------------------------------------------------------------
@@ -510,8 +540,12 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
   // khỏi payload để Firebase giữ nguyên dữ liệu cũ.
   {
     const sent = [];
-    const capture = async (url, opts) => {
-      sent.push(JSON.parse(opts.body));
+    const capture = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      // Preflight GET (khi máy đã từng sync) không có body — chỉ ghi nhận PATCH.
+      if (method !== 'GET') {
+        sent.push(JSON.parse(opts.body || '{}'));
+      }
       return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
     };
     env.window.fetch = capture;
@@ -552,8 +586,8 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
     // "không ghi danh sách rỗng" chỉ chặn được ghi RỘNG, không chặn được XOÁ.
     // PATCH chỉ cập nhật khoá được gửi, giữ nguyên phần còn lại.
     const methods = [];
-    const methodCapture = async (url, opts) => {
-      methods.push(opts.method);
+    const methodCapture = async (url, opts = {}) => {
+      methods.push(opts.method || 'GET');
       return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
     };
     env.window.fetch = methodCapture;
@@ -561,8 +595,10 @@ console.log('\n▶ [GROUP 7] Firebase Trả Lỗi Nhưng HTTP Vẫn 200 (Securit
 
     env.localStorage.setItem('ts_scheduler_students', JSON.stringify([{ id: 'a' }]));
     await csm.pushToCloud();
-    assert(methods[0] === 'PATCH',
-      `7.10: phải dùng PATCH để không xoá khoá vắng mặt. Thực tế: ${methods[0]}`);
+    assert(methods.includes('GET') && methods[methods.length - 1] === 'PATCH',
+      `7.10: máy đã sync phải preflight GET rồi mới PATCH. Thực tế: ${methods.join(', ')}`);
+    assert(methods.filter(m => m === 'PATCH').length === 1,
+      '7.10b: chỉ có đúng một lần ghi PATCH');
   }
 }
 
@@ -1011,6 +1047,100 @@ console.log('\n▶ [GROUP 9] Dữ Liệu Công Khai Cho Sinh Viên (Không PII):
     '9.32: Sự kiện công khai kéo về cũng phải sạch email');
 }
 
+{
+  // Trạng thái đổi ca công bố cho sinh viên: chỉ trường tối thiểu, không PII.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://pub-db.firebaseio.com' });
+  env.localStorage.setItem(K.SWAP_REQUESTS, JSON.stringify([{
+    id: 'swap_1',
+    studentId: 'SV001',
+    studentName: 'Nguyễn Văn A',
+    studentRole: 'old',
+    targetStudentId: 'SV002',
+    targetStudentName: 'Trần Thị B',
+    targetShiftId: 'T3_C',
+    shiftId: 'T2_S',
+    weekNum: 2,
+    type: 'swap',
+    reason: 'Bận thi đấu',
+    status: 'approved',
+    uid: 'UID_SECRET_1',
+    createdAt: '2026-10-20T00:00:00.000Z'
+  }]));
+
+  const payload = csm.buildPublicPayload();
+  assert(Array.isArray(payload.swapStatuses) && payload.swapStatuses.length === 1,
+    '9.33: Nhánh công khai có swapStatuses cho đề xuất đổi ca');
+  const status = payload.swapStatuses[0];
+  assert(JSON.stringify(Object.keys(status).sort())
+    === JSON.stringify(['id', 'shiftId', 'status', 'studentId', 'targetStudentId', 'weekNum']),
+  `9.34: swapStatuses chỉ chứa 6 trường tối thiểu. Thực tế: ${Object.keys(status).join(',')}`);
+  const flatStatus = JSON.stringify(status);
+  assert(!flatStatus.includes('Bận thi đấu') && !flatStatus.includes('UID_SECRET_1')
+    && !flatStatus.includes('Nguyễn Văn A') && !flatStatus.includes('Trần Thị B'),
+  '9.35: swapStatuses KHÔNG chứa reason/uid/tên người gửi/người nhận');
+
+  env.localStorage.setItem(K.SWAP_REQUESTS, JSON.stringify(
+    Array.from({ length: 205 }, (_, i) => ({
+      id: 'swap_' + i, studentId: 'SV001', status: 'pending',
+      weekNum: 1, shiftId: 'T2_S'
+    }))
+  ));
+  assert(csm.buildPublicPayload().swapStatuses.length === 200,
+    '9.36: swapStatuses giới hạn tối đa 200 như danh sách cục bộ');
+}
+
+{
+  // Áp trạng thái công khai vào máy sinh viên: chỉ cập nhật yêu cầu đã có.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  csm.saveConfig({ enabled: false, databaseUrl: 'https://pub-db.firebaseio.com' });
+  env.localStorage.setItem(K.SWAP_REQUESTS, JSON.stringify([
+    {
+      id: 's1', studentId: 'SV001', studentName: 'Nguyễn Văn A',
+      targetStudentName: 'Trần Thị B', status: 'pending', weekNum: 1,
+      shiftId: 'T2_S', reason: 'Bận thi', uid: 'UID_1',
+      createdAt: '2026-10-20T00:00:00.000Z'
+    },
+    {
+      id: 's3', studentId: 'SV003', status: 'rejected', weekNum: 2,
+      shiftId: 'T3_C', reason: 'Đã bị từ chối', createdAt: '2026-10-21T00:00:00.000Z'
+    }
+  ]));
+
+  const res = csm.applyPublicPayload({
+    swapStatuses: [
+      {
+        id: 's1', studentId: 'SV001', status: 'approved', weekNum: 3,
+        shiftId: 'T4_C', targetStudentId: 'SV009',
+        reason: 'HACK', studentName: 'HACK', targetStudentName: 'HACK', uid: 'HACK'
+      },
+      { id: 's3', status: 'pending', weekNum: 4, shiftId: 'T5_S' },
+      { id: 's2', studentId: 'SV999', status: 'pending' }
+    ]
+  });
+
+  assert(res.success === true, '9.37: applyPublicPayload áp dụng được swapStatuses');
+  const saved = JSON.parse(env.localStorage.getItem(K.SWAP_REQUESTS));
+  assert(saved.length === 2 && !saved.some(s => s.id === 's2'),
+    '9.38: KHÔNG tạo yêu cầu đổi ca lạ từ nhánh công khai');
+  const s1 = saved.find(s => s.id === 's1');
+  assert(s1.status === 'approved' && s1.weekNum === 3
+    && s1.shiftId === 'T4_C' && s1.targetStudentId === 'SV009',
+  '9.39: Cập nhật đúng status/weekNum/shiftId/targetStudentId');
+  assert(s1.reason === 'Bận thi' && s1.studentName === 'Nguyễn Văn A'
+    && s1.targetStudentName === 'Trần Thị B' && s1.uid === 'UID_1',
+  '9.40: KHÔNG ghi đè reason/tên/uid từ nhánh công khai');
+  const s3 = saved.find(s => s.id === 's3');
+  assert(s3.status === 'rejected' && s3.reason === 'Đã bị từ chối',
+    '9.41: Bản pending trên Cloud không ghi đè kết quả đã duyệt trên máy');
+}
+
 // -----------------------------------------------------------------------------
 // GROUP 10: Sinh viên gửi yêu cầu bằng phiên ẩn danh (không giao diện đăng nhập)
 // -----------------------------------------------------------------------------
@@ -1367,7 +1497,8 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
     authPassword: ''
   });
   env.localStorage.setItem(K.SWAP_REQUESTS, JSON.stringify([
-    { id: 's1', status: 'rejected', createdAt: '2026-10-20T00:00:00.000Z' }
+    { id: 's1', status: 'rejected', reason: 'Giữ nguyên', createdAt: '2026-10-20T00:00:00.000Z' },
+    { id: 's3', status: 'pending', weekNum: 1, shiftId: 'T2_S', createdAt: '2026-10-21T00:00:00.000Z' }
   ]));
 
   let requestedUrl = '';
@@ -1377,8 +1508,11 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
       ok: true,
       status: 200,
       json: async () => ({
-        s1: { id: 's1', status: 'pending', createdAt: '2026-10-20T00:00:00.000Z' },
-        s2: { id: 's2', status: 'pending', createdAt: '2026-10-22T00:00:00.000Z' }
+        swapStatuses: [
+          { id: 's1', status: 'pending', createdAt: '2026-10-20T00:00:00.000Z' },
+          { id: 's2', status: 'pending', createdAt: '2026-10-22T00:00:00.000Z' },
+          { id: 's3', status: 'approved', weekNum: 2, shiftId: 'T3_C', targetStudentId: 'SV009' }
+        ]
       })
     };
   };
@@ -1386,11 +1520,19 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
 
   const res = await csm.pullPublicSwaps();
   assert(res.success === true, '11.18: pullPublicSwaps phải thành công');
-  assert(requestedUrl.includes('/tvts_requests/swaps.json'),
-    '11.19: Chỉ đọc nhánh swaps công khai');
+  assert(requestedUrl.includes('/tvts_public.json')
+    && !requestedUrl.includes('/tvts_requests/swaps'),
+  '11.19: Chỉ đọc nhánh công khai, không đọc collection swaps bị khoá');
   const swaps = JSON.parse(env.localStorage.getItem(K.SWAP_REQUESTS));
-  assert(swaps.length === 2 && swaps.find(s => s.id === 's1').status === 'rejected',
-    '11.20: Giữ kết quả đã duyệt trên máy, chỉ thêm đề xuất mới');
+  assert(swaps.length === 2 && !swaps.some(s => s.id === 's2'),
+    '11.20: Không thêm đề xuất lạ; chỉ cập nhật yêu cầu đã có trên máy');
+  assert(swaps.find(s => s.id === 's1').status === 'rejected'
+    && swaps.find(s => s.id === 's1').reason === 'Giữ nguyên',
+  '11.20b: Giữ kết quả đã duyệt và lý do trên máy');
+  const s3 = swaps.find(s => s.id === 's3');
+  assert(s3.status === 'approved' && s3.weekNum === 2 && s3.shiftId === 'T3_C'
+    && s3.targetStudentId === 'SV009',
+  '11.20c: Trạng thái công khai cập nhật đúng yêu cầu đã có');
 }
 
 {
@@ -1457,9 +1599,11 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   const indexHtml = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   const adminHtml = fs.readFileSync(path.join(__dirname, '../admin.html'), 'utf8');
   let rules = null;
+  let rulesText = '';
   let rulesError = '';
   try {
-    rules = JSON.parse(fs.readFileSync(path.join(__dirname, '../database.rules.json'), 'utf8'));
+    rulesText = fs.readFileSync(path.join(__dirname, '../database.rules.json'), 'utf8');
+    rules = JSON.parse(rulesText);
   } catch (e) {
     rulesError = e.message;
   }
@@ -1490,6 +1634,8 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   const cloudJs = fs.readFileSync(path.join(__dirname, '../js/cloud_sync.js'), 'utf8');
   assert(/prompt:\s*'select_account'/.test(cloudJs),
   '12.6e: Đăng nhập Google phải luôn mở bảng chọn tài khoản');
+  assert(!cloudJs.includes('FALLBACK_ADMIN_USERS'),
+    '12.6f: Không còn danh sách tài khoản cán bộ fallback trong mã nguồn');
 
   assert(rules && rules.rules, '12.7: database.rules.json phải là JSON hợp lệ: ' + rulesError);
   const r = (rules && rules.rules) || {};
@@ -1550,6 +1696,23 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   assert(/cancelled/.test(swapRule['.validate'] || '')
     && /approved/.test(swapRule['.validate'] || ''),
   '12.20: Validate chặn giá trị status lạ');
+
+  // Quyền đọc đề xuất đổi ca: KHÔNG còn công khai cả collection.
+  const swapsRules = ((r.tvts_requests || {}).swaps || {});
+  const swapsRead = swapsRules['.read'] || '';
+  const swapChildRead = (swapsRules['$swapId'] || {})['.read'] || '';
+  assert(swapsRules['.read'] !== true
+    && !/"swaps"\s*:\s*\{\s*"\.read"\s*:\s*true/.test(rulesText),
+  '12.21: swaps KHÔNG còn ".read": true cho mọi người');
+  assert(/staff_emails/.test(swapsRead)
+    && /auth\.token\.email_verified === true/.test(swapsRead)
+    && /google\.com/.test(swapsRead)
+    && /root\.child\('staff'\)/.test(swapsRead),
+  '12.22: Cả collection swaps chỉ cán bộ Google đã xác thực được đọc');
+  assert(/data\.child\('uid'\)\.val\(\) === auth\.uid/.test(swapChildRead)
+    && /staff_emails/.test(swapChildRead)
+    && /google\.com/.test(swapChildRead),
+  '12.23: Chủ sở hữu được đọc đúng yêu cầu của mình; cán bộ đọc được mọi yêu cầu');
 }
 
 // -----------------------------------------------------------------------------
@@ -1669,6 +1832,380 @@ console.log('\n▶ [GROUP 13] Cấp Quyền Cán Bộ Theo Email:');
   assert(res.success === false, '13.13: Chưa có quyền thì không đọc được danh sách');
   assert(/Đăng nhập Google|chưa được cấp quyền/i.test(res.error || ''),
     `13.14: Thông báo 401 phải hướng dẫn đăng nhập/cấp quyền. Thực tế: ${res.error}`);
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 14: An Toàn Khi Đẩy (preflight, xung đột, guard, PATCH từng khoá)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 14] An Toàn Khi Đẩy Dữ Liệu Lên Cloud:');
+
+{
+  const remoteStudents = n => Array.from({ length: n }, (_, i) => ({
+    id: 'remote_' + i, studentId: 'R' + i, role: i % 2 ? 'old' : 'new'
+  }));
+  const localStudents = n => Array.from({ length: n }, (_, i) => ({
+    id: 'local_' + i, studentId: 'L' + i, role: i % 2 ? 'old' : 'new'
+  }));
+
+  // 14.1 / 14.2 — Xung đột: Cloud mới hơn, máy có thay đổi chưa đẩy, khác thiết bị.
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    env.localStorage.setItem(K.STUDENTS, JSON.stringify(localStudents(4)));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data',
+      lastCloudUpdatedAt: 1000,
+      localUpdatedAt: 2000
+    });
+
+    const methods = [];
+    let writeBody = null;
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      methods.push(method);
+      if (method === 'GET') {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            updatedAt: 5000,
+            deviceId: 'dev_thiet_bi_khac',
+            students: remoteStudents(5)
+          })
+        };
+      }
+      writeBody = JSON.parse(opts.body || '{}');
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const res = await csm.pushToCloud();
+    assert(res.success === false && res.conflict === true
+      && /thiết bị khác|xung đột/i.test(res.error || ''),
+    `14.1: Cloud mới hơn từ thiết bị khác phải bị chặn (conflict). Thực tế: ${res.error}`);
+    assert(!methods.includes('PATCH') && writeBody === null,
+      '14.2: Khi xung đột TUYỆT ĐỐI không được PATCH ghi đè Cloud');
+
+    // 14.3 — force bỏ qua xung đột và thực sự ghi.
+    const forced = await csm.pushToCloud(null, { force: true });
+    assert(forced.success === true, `14.3: force phải bỏ qua xung đột. Lỗi: ${forced.error || ''}`);
+    assert(methods.includes('PATCH') && writeBody && Array.isArray(writeBody.students)
+      && writeBody.students.length === 4,
+    '14.3b: force ghi đúng danh sách cục bộ (4 CTV)');
+  }
+
+  // 14.4 / 14.5 — Guard thu nhỏ danh sách so với bản trên Cloud.
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    env.localStorage.setItem(K.STUDENTS, JSON.stringify(localStudents(2)));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data',
+      lastCloudUpdatedAt: 1000
+    });
+
+    const methods = [];
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      methods.push(method);
+      if (method === 'GET') {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            updatedAt: 1000,
+            deviceId: csm.getConfig().deviceId,
+            students: remoteStudents(10)
+          })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const res = await csm.pushToCloud();
+    assert(res.success === false && res.guard === true
+      && res.remoteCount === 10 && res.localCount === 2,
+    `14.4: 2/10 CTV phải bị guard chặn. Thực tế: ${JSON.stringify(res)}`);
+    assert(!methods.includes('PATCH'),
+      '14.5: Guard thu nhỏ danh sách phải chặn trước khi PATCH');
+
+    const forced = await csm.pushToCloud(null, { force: true });
+    assert(forced.success === true && methods.includes('PATCH'),
+      `14.5b: force phải bỏ qua guard thu nhỏ. Lỗi: ${forced.error || ''}`);
+  }
+
+  // 14.6 — Guard theo số CTV đã đẩy thành công lần trước (lastPushedStudentCount).
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    env.localStorage.setItem(K.STUDENTS, JSON.stringify(localStudents(5)));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data',
+      lastCloudUpdatedAt: 1000,
+      lastPushedStudentCount: 20
+    });
+
+    const methods = [];
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      methods.push(method);
+      if (method === 'GET') {
+        return {
+          ok: true, status: 200,
+          json: async () => ({ updatedAt: 1000, deviceId: csm.getConfig().deviceId })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const res = await csm.pushToCloud();
+    assert(res.success === false && res.guard === true && res.localCount === 5,
+      `14.6: 5 CTV so với 20 đã đẩy lần trước phải bị guard. Thực tế: ${JSON.stringify(res)}`);
+  }
+
+  // 14.7 / 14.8 — Chỉ PATCH khoá thay đổi; dữ liệu không đổi thì chỉ gửi meta.
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    const student = {
+      id: 'a', studentId: '1', role: 'old', availableShifts: ['T2_S']
+    };
+    env.localStorage.setItem(K.STUDENTS, JSON.stringify([student]));
+    env.localStorage.setItem(K.REG_CONFIG, JSON.stringify({ mode: 'always_open', publishSchedule: true }));
+    env.localStorage.setItem(K.EVENTS, JSON.stringify([{ id: 'e1', title: 'Sự kiện mới', workUnits: 1 }]));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data',
+      lastCloudUpdatedAt: 1000
+    });
+
+    let remoteState = {
+      updatedAt: 1000,
+      deviceId: csm.getConfig().deviceId,
+      // Thứ tự key khác local: serializer phải coi là BẰNG NHAU.
+      students: [{ availableShifts: ['T2_S'], role: 'old', studentId: '1', id: 'a' }],
+      regConfig: { publishSchedule: true, mode: 'always_open' },
+      // Khác thật -> phải có trong PATCH.
+      events: [{ id: 'e0', title: 'Sự kiện cũ', workUnits: 1 }]
+    };
+    const patchBodies = [];
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      if (method === 'GET') {
+        return { ok: true, status: 200, json: async () => remoteState };
+      }
+      const body = JSON.parse(opts.body || '{}');
+      patchBodies.push(body);
+      remoteState = Object.assign({}, remoteState, body);
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const first = await csm.pushToCloud();
+    assert(first.success === true, `14.7: push thành công. Lỗi: ${first.error || ''}`);
+    const body1 = patchBodies[0] || {};
+    assert(!('students' in body1) && !('regConfig' in body1),
+      '14.7: Khoá không đổi (kể cả khác thứ tự key) phải bị loại khỏi PATCH');
+    assert('events' in body1 && body1.events[0].id === 'e1',
+      '14.7b: Khoá thay đổi thật vẫn phải được PATCH');
+    assert(['updatedAt', 'deviceId', 'version'].every(k => k in body1),
+      '14.7c: PATCH luôn kèm updatedAt/deviceId/version');
+
+    const second = await csm.pushToCloud();
+    assert(second.success === true, `14.8: push lần hai thành công. Lỗi: ${second.error || ''}`);
+    const body2 = patchBodies[1] || {};
+    const dataKeys = Object.keys(body2)
+      .filter(k => !['updatedAt', 'deviceId', 'version'].includes(k));
+    assert(dataKeys.length === 0,
+      `14.8: Không còn dữ liệu đổi thì chỉ PATCH meta. Thực tế: ${dataKeys.join(',')}`);
+    assert(Object.keys(body2).length > 0,
+      '14.8b: Vẫn có PATCH meta thay vì bỏ im lặng');
+  }
+
+  // 14.9 / 14.10 — Preflight lỗi (network / HTTP / body error) phải dừng push.
+  {
+    async function attemptPreflightFailure(getResponse, options) {
+      const env = createMockEnvironment();
+      const csm = env.CloudSyncManager;
+      csm.saveConfig({
+        enabled: true,
+        databaseUrl: 'https://guard-db.firebaseio.com',
+        syncPath: 'tvts_production_data',
+        lastCloudUpdatedAt: 1000
+      });
+      const methods = [];
+      env.window.fetch = async (url, opts = {}) => {
+        const method = opts.method || 'GET';
+        methods.push(method);
+        if (method === 'GET') return getResponse();
+        return { ok: true, status: 200, json: async () => ({}) };
+      };
+      env.sandbox.fetch = env.window.fetch;
+      const res = await csm.pushToCloud(null, options || {});
+      return { res, methods };
+    }
+
+    const networkFail = await attemptPreflightFailure(async () => {
+      throw new Error('preflight network down');
+    });
+    assert(networkFail.res.success === false
+      && /preflight network down/.test(networkFail.res.error || '')
+      && !networkFail.methods.includes('PATCH'),
+    '14.9: Preflight lỗi mạng phải chặn PATCH');
+
+    const httpFail = await attemptPreflightFailure(async () => ({
+      ok: false, status: 500, statusText: 'Server Error',
+      json: async () => ({}), text: async () => 'boom'
+    }));
+    assert(httpFail.res.success === false && /500/.test(httpFail.res.error || '')
+      && !httpFail.methods.includes('PATCH'),
+    '14.9b: Preflight HTTP 500 phải chặn PATCH');
+
+    const bodyFail = await attemptPreflightFailure(async () => ({
+      ok: true, status: 200,
+      json: async () => ({ error: 'Permission denied' })
+    }));
+    assert(bodyFail.res.success === false && /Permission denied/.test(bodyFail.res.error || '')
+      && !bodyFail.methods.includes('PATCH'),
+    '14.9c: Preflight HTTP 200 + {"error"} phải chặn PATCH');
+
+    const forced = await attemptPreflightFailure(async () => {
+      throw new Error('preflight network down');
+    }, { force: true });
+    assert(forced.res.success === true && forced.methods.includes('PATCH'),
+      '14.10: force được phép bỏ qua preflight lỗi (người dùng đã xác nhận)');
+  }
+
+  // 14.11 — Lần đẩy đầu tiên (lastCloudUpdatedAt = 0) KHÔNG preflight.
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    env.localStorage.setItem(K.STUDENTS, JSON.stringify(localStudents(3)));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data'
+    });
+
+    const methods = [];
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      methods.push(method);
+      if (method === 'GET') {
+        // Nếu preflight chạy, dữ liệu này sẽ gây conflict.
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            updatedAt: 999999999,
+            deviceId: 'dev_khac',
+            students: remoteStudents(100)
+          })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const res = await csm.pushToCloud();
+    assert(res.success === true, `14.11: Push đầu tiên phải thành công. Lỗi: ${res.error || ''}`);
+    assert(methods.length === 1 && methods[0] === 'PATCH',
+      `14.11b: Push đầu tiên bỏ qua preflight GET. Thực tế: ${methods.join(',')}`);
+    const cfgAfter = csm.getConfig();
+    assert(cfgAfter.lastPushedStudentCount === 3 && cfgAfter.lastCloudUpdatedAt > 0,
+      '14.11c: Push thành công phải lưu lastPushedStudentCount & lastCloudUpdatedAt');
+  }
+
+  // 14.12 — Máy thiết lập lần đầu (lastCloudUpdatedAt = 0) có adminUsers
+  // VẪN phải preflight để không đè danh sách tài khoản đang có trên Cloud.
+  {
+    const env = createMockEnvironment();
+    const csm = env.CloudSyncManager;
+    const K = csm.STORAGE_KEYS;
+    env.localStorage.setItem(K.ADMIN_USERS, JSON.stringify([{
+      id: 'usr_new', username: 'newadmin',
+      passwordHash: 'a'.repeat(64), passwordSalt: 'salt-new'
+    }]));
+    csm.saveConfig({
+      enabled: true,
+      databaseUrl: 'https://guard-db.firebaseio.com',
+      syncPath: 'tvts_production_data'
+    });
+
+    const methods = [];
+    let patchBody = null;
+    env.window.fetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      methods.push(method);
+      if (method === 'GET') {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            updatedAt: 5000,
+            deviceId: 'dev_thiet_bi_khac',
+            adminUsers: [
+              { id: 'usr_a', username: 'admin_a' },
+              { id: 'usr_b', username: 'admin_b' }
+            ]
+          })
+        };
+      }
+      patchBody = JSON.parse(opts.body || '{}');
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    env.sandbox.fetch = env.window.fetch;
+
+    const res = await csm.pushToCloud();
+    assert(res.success === false && res.guard === true
+      && res.remoteAdminCount === 2 && res.localAdminCount === 1,
+    `14.12: Thiết lập lần đầu không được đè 2 tài khoản Cloud. Thực tế: ${JSON.stringify(res)}`);
+    assert(!methods.includes('PATCH') && patchBody === null,
+      '14.12b: Guard tài khoản cán bộ phải chặn trước khi PATCH');
+
+    const forced = await csm.pushToCloud(null, { force: true });
+    assert(forced.success === true && methods.includes('PATCH')
+      && patchBody && Array.isArray(patchBody.adminUsers)
+      && patchBody.adminUsers.length === 1,
+    '14.12c: force cho phép ghi đè sau khi người dùng xác nhận');
+  }
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 15: Auto-pull không gọi Firebase riêng tư khi chưa đăng nhập
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 15] Auto-Pull Khi Chưa Đăng Nhập:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://guard-db.firebaseio.com',
+    authEmail: '',
+    authPassword: ''
+  });
+
+  let calls = 0;
+  env.window.fetch = async () => {
+    calls++;
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  await csm.autoInit();
+  assert(calls === 0,
+    '15.1: Chưa đăng nhập Google thì không được GET nhánh riêng tư (tránh 401)');
 }
 
 // -----------------------------------------------------------------------------

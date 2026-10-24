@@ -175,13 +175,13 @@
           Chọn tài khoản Google của cán bộ để tiếp tục.
         </div>
 
-        <div style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 0.25rem; color: var(--text-muted, #64748b); font-size: 0.76rem; font-weight: 600;">
+        <div id="admin-auth-divider" style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 0.25rem; color: var(--text-muted, #64748b); font-size: 0.76rem; font-weight: 600;">
           <span style="flex: 1; height: 1px; background: var(--border-color, #e2e8f0);"></span>
           <span>hoặc dùng tài khoản cán bộ</span>
           <span style="flex: 1; height: 1px; background: var(--border-color, #e2e8f0);"></span>
         </div>
 
-        <div class="auth-tabs">
+        <div class="auth-tabs" id="admin-auth-tabs">
           <button type="button" class="auth-tab-btn active" id="tab-auth-pwd">🔑 Tài Khoản & Mật Khẩu</button>
           <button type="button" class="auth-tab-btn" id="tab-auth-pin">⚡ Mã PIN Nhanh</button>
         </div>
@@ -192,11 +192,58 @@
           <span id="auth-error-msg">Tài khoản hoặc mật khẩu không chính xác!</span>
         </div>
 
+        <!-- Thiết lập lần đầu: chỉ hiện khi máy chưa có tài khoản cán bộ nào.
+             Không có tài khoản/mật khẩu/PIN mặc định trong mã nguồn. -->
+        <div id="admin-first-run" style="display: none;">
+          <div style="background: #eef2ff; border: 1px solid #c7d2fe; color: #312e81; border-radius: var(--radius-md); padding: 0.85rem 1rem; font-size: 0.83rem; line-height: 1.55; margin-bottom: 1rem;">
+            <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.3rem;">🔐 Thiết lập lần đầu</div>
+            Máy này chưa có tài khoản cán bộ nào. Hãy tạo tài khoản <strong>Trưởng ban điều hành</strong> đầu tiên.
+            Không có mật khẩu hay mã PIN mặc định — bạn tự đặt ngay bên dưới.
+          </div>
+          <form id="form-admin-first-run">
+            <div class="form-group">
+              <label class="form-label" for="first-run-fullname">Họ và Tên Trưởng Ban <span class="required">*</span></label>
+              <input type="text" id="first-run-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required autocomplete="name" aria-label="Họ và tên Trưởng ban">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="first-run-username">Tên Đăng Nhập <span class="required">*</span></label>
+              <input type="text" id="first-run-username" class="form-input" placeholder="3–32 ký tự: chữ thường, số, dấu chấm, gạch dưới, gạch ngang" required pattern="[a-z0-9._\-]{3,32}" maxlength="32" autocomplete="username" aria-label="Tên đăng nhập Trưởng ban">
+              <div class="form-hint">Ví dụ: nguyen.vanan hoặc truongban_2026</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="first-run-password">Mật Khẩu (tối thiểu 8 ký tự) <span class="required">*</span></label>
+              <input type="password" id="first-run-password" class="form-input" placeholder="Nhập mật khẩu riêng của bạn…" required minlength="8" autocomplete="new-password" aria-label="Mật khẩu Trưởng ban">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="first-run-password-confirm">Xác Nhận Mật Khẩu <span class="required">*</span></label>
+              <input type="password" id="first-run-password-confirm" class="form-input" placeholder="Nhập lại mật khẩu…" required minlength="8" autocomplete="new-password" aria-label="Xác nhận mật khẩu Trưởng ban">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+              <div class="form-group">
+                <label class="form-label" for="first-run-pin">Mã PIN 6 Số <span class="required">*</span></label>
+                <input type="password" id="first-run-pin" class="form-input" placeholder="••••••" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" aria-label="Mã PIN 6 số">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="first-run-pin-confirm">Xác Nhận PIN <span class="required">*</span></label>
+                <input type="password" id="first-run-pin-confirm" class="form-input" placeholder="••••••" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" aria-label="Xác nhận mã PIN 6 số">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="padding: 0.75rem; font-size: 0.95rem; font-weight: 700; margin-top: 0.5rem;">
+              <span>✓ Tạo Tài Khoản &amp; Vào Bảng Điều Hành</span>
+            </button>
+          </form>
+          <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed var(--border-color, #e2e8f0); font-size: 0.78rem; color: var(--text-muted, #64748b); line-height: 1.55;">
+            <strong>Đã cấu hình tài khoản ở máy khác?</strong> Hãy đăng nhập bằng Google cán bộ ở trên,
+            hoặc bấm “Kéo Dữ Liệu Mới Nhất Từ Cloud” bên dưới. Nếu Google/Cloud không khả dụng,
+            hãy khôi phục từ bản sao lưu JSON (.json) trong Trung Tâm Sao Lưu sau khi vào được hệ thống.
+          </div>
+        </div>
+
         <!-- Form 1: Đăng nhập bằng tài khoản và mật khẩu -->
         <form id="form-auth-credentials">
           <div class="form-group">
             <label class="form-label" for="auth-input-username">Tên Đăng Nhập / Mã Cán Bộ <span class="required">*</span></label>
-            <input type="text" id="auth-input-username" class="form-input" placeholder="Ví dụ: admin hoặc diephoi" required autocomplete="username" aria-label="Tên đăng nhập hoặc mã cán bộ">
+            <input type="text" id="auth-input-username" class="form-input" placeholder="Ví dụ: nguyen.vanan hoặc mã cán bộ" required autocomplete="username" aria-label="Tên đăng nhập hoặc mã cán bộ">
           </div>
           <div class="form-group">
             <label class="form-label" for="auth-input-password">Mật Khẩu Truy Cập <span class="required">*</span></label>
@@ -1199,7 +1246,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="pin-new">Cập Nhật Mã PIN Nhanh (Tùy chọn)</label>
-            <input type="text" id="pin-new" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="4 số (VD: 9999)" maxlength="6" aria-label="Cập Nhật Mã PIN Nhanh">
+            <input type="text" id="pin-new" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="6 số (VD: 246810)" maxlength="6" aria-label="Cập Nhật Mã PIN Nhanh">
           </div>
           <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; padding: 0.65rem;">
             <span>💾 Lưu Mật Khẩu Mới</span>
@@ -1333,6 +1380,9 @@
             Định dạng hỗ trợ: UTF-8 CSV (xuất từ Google Sheets hoặc Excel). Dung lượng tối đa: 5MB
           </div>
         </div>
+
+        <!-- Hộp cảnh báo/lỗi kiểm tra CSV (hiện trước bảng xem trước) -->
+        <div id="import-validation-box" role="alert" aria-live="polite" style="display: none; margin-top: 1.1rem; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: var(--radius-sm); padding: 0.8rem 1rem;"></div>
 
         <!-- Hộp xem trước (Preview) -->
         <div id="import-preview-section" style="display: none; margin-top: 1.25rem;">

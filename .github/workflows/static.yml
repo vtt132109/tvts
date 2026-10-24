@@ -6,6 +6,10 @@ name: Deploy static content to Pages
 # data/, tests/, tasks/, scripts/ (chứa PII và chi tiết kiểm thử nội bộ).
 # Trước đây dùng `path: '.'` khiến TOÀN BỘ repo bị publish công khai.
 #
+# Deploy ĐÃ ĐƯỢC CHẶN BỞI TEST: job `deploy` có `needs: test`, nên
+# tests/run_all_tests.js và scripts/clean_code.js phải đạt trước khi
+# artifact được upload. Test hỏng => không có bản deploy mới.
+#
 # ─────────────────────────────────────────────────────────────────────
 # ⚠️⚠️ CẦN LÀM MỘT LẦN TRONG GIAO DIỆN GITHUB (workflow này không tự làm được)
 # ─────────────────────────────────────────────────────────────────────
@@ -37,7 +41,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Kiểm thử trước khi deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Chạy bộ kiểm thử hồi quy
+        run: node tests/run_all_tests.js
+
+      - name: Kiểm tra chất lượng mã nguồn
+        run: node scripts/clean_code.js
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -117,12 +140,34 @@ jobs:
             fi
           done
           # Không được hardcode THÔNG TIN ĐĂNG NHẬP trong JS được publish.
-          # LƯU Ý: js/sample30.js cố tình chứa danh sách 30 CTV thật
-          # (họ tên + MSSV) — đó là dữ liệu nghiệp vụ mà cổng Sinh Viên cần
-          # để xác thực MSSV, KHÔNG phải rò rỉ. Chỉ kiểm tra thông tin
-          # ĐĂNG NHẬP (mật khẩu / PIN / id tài khoản).
-          if grep -rnE '"pin"[[:space:]]*:[[:space:]]*"[0-9]{4,6}"' _site/js/ ; then
-            echo "::error::Phát hiện PIN tài khoản hardcode trong JS được publish"
+          # Danh sách CTV không còn nhúng trong JS — được nhập từ CSV cục bộ.
+          # Chỉ kiểm tra thông tin ĐĂNG NHẬP (mật khẩu / PIN / id tài khoản).
+          # Bắt đủ 3 dạng key: "pin": "9999", 'pin': '9999' và pin: '123456'
+          # (key không nháy). Giá trị phải là literal cùng dòng và không chứa
+          # khoảng trắng, nên KHÔNG khớp các dạng an toàn như
+          # verifyUserSecret(user, 'pin', value) hay chuỗi thông báo lỗi.
+          Q="['\"]"
+          SECRET_RE="(^|[^[:alnum:]_])${Q}?(pin|password|passwd|pwd)${Q}?[[:space:]]*:[[:space:]]*(${Q}[^'\"[:space:]]{3,}${Q}|[0-9]{4,8})([[:space:],;}]|\$)"
+          # NGOẠI LỆ DUY NHẤT: LEGACY_DEFAULT_ACCOUNTS chứa chữ ký credential
+          # mặc định cũ để PURGE tài khoản trên máy đã dùng app. Đây không phải
+          # tài khoản seed. Bỏ đúng khối này khi quét, nhưng kiểm tra riêng
+          # rằng nó không được dùng để gán state.adminUsers.
+          scan_js_without_legacy_block() {
+            local f
+            find _site/js -name '*.js' -print0 | while IFS= read -r -d '' f; do
+              awk '
+                /const LEGACY_DEFAULT_ACCOUNTS[[:space:]]*=[[:space:]]*\[/ { skip=1 }
+                skip && /^[[:space:]]*\];[[:space:]]*$/ { skip=0; next }
+                !skip { print FILENAME ":" FNR ":" $0 }
+              ' "$f"
+            done
+          }
+          if scan_js_without_legacy_block | grep -E "$SECRET_RE" ; then
+            echo "::error::Phát hiện PIN/mật khẩu hardcode trong JS được publish"
+            fail=1
+          fi
+          if grep -rnE 'state\.adminUsers[[:space:]]*=[[:space:]]*(\[\.\.\.)?LEGACY_DEFAULT_ACCOUNTS' _site/js/ ; then
+            echo "::error::LEGACY_DEFAULT_ACCOUNTS chỉ được dùng để purge, không được seed tài khoản"
             fail=1
           fi
           if grep -rnE 'usr_[0-9]{10,}' _site/ ; then

@@ -1,0 +1,298 @@
+/**
+ * ============================================================================
+ * AUTOMATED TEST SUITE: CSV IMPORT VALIDATION (QA-AGENT)
+ * ============================================================================
+ * Kiểm thử analyzeStudentsCsv()/parseStudentsCsv() trong js/admin.js:
+ *  - File hợp lệ nạp đủ 6 CTV (fixture synthetic)
+ *  - Trùng MSSV trong file là lỗi chặn nhập (dòng trùng bị bỏ qua)
+ *  - Thiếu cột Họ tên/MSSV và không có fallback vị trí hợp lý => lỗi
+ *  - Thiếu cột vai trò => cảnh báo, mặc định Tập Sự
+ *  - Dòng thiếu Họ tên/MSSV được đếm vào ignoredRows
+ *  - Fixture synthetic không chứa dấu vết PII thật
+ *
+ * Chạy: node tests/csv_import.test.js
+ * ============================================================================
+ */
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+// ---------------------------------------------------------------------------
+// 1. Mock Storage & DOM tối thiểu (cùng kiểu với tests/auth.test.js)
+// ---------------------------------------------------------------------------
+class MockStorage {
+  constructor() { this.store = {}; }
+  getItem(key) {
+    return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
+  }
+  setItem(key, val) { this.store[key] = String(val); }
+  removeItem(key) { delete this.store[key]; }
+  clear() { this.store = {}; }
+}
+
+const mockLocalStorage = new MockStorage();
+const mockSessionStorage = new MockStorage();
+const elementsMap = {};
+
+function createMockElement(id = '', tag = 'div') {
+  const el = {
+    id,
+    tagName: tag.toUpperCase(),
+    style: {},
+    dataset: {},
+    classList: {
+      _classes: new Set(),
+      add(cls) { this._classes.add(cls); },
+      remove(cls) { this._classes.delete(cls); },
+      contains(cls) { return this._classes.has(cls); },
+      toggle(cls, force) {
+        if (force !== undefined) {
+          if (force) this.add(cls); else this.remove(cls);
+          return force;
+        }
+        if (this.contains(cls)) { this.remove(cls); return false; }
+        this.add(cls); return true;
+      }
+    },
+    value: '',
+    textContent: '',
+    innerHTML: '',
+    listeners: {},
+    addEventListener(event, fn) {
+      if (!this.listeners[event]) this.listeners[event] = [];
+      this.listeners[event].push(fn);
+    },
+    dispatchEvent(event) {
+      const fns = this.listeners[event.type || event] || [];
+      fns.forEach(fn => fn(event));
+    },
+    appendChild(child) { return child; },
+    removeChild(child) { return child; },
+    remove() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    closest() { return null; },
+    setAttribute() {},
+    removeAttribute() {},
+    getAttribute() { return null; },
+    hasAttribute() { return false; }
+  };
+  if (id) elementsMap[id] = el;
+  return el;
+}
+
+global.localStorage = mockLocalStorage;
+global.sessionStorage = mockSessionStorage;
+
+global.window = {
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => {},
+  matchMedia: () => ({ matches: false, addEventListener() {} }),
+  localStorage: mockLocalStorage,
+  sessionStorage: mockSessionStorage,
+  location: { href: 'http://localhost/admin.html', reload: () => {} },
+  confirm: () => true,
+  alert: () => {},
+  setInterval: () => 1,
+  clearInterval: () => {}
+};
+
+global.document = {
+  readyState: 'complete',
+  documentElement: createMockElement('html', 'html'),
+  body: createMockElement('body', 'body'),
+  getElementById: (id) => elementsMap[id] || createMockElement(id),
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  createElement: (tag) => createMockElement('', tag),
+  addEventListener: () => {}
+};
+
+// ---------------------------------------------------------------------------
+// 2. Nạp scheduler engine (để có SHIFTS thật) rồi admin.js
+// ---------------------------------------------------------------------------
+const ROOT = path.resolve(__dirname, '..');
+const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+const monthCalendarCode = readSrc('js/month_calendar.js');
+const schedulerCode = readSrc('js/scheduler.js');
+// new Function('window', 'module') giống regression_guard: không ghi đè
+// module.exports của chính file test này.
+// eslint-disable-next-line no-new-func
+new Function('window', 'module', monthCalendarCode)(global.window, undefined);
+// eslint-disable-next-line no-new-func
+new Function('window', 'module', schedulerCode)(global.window, undefined);
+
+eval(readSrc('js/common.js'));
+eval(readSrc('js/admin.js'));
+
+assert.ok(global.window.csvImportTestHelper, 'admin.js phải export window.csvImportTestHelper');
+const { parseStudentsCsv, analyzeStudentsCsv } = global.window.csvImportTestHelper;
+
+// ---------------------------------------------------------------------------
+// 3. Runner
+// ---------------------------------------------------------------------------
+let passed = 0;
+let total = 0;
+
+function runTest(name, fn) {
+  total++;
+  try {
+    fn();
+    console.log(`  ✓ [PASS] ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ [FAIL] ${name}: ${err.message}`);
+    console.error(err.stack);
+  }
+}
+
+console.log('================================================================');
+console.log('📥 BẮT ĐẦU KIỂM THỬ TỰ ĐỘNG - VALIDATE NHẬP CSV DANH SÁCH CTV');
+console.log('================================================================\n');
+
+const fixturePath = path.join(__dirname, 'fixtures', 'roster_sample.csv');
+const fixtureCsv = fs.readFileSync(fixturePath, 'utf8');
+
+runTest('File fixture hợp lệ: nạp đủ 6 CTV (3 cũ + 3 mới), không lỗi/cảnh báo', () => {
+  const report = analyzeStudentsCsv(fixtureCsv);
+
+  assert.strictEqual(report.errors.length, 0,
+    `Không được có lỗi: ${report.errors.join(' | ')}`);
+  assert.strictEqual(report.warnings.length, 0,
+    `Không được có cảnh báo: ${report.warnings.join(' | ')}`);
+  assert.strictEqual(report.candidates.length, 6, 'Phải nạp đủ 6 CTV');
+  assert.strictEqual(report.stats.validRows, 6);
+  assert.strictEqual(report.stats.totalRows, 6);
+  assert.strictEqual(report.stats.duplicateRows, 0);
+  assert.strictEqual(report.stats.ignoredRows, 0);
+  assert.strictEqual(report.stats.roleColumnFound, true, 'Fixture có cột Vai trò');
+
+  const oldCount = report.candidates.filter(c => c.role === 'old').length;
+  const newCount = report.candidates.filter(c => c.role === 'new').length;
+  assert.strictEqual(oldCount, 3, 'Phải có 3 CTV cũ');
+  assert.strictEqual(newCount, 3, 'Phải có 3 CTV mới');
+
+  // parseStudentsCsv() vẫn phải trả về MẢNG (hợp đồng cho khoi_phuc_58.js)
+  const parsed = parseStudentsCsv(fixtureCsv);
+  assert.ok(Array.isArray(parsed), 'parseStudentsCsv phải trả về mảng');
+  assert.strictEqual(parsed.length, 6);
+});
+
+runTest('Trùng MSSV trong file là LỖI chặn nhập; dòng trùng bị bỏ qua', () => {
+  const csv = [
+    'Họ và tên,MSSV,Vai trò',
+    'Mẫu Trùng Một,99000011,CTV cũ',
+    'Mẫu Trùng Hai,99000011,CTV mới',
+    'Mẫu Hợp Lệ,99000012,CTV mới'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.ok(report.errors.length >= 1, 'Trùng MSSV phải tạo lỗi');
+  assert.ok(report.errors.some(msg => /trùng/i.test(msg)), 'Thông báo lỗi phải nêu rõ trùng MSSV');
+  assert.strictEqual(report.stats.duplicateRows, 1, 'Phải đếm đúng 1 dòng trùng');
+  assert.strictEqual(report.candidates.length, 2, 'Chỉ giữ dòng MSSV xuất hiện đầu tiên');
+  assert.strictEqual(report.stats.validRows, 2);
+  assert.strictEqual(report.candidates.filter(c => c.studentId === '99000011').length, 1);
+});
+
+runTest('Thiếu cột Họ tên/MSSV và không có fallback vị trí hợp lý => LỖI', () => {
+  const csv = [
+    'Email,Số điện thoại',
+    'khong.phai.ten@example.com,0901234567',
+    'cung.khong.phai@example.com,0912345678'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.ok(report.errors.length >= 1, 'Phải báo lỗi khi không nhận diện được Họ tên/MSSV');
+  assert.strictEqual(report.candidates.length, 0, 'Không được đoán bừa email/SĐT thành hồ sơ CTV');
+  assert.ok(report.errors.some(msg => /Họ tên\/MSSV/i.test(msg)),
+    'Thông báo lỗi phải nhắc cột Họ tên/MSSV');
+});
+
+runTest('Thiếu cột vai trò => CẢNH BÁO và mặc định Tập Sự (new)', () => {
+  const csv = [
+    'Họ và tên,MSSV,SĐT,Các ca rảnh',
+    'Mẫu Không Vai Trò Một,99000021,,T2_S',
+    'Mẫu Không Vai Trò Hai,99000022,,T3_C'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.strictEqual(report.errors.length, 0,
+    `Thiếu cột vai trò chỉ là cảnh báo: ${report.errors.join(' | ')}`);
+  assert.ok(report.warnings.length >= 1, 'Phải có cảnh báo thiếu cột vai trò');
+  assert.ok(report.warnings.some(msg => /vai trò/i.test(msg)), 'Cảnh báo phải nhắc cột vai trò');
+  assert.strictEqual(report.stats.roleColumnFound, false);
+  assert.strictEqual(report.candidates.length, 2);
+  assert.ok(report.candidates.every(c => c.role === 'new'),
+    'Tất cả phải được mặc định là Tập Sự (new)');
+});
+
+runTest('Dòng thiếu Họ tên/MSSV được đếm vào ignoredRows và có cảnh báo', () => {
+  const csv = [
+    'Họ và tên,MSSV,Vai trò',
+    'Mẫu Hợp Lệ,99000031,CTV cũ',
+    ',99000032,CTV mới',
+    'Thiếu Mã Sinh Viên,,CTV mới',
+    'Mẫu Hợp Lệ Hai,99000033,CTV mới'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.strictEqual(report.errors.length, 0);
+  assert.strictEqual(report.stats.totalRows, 4);
+  assert.strictEqual(report.stats.ignoredRows, 2, 'Phải đếm 2 dòng thiếu tên/MSSV');
+  assert.strictEqual(report.candidates.length, 2);
+  assert.ok(report.warnings.some(msg => /bỏ qua/i.test(msg)), 'Phải cảnh báo các dòng bị bỏ qua');
+});
+
+runTest('Mã ca không nhận diện được => CẢNH BÁO, không chặn nhập', () => {
+  const csv = [
+    'Họ và tên,MSSV,Vai trò,Các ca rảnh',
+    'Mẫu Ca Lạ,99000041,CTV mới,"T2_S, T9_Z"'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.strictEqual(report.errors.length, 0);
+  assert.ok(report.warnings.some(msg => /mã ca/i.test(msg)), 'Phải cảnh báo mã ca lạ');
+  assert.deepStrictEqual(report.candidates[0].availableShifts, ['T2_S']);
+});
+
+runTest('File Google Sheets có dòng tiêu đề lớn + dòng trống: vẫn tìm đúng header', () => {
+  const csv = [
+    'DANH SÁCH CTV TVTS,,,,',
+    ',,,,',
+    'STT,Họ và tên,MSSV,SĐT',
+    '1,Mẫu Tiêu Đề Một,99000051,',
+    '2,Mẫu Tiêu Đề Hai,99000052,',
+    ',,,,',
+    ',,,,'
+  ].join('\n');
+
+  const report = analyzeStudentsCsv(csv);
+  assert.strictEqual(report.errors.length, 0, report.errors.join(' | '));
+  assert.strictEqual(report.candidates.length, 2, 'Phải bỏ qua dòng tiêu đề lớn và dòng trống');
+  assert.strictEqual(report.stats.totalRows, 2, 'Dòng ",,,," không được tính là dữ liệu lỗi');
+  assert.strictEqual(report.stats.ignoredRows, 0);
+});
+
+runTest('Fixture synthetic không chứa dấu vết PII thật', () => {
+  assert.ok(/giả lập/i.test(fixtureCsv), 'Fixture phải ghi rõ là dữ liệu giả lập');
+  assert.ok(!fixtureCsv.includes('@'), 'Fixture không được chứa email');
+  assert.ok(!/hcmute/i.test(fixtureCsv), 'Fixture không được chứa domain trường');
+  assert.ok(!/(^|,)\s*0\d{9}\s*(,|$)/m.test(fixtureCsv), 'Fixture không được chứa SĐT thật');
+  // MSSV synthetic nằm trong dải 99000001-99000006, không phải MSSV thật.
+  const ids = [...fixtureCsv.matchAll(/(?:^|,)(9900000\d)(?=,|$)/gm)].map(m => m[1]);
+  assert.strictEqual(new Set(ids).size, 6, 'Phải có đúng 6 MSSV synthetic dạng 9900000x');
+});
+
+console.log('\n================================================================');
+console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round((passed / total) * 100)}%)`);
+console.log('================================================================\n');
+
+if (passed !== total) {
+  process.exit(1);
+} else {
+  process.exit(0);
+}

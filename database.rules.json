@@ -30,8 +30,9 @@
       },
 
       "swaps": {
-        ".read": true,
+        ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
         "$swapId": {
+          ".read": "auth != null && (data.child('uid').val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
           ".write": "auth != null && ((auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)) || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (data.exists() && data.child('uid').val() === auth.uid && data.child('status').val() === 'pending' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'cancelled'))",
           ".validate": "newData.hasChildren(['id','studentId','status','uid','createdAt']) && newData.child('id').val() === $swapId && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'approved' || newData.child('status').val() === 'rejected' || newData.child('status').val() === 'cancelled')"
         }

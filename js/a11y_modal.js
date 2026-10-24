@@ -11,9 +11,11 @@
  *  - showToast() luôn ghi vào vùng aria-live="polite", kể cả thông báo
  *    lỗi — trình đọc màn hình không đọc lời cảnh báo khẩn cấp.
  *
- * Cách hoạt động: theo dõi (MutationObserver) các phần tử modal, khi
- * modal nào nhận class "active" thì nhớ phần tử đang được focus và cài
- * focus trap; khi modal đóng lại thì trả tiêu điểm về đúng chỗ cũ.
+ * Cách hoạt động: theo dõi (MutationObserver) MỌI thay đổi class/style của
+ * các phần tử modal. Modal được coi là mở khi có class "active" HOẶC được
+ * bật bằng style.display (nhiều nơi dùng display = 'flex'). WeakSet ghi nhớ
+ * modal nào đang mở thật để onModalOpened/onModalClosed chỉ chạy đúng lúc
+ * trạng thái đổi; khi rời trang thì ngắt observer.
  *
  * Nhờ vậy không phải sửa ở mọi nơi gọi classList.add/remove('active').
  * ===================================================================== */
@@ -142,6 +144,25 @@
     return el.classList.contains('modal-overlay') || el.classList.contains('modal-backdrop');
   }
 
+  /* Các modal đang THỰC SỰ mở. WeakSet để không giữ DOM đã gỡ trong bộ nhớ. */
+  var openModals = typeof WeakSet === 'function' ? new WeakSet() : null;
+
+  function hasOpenState(modal) {
+    if (!modal) return false;
+    if (modal.classList && modal.classList.contains('active')) return true;
+    // Nhiều nơi mở modal bằng style.display = 'flex' mà không thêm class.
+    var display = modal.style && modal.style.display;
+    return !!display && display !== 'none';
+  }
+
+  function markOpen(modal) {
+    return !!(openModals && !openModals.has(modal) && openModals.add(modal));
+  }
+
+  function markClosed(modal) {
+    return !!(openModals && openModals.has(modal) && openModals.delete(modal));
+  }
+
   function init() {
     if (typeof MutationObserver !== 'function' || !document.body) return;
 
@@ -149,27 +170,47 @@
       mutations.forEach(function (mutation) {
         var modal = mutation.target;
         if (!isModal(modal)) return;
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-          if (modal.classList.contains('active')) {
-            onModalOpened(modal);
-          } else {
-            onModalClosed(modal);
-          }
+        if (mutation.type !== 'attributes') return;
+        if (mutation.attributeName !== 'class' && mutation.attributeName !== 'style') return;
+
+        // Chỉ gọi onModalOpened/onModalClosed khi trạng thái ĐÓNG/MỞ đổi
+        // thật sự — đổi class/style khác (active tab, màu nền…) thì bỏ qua.
+        var isOpen = hasOpenState(modal);
+        var wasOpen = !!(openModals && openModals.has(modal));
+        if (isOpen && !wasOpen) {
+          markOpen(modal);
+          onModalOpened(modal);
+        } else if (!isOpen && wasOpen) {
+          markClosed(modal);
+          onModalClosed(modal);
         }
       });
     });
 
-    // Theo dõi class của MỌI phần tử (rẻ hơn theo dõi từng modal).
+    // Theo dõi cả class (modal mở bằng .active) lẫn style (modal mở bằng
+    // style.display = 'flex' — admin.js dùng cách này ở nhiều chỗ).
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ['class'],
+      attributeFilter: ['class', 'style'],
       subtree: true
     });
 
     document.addEventListener('keydown', handleKeydown, true);
 
-    // Dọn dẹp khi modal bị gỡ khỏi DOM mà không đóng tường minh.
-    observer.disconnect;
+    // Modal có thể đã mở sẵn trước khi file này chạy (class hoặc inline style).
+    Array.prototype.forEach.call(document.querySelectorAll(MODAL_SELECTOR), function (modal) {
+      if (!hasOpenState(modal) || !markOpen(modal)) return;
+      onModalOpened(modal);
+    });
+
+    // Rời trang: ngắt observer và gỡ listener. Môi trường không có window
+    // (test/worker) thì bỏ qua phần dọn dẹp này.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', function () {
+        try { observer.disconnect(); } catch (e) { /* bỏ qua */ }
+        document.removeEventListener('keydown', handleKeydown, true);
+      }, { once: true });
+    }
   }
 
   /* ---------------------------------------------------------------

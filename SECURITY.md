@@ -4,6 +4,9 @@
 > (`https://vtt132109.github.io/tvts/`), không phải đánh giá lý thuyết. Cập nhật
 > **2026-10-23**: quy trình ca rảnh không chờ duyệt + đăng nhập Google ở màn hình admin
 > + cấp quyền trước bằng email qua `/staff_emails`. Cập nhật **2026-10-23 (đợt 2)**: chặn sinh viên tự duyệt đổi ca, chặn ghi đè đăng ký của MSSV khác (`mssv_owner`), lọc mã ca & mốc thời gian do client gửi.
+> Cập nhật **2026-10-24**: xoá toàn bộ tài khoản/mật khẩu/PIN mặc định, thêm thiết lập
+> lần đầu; chặn PATCH mù bằng preflight `updatedAt` + guard thu nhỏ danh sách; chỉ PATCH
+> key thay đổi; khoá đọc công khai của `tvts_requests/swaps`; deploy phải qua test.
 >
 > **Đọc mục 1 trước.** Có một sự cố đang mở cần xử lý bằng tay trong Firebase Console —
 > không thể sửa bằng code trong repo này.
@@ -115,9 +118,10 @@ Firebase Console → Realtime Database → Data
 Xoá node: tvts_production_data/adminUsers
 ```
 
-Ứng dụng sẽ tự dựng lại danh sách từ `DEFAULT_ADMIN_USERS` ở máy đầu tiên đăng nhập
-(không còn tài khoản thật nào trong đó). Nếu muốn giữ tài khoản cán bộ thật, đổi mật khẩu
-trên một máy sạch rồi đẩy lại Cloud: payload mới chỉ chứa **hash có muối**, không còn plaintext.
+Ứng dụng **không còn tài khoản mặc định** để tự dựng lại. Máy trống sẽ hiện
+**Thiết lập lần đầu** để tạo Trưởng ban mới (mật khẩu ≥ 8 ký tự, PIN 6 số). Nếu muốn
+giữ tài khoản cán bộ thật, đổi mật khẩu trên một máy sạch rồi đẩy lại Cloud: payload
+mới chỉ chứa **hash có muối**, không còn plaintext.
 
 ### Bước 4 — Bật Google + Anonymous (code đã hỗ trợ)
 
@@ -189,13 +193,16 @@ firebase deploy --only database --project <project-id>
 | Stored XSS: `cfg.closedNotice` gán thẳng vào `innerHTML` ở cổng sinh viên | Đã `escapeHtml` cả 2 nhánh + test hồi quy `2.4` |
 | PIN hiện nguyên văn trong bảng "Cấp Quyền & Đổi MK" | Che mặc định (`••••`), có nút 👁️ hiện/ẩn + test `6.11` |
 | Mật khẩu/PIN bị serialize vào `sessionStorage` | Chỉ lưu `id/username/fullName/role` qua một cửa duy nhất `persistCurrentUser()` + test `6.12` |
-| `bankName` + `bankAccount` của 30 CTV nằm trong JSON công khai | Đã bỏ khỏi `data/default_students.json` (không mã nào dùng); test `6.13` chặn tái diễn. **Bản đầy đủ nằm ngoài repo** |
+| `bankName` + `bankAccount` của 30 CTV nằm trong JSON công khai | Đã bỏ khỏi `data/default_students.json`; file JSON mẫu đã xoá hẳn. Test `6.13` chặn tái diễn. **Bản đầy đủ nằm ngoài repo** |
 | Khoá `"pin"`/`"password"` bị đẩy lên Cloud | **Đã sửa:** payload chỉ chứa **hash có muối** (`passwordHash/passwordSalt/pinHash/pinSalt`), không bao giờ có plaintext. Máy khác vẫn đăng nhập được bằng đúng mật khẩu/PIN + test `2.7-2.9`, `3.3d-3.3e`, `5.4-5.5b` |
 | Tài khoản cấp ở máy A không dùng được ở máy B | **Đã sửa:** `applyPayload` tạo tài khoản từ Cloud **chỉ khi có hash hợp lệ** (bản ghi plaintext bị bỏ) + test `3.3d` |
 | Mật khẩu/PIN lưu plaintext ngay trên máy | **Đã sửa:** băm SHA-256 + salt ngẫu nhiên + 3.000 vòng lặp; tài khoản cũ tự nâng cấp sau lần đăng nhập đầu + test vector FIPS `auth.test.js` |
 | Dò mật khẩu/PIN không giới hạn | **Đã sửa:** khoá 60 giây sau 5 lần sai đúng định dạng + test trong `auth.test.js` |
 | Phiên đăng nhập tồn tại vô hạn trong tab | **Đã sửa:** tự hết hạn sau 12 giờ + test |
-| Mật khẩu/PIN mặc định `0000/9999` trong JS được deploy | **Một phần:** vẫn dùng cho dashboard nội bộ phía client; dữ liệu Cloud đã chuyển sang Google + `/staff`, không còn phụ thuộc mật khẩu mặc định |
+| Mật khẩu/PIN mặc định `0000/9999` trong JS được deploy | **Đã xử lý (2026-10-24):** xoá `DEFAULT_ADMIN_USERS` và `FALLBACK_ADMIN_USERS`; máy trống hiện form thiết lập lần đầu, bắt buộc mật khẩu ≥ 8 ký tự và PIN 6 số. Tài khoản cũ còn dùng credential mặc định (kể cả đã băm) bị **tự vô hiệu hoá khi nạp danh sách**. |
+| `tvts_requests/swaps` cho phép đọc công khai MSSV/uid/lý do | **Đã xử lý (2026-10-24):** chỉ staff đọc cả collection, chủ sở hữu đọc đúng yêu cầu của mình; trạng thái công khai nằm ở `tvts_public.swapStatuses` (không lý do/tên/uid). |
+| PATCH mù có thể ghi đè dữ liệu Cloud | **Đã xử lý (2026-10-24):** preflight `updatedAt`, chặn xung đột, guard CTA/tài khoản teo bất thường, chỉ PATCH key thay đổi; force chỉ sau khi xác nhận. |
+| Deploy có thể lên production dù test đỏ | **Đã xử lý (2026-10-24):** `static.yml` có job `test`, `deploy.needs: test`; quét PIN/mật khẩu cả 3 dạng key trong `_site/js`. |
 | Dữ liệu công khai chứa SĐT/email/số tài khoản/hash | **Đã sửa:** `tvts_public` chỉ nhận `id`, `studentId`, `fullName`, `role`, `faculty`, `className`, ca rảnh, lịch; **lịch/sự kiện được quét sạch PII ở mọi cấp**; test `9.1-9.32`, `10.17-10.20` chặn tái diễn |
 | Cán bộ dùng chung tài khoản Firebase Email/Password | **Đã sửa:** UI admin dùng **Google Login**; quyền Cloud kiểm tra UID trong `/staff` hoặc email trong `/staff_emails`; Email/Password chỉ còn fallback trong code/test |
 | Sinh viên phải có tài khoản mới đăng ký/đổi ca được | **Đã sửa:** không có trang đăng nhập; app tự tạo phiên **Anonymous** và gửi vào `tvts_requests` |
