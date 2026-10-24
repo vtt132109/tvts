@@ -8,8 +8,9 @@
 > lần đầu; chặn PATCH mù bằng preflight `updatedAt` + guard thu nhỏ danh sách; chỉ PATCH
 > key thay đổi; khoá đọc công khai của `tvts_requests/swaps`; deploy phải qua test.
 >
-> **Đọc mục 1 trước.** Có một sự cố đang mở cần xử lý bằng tay trong Firebase Console —
-> không thể sửa bằng code trong repo này.
+> **Trạng thái 2026-10-24:** sự cố đọc công khai đã được xử lý. `database.rules.json`
+> đã Publish lên project `vtt123-76e07`; các probe bên dưới trả 401 cho dữ liệu riêng tư
+> và `swaps`, 200 cho `tvts_public`. Mục 1 giữ lại làm hồ sơ sự cố.
 
 ---
 
@@ -35,7 +36,7 @@ Repo đã chuyển sang mô hình **3 nhánh dữ liệu Firebase + 2 node cấp
 
 ---
 
-## 1. 🔴 SỰ CỐ ĐANG MỞ: Firebase Realtime Database đang cho phép đọc công khai
+## 1. ✅ SỰ CỐ ĐÃ XỬ LÝ (2026-10-24): Firebase Realtime Database từng cho phép đọc công khai
 
 ### Bằng chứng
 
@@ -78,7 +79,13 @@ mật khẩu + PIN. **Lịch sử git vẫn còn file này** — xem mục 3.
 
 ---
 
-## 2. ✅ Việc phải làm ngay (theo thứ tự)
+## 2. ✅ Quy trình đã thực hiện (2026-10-24)
+
+> Rules đã được Publish bằng Firebase CLI (`firebase deploy --only database`).
+> Kết quả kiểm chứng: `tvts_production_data.json` và `tvts_requests/swaps.json`
+> trả **401 Permission denied** khi chưa đăng nhập; `tvts_public.json` trả **200**.
+> Ba tài khoản profile-only `thien`, `phuong`, `diephoi` đã được xoá khỏi
+> `tvts_production_data/adminUsers`; chỉ còn `admin` dạng hash, không plaintext.
 
 ### Bước 1 — Publish Rules đầy đủ (bắt buộc)
 
@@ -203,11 +210,12 @@ firebase deploy --only database --project <project-id>
 | `tvts_requests/swaps` cho phép đọc công khai MSSV/uid/lý do | **Đã xử lý (2026-10-24):** chỉ staff đọc cả collection, chủ sở hữu đọc đúng yêu cầu của mình; trạng thái công khai nằm ở `tvts_public.swapStatuses` (không lý do/tên/uid). |
 | PATCH mù có thể ghi đè dữ liệu Cloud | **Đã xử lý (2026-10-24):** preflight `updatedAt`, chặn xung đột, guard CTA/tài khoản teo bất thường, chỉ PATCH key thay đổi; force chỉ sau khi xác nhận. |
 | Deploy có thể lên production dù test đỏ | **Đã xử lý (2026-10-24):** `static.yml` có job `test`, `deploy.needs: test`; quét PIN/mật khẩu cả 3 dạng key trong `_site/js`. |
+| Cloud còn 3 tài khoản profile-only (`thien`, `phuong`, `diephoi`) | **Đã xử lý (2026-10-24):** xoá khỏi `tvts_production_data/adminUsers`; chỉ còn `admin` dạng hash, không plaintext. |
 | Dữ liệu công khai chứa SĐT/email/số tài khoản/hash | **Đã sửa:** `tvts_public` chỉ nhận `id`, `studentId`, `fullName`, `role`, `faculty`, `className`, ca rảnh, lịch; **lịch/sự kiện được quét sạch PII ở mọi cấp**; test `9.1-9.32`, `10.17-10.20` chặn tái diễn |
 | Cán bộ dùng chung tài khoản Firebase Email/Password | **Đã sửa:** UI admin dùng **Google Login**; quyền Cloud kiểm tra UID trong `/staff` hoặc email trong `/staff_emails`; Email/Password chỉ còn fallback trong code/test |
 | Sinh viên phải có tài khoản mới đăng ký/đổi ca được | **Đã sửa:** không có trang đăng nhập; app tự tạo phiên **Anonymous** và gửi vào `tvts_requests` |
 | Yêu cầu đăng ký/đổi ca không đến được cán bộ | **Đã sửa:** cán bộ đăng nhập Google là app tự kéo và gộp ca rảnh ngay (nút **📥 Kéo Ca Rảnh & Yêu Cầu** khi cần kéo tay); **không tự xếp lịch, không tự đẩy** Cloud. Đề xuất đổi ca vẫn chờ duyệt |
-| Rules cũ chỉ có một node, không phân quyền sinh viên | **Đã có:** `database.rules.json` 3 nhánh dữ liệu + `/staff`/`/staff_emails`; **cần Publish thủ công** trên Firebase Console (mục 2, Bước 1) |
+| Rules cũ chỉ có một node, không phân quyền sinh viên | **Đã xử lý (2026-10-24):** `database.rules.json` 3 nhánh dữ liệu + `/staff`/`/staff_emails` đã **Publish** lên project `vtt123-76e07`; probe xác nhận 401 với dữ liệu riêng tư/swaps |
 
 > ⚠️ **Hệ quả của việc đồng bộ hash:** máy cán bộ có thể **tạo tài khoản từ Cloud**, nên nếu Firebase Rules còn cho ghi công khai thì kẻ tấn công có thể chèn tài khoản vào `tvts_production_data/adminUsers`. **Bắt buộc** Publish `database.rules.json` (mục 2, Bước 1) trước khi dùng tính năng này trên môi trường thật.
 
