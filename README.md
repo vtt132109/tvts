@@ -313,11 +313,11 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 1. **Authentication → Sign-in method:** bật **Google** và **Anonymous**.
 2. **Authentication → Settings → Authorized domains:** thêm tên miền GitHub Pages (ví dụ `vtt132109.github.io`).
 3. **Realtime Database → Data:** thêm `staff/<UID Google của quản trị chính>: true`. Để cấp quyền trước cho người khác, thêm `staff_emails/<email đã mã hóa>: true` (email viết thường, thay dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`). Chỉ dùng boolean `true`, không dùng chuỗi `"true"` hay object.
-4. **Realtime Database → Rules:** dán toàn bộ `database.rules.json` (3 nhánh dữ liệu + `/staff`, `/staff_emails`) rồi **Publish**. Rules cho phép mỗi tài khoản đã đăng nhập chỉ đọc đúng UID hoặc email của mình để app xác minh quyền cán bộ.
+4. **Realtime Database → Rules:** dán toàn bộ `database.rules.json` (3 nhánh dữ liệu + `/staff`, `/staff_emails`) rồi **Publish**. Rules cho phép mỗi tài khoản đã đăng nhập chỉ đọc đúng UID hoặc email của mình để app xác minh quyền cán bộ. **Trạng thái 2026-10-24: đã Publish** — chỉ làm lại khi đổi rules hoặc chủ sở hữu.
 5. **Project settings → General → Web API Key:** dán vào modal Cloud của admin → **Lưu Cấu Hình**. Sau đó có thể bấm **Đăng nhập bằng Google** ngay ở màn hình xác thực admin (hoặc trong modal Cloud).
 6. Bấm **Đẩy Lên Cloud** một lần để tạo `tvts_public` cho trang sinh viên.
 
-> ⚠️ Nếu chưa Publish rules mới, sinh viên sẽ không gửi được yêu cầu và trang sinh viên không có dữ liệu công khai.
+> ⚠️ Nếu chưa Publish rules mới, sinh viên sẽ không gửi được yêu cầu và trang sinh viên không có dữ liệu công khai. Rules hiện tại đã được Publish ngày 2026-10-24; probe xác nhận dữ liệu riêng tư và `swaps` trả 401 khi chưa đăng nhập.
 
 > ⚠️ **Quan trọng:** Đây là ứng dụng web tĩnh, phần mở bảng quản trị chạy phía trình duyệt.
 > Mật khẩu/PIN nội bộ mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
