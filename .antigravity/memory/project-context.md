@@ -44,10 +44,9 @@ tvts/
 ├── css/
 │   └── style.css                # Toàn bộ stylesheet hợp nhất của ứng dụng
 ├── data/
-│   └── admin_accounts.json      # Schema & dữ liệu cán bộ mẫu
+│   └── ds-ctv.csv               # Danh sách 58 CTV thật (cục bộ, gitignored vì chứa PII)
 ├── js/
 │   ├── scheduler.js             # Lõi thuật toán xếp ca Bipartite Matching & luân phiên
-│   ├── sample30.js              # Bộ dữ liệu mẫu 30 CTV và 16 CTV HCM-UTE thực tế
 │   ├── student.js               # Logic Cổng Sinh Viên (đăng ký, xem lịch, đổi ca)
 │   └── admin.js                 # Logic Bảng Điều Hành Quản Trị (phân bổ, xuất Excel, sao lưu)
 ├── tasks/                       # Nhật ký công việc và kế hoạch kiểm thử

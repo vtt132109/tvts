@@ -328,3 +328,65 @@ interface CloudSyncPayload {
    - Dữ liệu được lưu vào `localStorage` trước, sau đó `CloudSyncManager.pushToCloud()` đẩy payload lên Firebase REST API.
 3. **Fallback Offline-First:**
    - Khi mất mạng hoặc chưa cấu hình Firebase, toàn bộ ứng dụng hoạt động 100% trơn tru bằng `localStorage` như bình thường.
+
+---
+
+## 11. 🔒 Hợp Đồng Cập Nhật 2026-10-24 (Cloud Guard, Swap Status, First-run Admin, CSV Validation)
+
+### A. Kết quả đẩy Cloud (`CloudPushResult`)
+```typescript
+interface CloudPushResult {
+  success: boolean;
+  conflict?: boolean;   // Cloud có bản mới hơn máy này
+  guard?: boolean;      // Bị chặn bởi kiểm tra an toàn danh sách
+  error?: string;
+  remoteCount?: number;
+  localCount?: number;
+  timestamp?: number;
+  keys?: string[];
+}
+```
+- `pushToCloud(cfg?, options?)` với `options.force === true` để bỏ qua guard (chỉ dùng sau khi người dùng xác nhận).
+- Khi `lastCloudUpdatedAt > 0`, phải preflight GET để so `updatedAt` + số lượng CTV trước khi PATCH.
+- Chỉ PATCH các key thực sự thay đổi; không gửi `students`/`adminUsers` rỗng.
+
+### B. Trạng thái đổi ca công khai (`PublicSwapStatus`)
+```typescript
+interface PublicSwapStatus {
+  id: string;
+  studentId: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  weekNum: number;
+  shiftId: string;
+  targetStudentId?: string;
+}
+```
+- Nằm trong `tvts_public.swapStatuses`.
+- TUYỆT ĐỐI không chứa `reason`, `studentName`, `targetStudentName`, `uid`.
+- `tvts_requests/swaps` chỉ staff đọc cả collection; chủ sở hữu đọc được đúng request của mình.
+
+### C. Thiết lập tài khoản lần đầu (`FirstRunAdmin`)
+- Không còn `DEFAULT_ADMIN_USERS` / `FALLBACK_ADMIN_USERS` trong mã nguồn.
+- Khi `adminUsers` rỗng: hiển thị form tạo Trưởng ban (họ tên, username, mật khẩu ≥ 8, PIN 6 số).
+- Khôi phục: đăng nhập Google cán bộ (nếu Cloud đã cấu hình) hoặc kéo dữ liệu Cloud; không dùng mật khẩu mặc định.
+
+### D. Báo cáo nhập CSV (`CsvImportReport`)
+```typescript
+interface CsvImportReport {
+  candidates: Array<{
+    fullName: string; studentId: string; phone?: string;
+    role: 'old' | 'new'; availableShifts: string[]; isExisting: boolean;
+  }>;
+  errors: string[];    // lỗi chặn nhập
+  warnings: string[];  // cảnh báo vẫn cho nhập
+  stats: {
+    totalRows: number;
+    validRows: number;
+    duplicateRows: number;
+    ignoredRows: number;
+    roleColumnFound: boolean;
+  };
+}
+```
+- Trùng MSSV trong file là lỗi chặn nhập.
+- Thiếu cột Họ tên/MSSV là lỗi; thiếu cột vai trò là cảnh báo (mặc định Tập Sự).

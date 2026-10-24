@@ -101,7 +101,16 @@
       });
 
       const startFull = expandShortDate(w.startDateStr, year);
-      const endFull = expandShortDate(w.endDateStr, year);
+
+      // Tuần có thể vắt qua năm mới (Tuần 4 của tháng 12: 28/12 - 01/01).
+      // Nếu tháng kết thúc nhỏ hơn tháng bắt đầu thì ngày kết thúc thuộc
+      // năm sau — chỉ dùng năm +1 cho endFull, không đụng tới startFull.
+      const startMonthNum = parseInt(String(w.startDateStr || '').split('/')[1], 10);
+      const endMonthNum = parseInt(String(w.endDateStr || '').split('/')[1], 10);
+      const endYear = (startMonthNum && endMonthNum && endMonthNum < startMonthNum)
+        ? year + 1
+        : year;
+      const endFull = expandShortDate(w.endDateStr, endYear);
 
       return {
         weekNumber: w.weekNumber,
@@ -130,8 +139,9 @@
   }
 
   /**
-   * Lịch tháng trước: ưu tiên kho ALL_MONTHS, sau đó tới bản sao lưu web,
-   * cuối cùng mới sinh mẫu bằng SchedulerEngine. Luôn gắn đúng tháng/năm.
+   * Lịch tháng trước: CHỈ đọc dữ liệu lưu trữ thật (kho ALL_MONTHS, bản sao
+   * lưu web, cache tháng trước). Nếu chưa có thì trả null — tuyệt đối không
+   * tự sinh lịch mẫu, vì lịch bịa sẽ bị người dùng hiểu là lịch đã chốt.
    */
   function getPrevMonthSchedule() {
     const prev = getPrevActiveMonth();
@@ -176,24 +186,9 @@
       }
     } catch (e) {}
 
-    // 4. Sinh lịch mẫu chân thực cho đúng tháng trước
-    let prevSched = null;
-    try {
-      const students = loadAllStudents();
-      if (window.SchedulerEngine && typeof window.SchedulerEngine.runMonthSchedule === 'function' && students.length > 0) {
-        prevSched = window.SchedulerEngine.runMonthSchedule(students, prev.year, prev.month);
-      }
-    } catch (err) {
-      console.warn('[Portal] Không thể tự động sinh lịch tháng trước:', err);
-    }
-
-    if (prevSched) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE, JSON.stringify(prevSched));
-      } catch (e) {}
-      return prevSched;
-    }
-
+    // 4. Không có dữ liệu lưu trữ thật: trả null để màn hình hiển thị
+    // trạng thái trống. KHÔNG gọi SchedulerEngine.runMonthSchedule ở đây —
+    // lịch tự sinh không phải lịch Ban Điều Hành đã chốt.
     return null;
   }
 
@@ -1698,25 +1693,37 @@ function paintSlotAvailability() {
     ];
 
     if (!scheduleResult || Object.keys(schedule).length === 0) {
+      // Tháng trước có thể chưa từng được lưu trên máy này. Không tự sinh
+      // lịch thay thế — hiển thị đúng trạng thái trống của kho lưu trữ.
+      const isPrevView = selectedMonth === 'prev';
+      const emptyTitle = isPrevView
+        ? 'Chưa Có Lịch Lưu Trữ Tháng Trước'
+        : 'Ban Điều Hành Đang Tổng Hợp Lịch';
+      const emptyDesc = isPrevView
+        ? `Không tìm thấy lịch ${escapeHtml(prevLabel)} trong kho lưu trữ trên máy này.`
+        : 'Lịch trực chính thức sẽ được công bố tại đây.';
+
       elements.timetableGrid.innerHTML = `
         <div style="grid-column: 1 / -1; background: var(--bg-card); padding: 3rem 1.5rem; text-align: center;">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⏳</div>
-          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Ban Điều Hành Đang Tổng Hợp Lịch</h3>
+          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">${emptyTitle}</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
-            Lịch trực chính thức sẽ được công bố tại đây.
+            ${emptyDesc}
           </p>
         </div>
       `;
       if (elements.scheduleStatusBanner) {
-        elements.scheduleStatusBanner.innerHTML = `<span class="badge" style="background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a;">Đang chờ xếp lịch</span>`;
+        elements.scheduleStatusBanner.innerHTML = isPrevView
+          ? `<span class="badge" style="background: var(--bg-card-hover); color: var(--text-muted); border: 1px solid var(--border-color);">Chưa có lịch lưu trữ</span>`
+          : `<span class="badge" style="background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a;">Đang chờ xếp lịch</span>`;
       }
       // Trên mobile, .timetable-wrapper bị ẩn nên thông báo rỗng phải hiện ở agenda.
       if (elements.agendaMobile) {
         elements.agendaMobile.innerHTML = `
           <div class="sv-agenda-empty-state">
             <div style="font-size: 2rem; margin-bottom: 0.4rem;">⏳</div>
-            <strong style="display:block; color: var(--text-main); margin-bottom: 0.25rem;">Ban Điều Hành Đang Tổng Hợp Lịch</strong>
-            <span>Lịch trực chính thức sẽ được công bố tại đây.</span>
+            <strong style="display:block; color: var(--text-main); margin-bottom: 0.25rem;">${emptyTitle}</strong>
+            <span>${emptyDesc}</span>
           </div>
         `;
       }
@@ -1981,9 +1988,12 @@ function paintSlotAvailability() {
     const prevShifts = extractStudentShiftsFromSchedule(mssv, prevSched);
 
     if (currentShifts.length === 0 && prevShifts.length === 0) {
+      // Nếu tháng trước chưa có lịch lưu trữ thật (prevSched === null) thì
+      // không được nói đã tra cứu tháng đó — chỉ báo đúng phạm vi đã có.
+      const searchedScope = prevSched ? `${curLabel} và ${prevLabel}` : curLabel;
       elements.lookupResult.innerHTML = `
         <div style="padding: 1.25rem; background: var(--bg-card-hover); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem; color: var(--text-muted); text-align: center;">
-          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong ${escapeHtml(curLabel)} và ${escapeHtml(prevLabel)}.<br>
+          ℹ️ Không tìm thấy lịch trực của MSSV <strong>${escapeHtml(elements.inputLookupMssv.value)}</strong> trong ${escapeHtml(searchedScope)}.<br>
           <span style="font-size: 0.82rem;">(Vui lòng kiểm tra lại MSSV hoặc liên hệ Ban Điều Hành nếu bạn đã đăng ký).</span>
         </div>
       `;
@@ -2019,7 +2029,7 @@ function paintSlotAvailability() {
     currentLookupStudent = studentInfo;
     currentLookupShifts = currentShifts;
 
-    renderPersonalDutyCard(studentInfo, currentShifts, prevShifts);
+    renderPersonalDutyCard(studentInfo, currentShifts, prevShifts, !!prevSched);
     elements.lookupResult.style.display = 'block';
     elements.lookupResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -2312,7 +2322,7 @@ function paintSlotAvailability() {
    * Render Thẻ Lịch Trực Cá Nhân Điện Tử (Task 2 & Task 4)
    * Tuyệt đối KHÔNG có dặn dò trang phục và KHÔNG hiển thị vai trò
    */
-  function renderPersonalDutyCard(student, currentShifts = [], prevShifts = []) {
+  function renderPersonalDutyCard(student, currentShifts = [], prevShifts = [], hasPrevMonthSchedule = true) {
     const curM = getActiveMonth();
     const prevM = getPrevActiveMonth();
     const curLabel = formatMonthLabel(curM.month, curM.year);
@@ -2331,9 +2341,9 @@ function paintSlotAvailability() {
     // Lịch sử trực tổng hợp toàn bộ các tháng còn lưu trong máy
     const shiftHistory = buildStudentShiftHistory(student.studentId);
 
-    const renderShiftList = (shifts, isCurrent) => {
+    const renderShiftList = (shifts, isCurrent, emptyText) => {
       if (!shifts || shifts.length === 0) {
-        return `<div style="padding: 1.25rem; text-align: center; color: var(--text-muted); font-size: 0.88rem; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">Không có ca trực nào trong kỳ này.</div>`;
+        return `<div style="padding: 1.25rem; text-align: center; color: var(--text-muted); font-size: 0.88rem; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">${emptyText || 'Không có ca trực nào trong kỳ này.'}</div>`;
       }
       return shifts.map((s, idx) => `
         <div class="personal-shift-card">
@@ -2361,7 +2371,11 @@ function paintSlotAvailability() {
     };
 
     const currentShiftsHtml = renderShiftList(currentShifts, true);
-    const prevShiftsHtml = renderShiftList(prevShifts, false);
+    const prevShiftsHtml = renderShiftList(
+      prevShifts,
+      false,
+      hasPrevMonthSchedule ? '' : 'Chưa có lịch lưu trữ cho tháng này trên máy.'
+    );
 
     const swapsHtml = mySwaps.length > 0 ? `
       <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color);">
@@ -2899,6 +2913,10 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     loadAllStudents,
     switchRegWeek,
     renderMonthOverview,
+    // Cho test hồi quy: cấu hình tuần (ngày bắt đầu/kết thúc đầy đủ) và
+    // lịch tháng trước (chỉ đọc kho lưu trữ, không tự sinh).
+    getMonthWeeksConfig: (month, year) => buildMonthWeeksConfig(month, year),
+    getPrevMonthSchedule,
     // #12: lịch sử ca trực nhiều tháng
     buildShiftHistory: (mssv, options) => buildStudentShiftHistory(mssv, options),
     collectArchivedMonthSchedules,

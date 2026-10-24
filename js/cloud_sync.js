@@ -724,29 +724,6 @@
     }
   }
 
-  // Danh sách tài khoản khởi tạo CHỈ dùng khi máy chưa có dữ liệu nào.
-// LƯU Ý BẢO MẬT: đây là thông tin công khai trong mã nguồn. Ban Tuyển Sinh
-// phải đổi mật khẩu & PIN ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
-// Tài khoản thật KHÔNG được commit vào kho công khai.
-  const FALLBACK_ADMIN_USERS = [
-    {
-      id: 'usr_admin',
-      username: 'admin',
-      password: '0000',
-      pin: '9999',
-      fullName: 'Trưởng Ban Tuyển Sinh',
-      role: 'Trưởng ban điều hành'
-    },
-    {
-      id: 'usr_diephoi',
-      username: 'diephoi',
-      password: '0000',
-      pin: '8888',
-      fullName: 'Cán Bộ Điều Phối Tuyển Sinh',
-      role: 'Điều phối viên tuyển sinh'
-    }
-  ];
-
   // Hồ sơ cán bộ được phép đồng bộ qua Cloud.
   //
   // CHỈ đẩy hash đã có muối (passwordHash/passwordSalt/pinHash/pinSalt) —
@@ -947,10 +924,15 @@
       }
     }
 
-    let localAdmins = readKey(STORAGE_KEYS.ADMIN_USERS, []);
-    if (!Array.isArray(localAdmins) || localAdmins.length === 0) {
-      localAdmins = FALLBACK_ADMIN_USERS;
-    }
+    // KHÔNG có tài khoản mặc định/fallback trong mã nguồn.
+    //
+    // Máy chưa có danh sách (hoặc danh sách rỗng) nghĩa là "chưa nạp", KHÔNG
+    // phải "xoá hết" hay "dùng tài khoản mẫu". Bỏ hẳn khoá adminUsers khỏi
+    // payload để PATCH giữ nguyên dữ liệu đang có trên Cloud.
+    const localAdmins = readKey(STORAGE_KEYS.ADMIN_USERS, null);
+    const adminsToPush = Array.isArray(localAdmins) && localAdmins.length > 0
+      ? localAdmins.map(publicAdminProfile).filter(Boolean)
+      : undefined;
 
     // KHÔNG được đẩy danh sách rỗng lên Cloud.
     //
@@ -966,12 +948,6 @@
       : undefined;
 
     const payload = {
-      // Chỉ đẩy HỒ SƠ (id/username/fullName/role). Mật khẩu & PIN ở lại máy.
-      //
-      // Trước đây mảng adminUsers nguyên bản (kèm password + pin plaintext) được
-      // PATCH lên Firebase — nơi ai có URL cũng đọc được. Đó là lý do phát hiện
-      // CRITICAL ngày 2026-10-22: 4 tài khoản cán bộ bị lộ mật khẩu/PIN.
-      adminUsers: localAdmins.map(publicAdminProfile).filter(Boolean),
       scheduleResult: readKey(STORAGE_KEYS.SCHEDULE, null),
       twoWeekSchedule: readKey(STORAGE_KEYS.TWO_WEEK_SCHEDULE, null),
       monthSchedule: readKey(STORAGE_KEYS.MONTH_SCHEDULE, null),
@@ -990,6 +966,15 @@
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
     };
+    // Chỉ đẩy HỒ SƠ cán bộ (id/username/fullName/role + hash nếu có). Mật khẩu
+    // & PIN thô ở lại máy. Không có danh sách thì bỏ khoá để Cloud giữ nguyên.
+    //
+    // Trước đây mảng adminUsers nguyên bản (kèm password + pin plaintext) được
+    // PATCH lên Firebase — nơi ai có URL cũng đọc được. Đó là lý do phát hiện
+    // CRITICAL ngày 2026-10-22: 4 tài khoản cán bộ bị lộ mật khẩu/PIN.
+    if (adminsToPush && adminsToPush.length > 0) {
+      payload.adminUsers = adminsToPush;
+    }
     // Chỉ gán khi máy này THẬT SỰ có danh sách. Bỏ khoá khỏi JSON.stringify()
     // khiến Firebase giữ nguyên dữ liệu cũ (không ghi đè bằng rỗng).
     if (studentsToPush !== undefined) {
@@ -999,6 +984,23 @@
 
     return payload;
   }
+
+  /**
+   * Serialize ổn định (không phụ thuộc thứ tự key) để so sánh payload cục bộ
+   * với bản đọc từ Firebase. Nhờ vậy chỉ PATCH đúng các khoá thực sự đổi.
+   */
+  function stableStringify(value) {
+    if (value === undefined) return 'undefined';
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) {
+      return '[' + value.map(item => stableStringify(item)).join(',') + ']';
+    }
+    const keys = Object.keys(value).sort();
+    return '{' + keys.map(key => JSON.stringify(key) + ':' + stableStringify(value[key])).join(',') + '}';
+  }
+
+  /** Khoá meta luôn gửi kèm mỗi lần PATCH (kể cả khi dữ liệu không đổi). */
+  const PUSH_META_KEYS = ['updatedAt', 'deviceId', 'version'];
 
   /**
    * Chuẩn hoá activeMonth về {month, year}.
@@ -1229,6 +1231,27 @@
     return record;
   }
 
+  /**
+   * Trạng thái đổi ca được công bố cho trang sinh viên.
+   *
+   * CHỈ các trường cần để hiển thị kết quả duyệt. Tuyệt đối không có
+   * reason / studentName / targetStudentName / uid (dữ liệu riêng tư).
+   */
+  function publicSwapStatus(swap) {
+    if (!swap || typeof swap !== 'object' || !swap.id) return null;
+    const record = {
+      id: String(swap.id),
+      studentId: typeof swap.studentId === 'string' ? swap.studentId : '',
+      status: typeof swap.status === 'string' ? swap.status : 'pending',
+      weekNum: Number(swap.weekNum) || 0,
+      shiftId: typeof swap.shiftId === 'string' ? swap.shiftId : ''
+    };
+    if (typeof swap.targetStudentId === 'string' && swap.targetStudentId) {
+      record.targetStudentId = swap.targetStudentId;
+    }
+    return record;
+  }
+
   /** Đọc JSON từ localStorage, trả về mặc định nếu thiếu/hỏng. */
   function readStorageJson(key, defaultValue) {
     try {
@@ -1295,6 +1318,11 @@
       : [];
 
     const cfg = getConfig();
+    const localSwaps = readStorageJson(STORAGE_KEYS.SWAP_REQUESTS, []);
+    // Cùng giới hạn 200 với danh sách cục bộ; chỉ công bố trạng thái, không PII.
+    const swapStatuses = Array.isArray(localSwaps)
+      ? localSwaps.slice(0, 200).map(publicSwapStatus).filter(Boolean)
+      : [];
     const payload = {
       meta: {
         updatedAt: Date.now(),
@@ -1317,6 +1345,7 @@
       allMonths: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
       activeMonth: normalizeActiveMonth(readStorageJson(STORAGE_KEYS.ACTIVE_MONTH, null)),
       availabilityMonth: readStorageJson(STORAGE_KEYS.AVAILABILITY_MONTH, null),
+      swapStatuses,
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
       version: 'public-1.0'
@@ -1329,8 +1358,82 @@
   }
 
   /**
+   * Gộp trạng thái đổi ca CÔNG KHAI vào danh sách cục bộ.
+   *
+   * - Chỉ cập nhật các yêu cầu ĐÃ CÓ trên máy (không tạo yêu cầu lạ).
+   * - Chỉ chạm status/weekNum/shiftId/targetStudentId; giữ nguyên reason,
+   *   studentName, targetStudentName, uid...
+   * - Không để bản pending cũ trên Cloud ghi đè kết quả đã duyệt trên máy.
+   */
+  const PUBLIC_SWAP_STATUS_VALUES = new Set(['pending', 'approved', 'rejected', 'cancelled']);
+
+  function normalizePublicSwapStatusList(input) {
+    if (Array.isArray(input)) return input;
+    if (input && typeof input === 'object') {
+      return Object.keys(input).map(key => {
+        const item = input[key];
+        if (!item || typeof item !== 'object') return null;
+        return Object.assign({ id: key }, item);
+      }).filter(Boolean);
+    }
+    return [];
+  }
+
+  function mergePublicSwapStatuses(localList, remoteList) {
+    const swaps = Array.isArray(localList)
+      ? localList.map(item => Object.assign({}, item))
+      : [];
+    const indexById = new Map();
+    swaps.forEach((item, index) => {
+      if (item && item.id) indexById.set(String(item.id), index);
+    });
+
+    let updated = 0;
+    normalizePublicSwapStatusList(remoteList).forEach(remote => {
+      if (!remote || !remote.id) return;
+      const index = indexById.get(String(remote.id));
+      if (index === undefined) return; // KHÔNG tạo yêu cầu lạ từ nhánh công khai
+      const current = swaps[index];
+      let changed = false;
+
+      if (typeof remote.status === 'string' && PUBLIC_SWAP_STATUS_VALUES.has(remote.status)) {
+        const localHandled = current.status === 'approved' || current.status === 'rejected';
+        const remotePending = remote.status === 'pending';
+        if (!(localHandled && remotePending) && current.status !== remote.status) {
+          current.status = remote.status;
+          changed = true;
+        }
+      }
+
+      const weekNum = Number(remote.weekNum);
+      if (Number.isInteger(weekNum) && weekNum >= 1 && weekNum <= 4
+        && current.weekNum !== weekNum) {
+        current.weekNum = weekNum;
+        changed = true;
+      }
+
+      if (typeof remote.shiftId === 'string' && remote.shiftId
+        && current.shiftId !== remote.shiftId) {
+        current.shiftId = remote.shiftId;
+        changed = true;
+      }
+
+      if (typeof remote.targetStudentId === 'string'
+        && current.targetStudentId !== remote.targetStudentId) {
+        current.targetStudentId = remote.targetStudentId;
+        changed = true;
+      }
+
+      if (changed) updated++;
+    });
+
+    return { swaps, updated };
+  }
+
+  /**
    * Áp dụng dữ liệu CÔNG KHAI vào LocalStorage của trang sinh viên.
-   * Không bao giờ ghi adminUsers / webBackups / swapRequests từ nhánh này.
+   * Không bao giờ ghi adminUsers / webBackups / swapRequests nguyên bản từ
+   * nhánh này; chỉ gộp trạng thái đổi ca (swapStatuses) vào yêu cầu đã có.
    */
   function applyPublicPayload(payload) {
     if (!payload || typeof payload !== 'object') {
@@ -1378,6 +1481,16 @@
       }
 
       if (Array.isArray(payload.events)) writeKey(STORAGE_KEYS.EVENTS, sanitizePublicData(payload.events));
+
+      // Trạng thái đổi ca: chỉ cập nhật yêu cầu đã có, không tạo mới và không
+      // bao giờ ghi đè lý do/tên người gửi.
+      if (payload.swapStatuses !== undefined && payload.swapStatuses !== null) {
+        const localSwaps = readStorageJson(STORAGE_KEYS.SWAP_REQUESTS, []);
+        const mergedSwaps = mergePublicSwapStatuses(localSwaps, payload.swapStatuses);
+        if (mergedSwaps.updated > 0) {
+          writeKey(STORAGE_KEYS.SWAP_REQUESTS, mergedSwaps.swaps);
+        }
+      }
 
       const allMonthsData = payload.allMonthSchedules || payload.allMonths;
       if (allMonthsData && typeof allMonthsData === 'object') {
@@ -1773,15 +1886,18 @@
   }
 
   /**
-   * Trang sinh viên tải danh sách đề xuất đổi ca đang công khai để xem lịch sử.
-   * Chỉ GET nhánh swaps (rules cho phép read: true).
+   * Trang sinh viên tải TRẠNG THÁI đề xuất đổi ca từ nhánh CÔNG KHAI.
+   *
+   * Rules mới không còn cho đọc cả collection tvts_requests/swaps (chỉ staff
+   * hoặc chủ sở hữu từng yêu cầu). Vì vậy chỉ GET tvts_public và gộp
+   * swapStatuses (status-only) vào các yêu cầu đã có trên máy.
    */
   async function pullPublicSwaps(customCfg) {
     const cfg = customCfg || getConfig();
     if (!cfg.databaseUrl) return { success: false, error: 'Chưa cấu hình URL Firebase!' };
     const url = formatFirebaseUrl(
       cfg.databaseUrl,
-      (cfg.requestsPath || 'tvts_requests') + '/swaps',
+      cfg.publicPath || 'tvts_public',
       ''
     );
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
@@ -1794,20 +1910,21 @@
       }
       const data = await response.json();
       if (data && typeof data === 'object' && data.error) {
-        return { success: false, error: 'Firebase từ chối đọc đề xuất đổi ca.' };
+        return { success: false, error: 'Firebase từ chối đọc trạng thái đổi ca.' };
       }
-      const remoteSwaps = (data && typeof data === 'object' && !Array.isArray(data))
-        ? Object.keys(data).map(key => Object.assign({ id: key }, data[key] || {}))
-        : [];
+
       const localSwaps = readStorageJson(STORAGE_KEYS.SWAP_REQUESTS, []);
-      const merged = mergeSwapRequests(localSwaps, remoteSwaps);
-      localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(merged));
-      try {
-        window.dispatchEvent(new CustomEvent('ts:data-changed', {
-          detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] }
-        }));
-      } catch (e) {}
-      return { success: true, swaps: merged };
+      const remoteStatuses = data && typeof data === 'object' ? data.swapStatuses : null;
+      const merged = mergePublicSwapStatuses(localSwaps, remoteStatuses);
+      if (merged.updated > 0) {
+        localStorage.setItem(STORAGE_KEYS.SWAP_REQUESTS, JSON.stringify(merged.swaps));
+        try {
+          window.dispatchEvent(new CustomEvent('ts:data-changed', {
+            detail: { keys: [STORAGE_KEYS.SWAP_REQUESTS] }
+          }));
+        } catch (e) {}
+      }
+      return { success: true, swaps: merged.swaps, updated: merged.updated };
     } catch (err) {
       return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
     }
@@ -2019,7 +2136,10 @@
   }
 
   // Đẩy dữ liệu từ LocalStorage lên Firebase Cloud (Push)
-  async function pushToCloud(customCfg) {
+  //
+  // options.force === true: bỏ qua cảnh báo xung đột / guard thu nhỏ danh sách.
+  // Chỉ dùng sau khi người dùng đã xác nhận rõ ràng.
+  async function pushToCloud(customCfg, options = {}) {
     const cfg = customCfg || getConfig();
     if (isStudentMode(cfg)) {
       return { success: false, error: 'Trang sinh viên không có quyền đẩy dữ liệu riêng tư lên Cloud.' };
@@ -2027,6 +2147,8 @@
     if (!cfg.databaseUrl) {
       return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
     }
+
+    const force = Boolean(options && options.force === true);
 
     const url = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, cfg.apiKey);
     if (!url) {
@@ -2041,24 +2163,178 @@
       return { success: false, error: authErr.message };
     }
     const authedUrl = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, token);
+    if (!authedUrl) {
+      return { success: false, error: 'URL Firebase không hợp lệ!' };
+    }
 
     const payload = buildPayload();
+    const lastCloudUpdatedAt = Number(cfg.lastCloudUpdatedAt) || 0;
+    const localStudents = Array.isArray(payload.students) ? payload.students : null;
 
-    // PATCH thay vì PUT — đây là nguyên nhân gốc khiến danh sách 58 CTV bị xoá.
+    // -----------------------------------------------------------------------
+    // PREFLIGHT: máy đã từng đồng bộ thì đọc bản trên Cloud trước khi ghi.
+    //
+    // Bỏ qua khi lastCloudUpdatedAt = 0 (lần đẩy đầu tiên) để luồng đơn giản
+    // và không phát sinh thêm request. Nếu đọc lỗi, DỪNG hẳn — thà không đẩy
+    // còn hơn ghi đè mù dữ liệu của thiết bị khác (trừ khi force).
+    // -----------------------------------------------------------------------
+    let remote = null;
+    const needsPreflight = lastCloudUpdatedAt > 0
+      || (Array.isArray(payload.adminUsers) && payload.adminUsers.length > 0);
+    if (needsPreflight) {
+      let preflightError = '';
+      try {
+        const preflightResponse = await fetch(authedUrl, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        let preflightData = null;
+        let parseFailed = false;
+        try { preflightData = await preflightResponse.json(); } catch (e) {
+          preflightData = null;
+          parseFailed = true;
+        }
+
+        if (!preflightResponse.ok) {
+          const detail = preflightData && preflightData.error
+            ? (typeof preflightData.error === 'string'
+              ? preflightData.error
+              : JSON.stringify(preflightData.error))
+            : (preflightResponse.statusText || ('HTTP ' + preflightResponse.status));
+          preflightError = `Firebase HTTP ${preflightResponse.status}: ${detail}`;
+        } else if (parseFailed) {
+          preflightError = 'Phản hồi Cloud không phải JSON hợp lệ';
+        } else if (preflightData && typeof preflightData === 'object'
+          && !Array.isArray(preflightData) && preflightData.error) {
+          const detail = typeof preflightData.error === 'string'
+            ? preflightData.error
+            : JSON.stringify(preflightData.error);
+          preflightError = 'Firebase từ chối đọc: ' + detail;
+        } else {
+          remote = (preflightData && typeof preflightData === 'object'
+            && !Array.isArray(preflightData)) ? preflightData : {};
+        }
+      } catch (preflightErr) {
+        preflightError = preflightErr.message || 'Lỗi kết nối Firebase Cloud';
+      }
+
+      if (preflightError && !force) {
+        return {
+          success: false,
+          error: 'Không kiểm tra được dữ liệu trên Cloud trước khi đẩy nên đã dừng lại '
+            + 'để bảo vệ dữ liệu: ' + preflightError
+        };
+      }
+    }
+
+    const remoteStudentsCount = (() => {
+      if (!remote || !remote.students) return 0;
+      if (Array.isArray(remote.students)) return remote.students.length;
+      return typeof remote.students === 'object' ? Object.keys(remote.students).length : 0;
+    })();
+
+    // Tài khoản cán bộ là dữ liệu nhạy cảm nhất: máy mới thiết lập lần đầu
+    // tuyệt đối không được PATCH đè danh sách tài khoản đang có trên Cloud.
+    const remoteAdminCount = (() => {
+      if (!remote || !remote.adminUsers) return 0;
+      if (Array.isArray(remote.adminUsers)) return remote.adminUsers.length;
+      return typeof remote.adminUsers === 'object' ? Object.keys(remote.adminUsers).length : 0;
+    })();
+    const localAdminCount = Array.isArray(payload.adminUsers) ? payload.adminUsers.length : 0;
+
+    if (!force && remote) {
+      if (remoteAdminCount > 0 && localAdminCount > 0 && localAdminCount < remoteAdminCount) {
+        return {
+          success: false,
+          guard: true,
+          remoteAdminCount,
+          localAdminCount,
+          error: `Cloud đang có ${remoteAdminCount} tài khoản cán bộ, máy này chỉ có ${localAdminCount}. `
+            + 'Đã chặn đẩy để tránh xoá quyền của người khác. '
+            + 'Hãy kéo dữ liệu Cloud trước, hoặc xác nhận ghi đè (force) nếu chắc chắn.'
+        };
+      }
+      // XUNG ĐỘT: Cloud có bản mới hơn mốc máy này biết, máy này cũng có thay
+      // đổi chưa đẩy, và bản trên Cloud do thiết bị khác tạo.
+      const remoteUpdatedAt = Number(remote.updatedAt) || 0;
+      const localUpdatedAt = Number(cfg.localUpdatedAt) || 0;
+      const remoteDeviceId = typeof remote.deviceId === 'string'
+        ? remote.deviceId
+        : (typeof remote.updatedByDeviceId === 'string' ? remote.updatedByDeviceId : '');
+      if (remoteUpdatedAt > lastCloudUpdatedAt
+        && localUpdatedAt > 0
+        && (!remoteDeviceId || remoteDeviceId !== payload.deviceId)) {
+        return {
+          success: false,
+          conflict: true,
+          remoteUpdatedAt,
+          localUpdatedAt,
+          error: 'Cloud có bản cập nhật mới hơn từ thiết bị khác. '
+            + 'Hãy kéo dữ liệu mới nhất trước, hoặc xác nhận ghi đè (force) nếu chắc chắn.'
+        };
+      }
+
+      // GUARD 1: danh sách cục bộ teo bất thường so với bản trên Cloud.
+      if (localStudents && remoteStudentsCount > 0) {
+        const localCount = localStudents.length;
+        const lost = remoteStudentsCount - localCount;
+        if (localCount < Math.ceil(remoteStudentsCount * 0.5) && lost >= 3) {
+          return {
+            success: false,
+            guard: true,
+            remoteCount: remoteStudentsCount,
+            localCount,
+            error: `Danh sách trên máy chỉ còn ${localCount}/${remoteStudentsCount} CTV `
+              + '(mất ' + lost + ' người). Đã chặn đẩy để tránh xoá nhầm dữ liệu Cloud. '
+              + 'Hãy kiểm tra lại hoặc xác nhận ghi đè (force).'
+          };
+        }
+      }
+    }
+
+    // GUARD 2: so với số CTV của lần đẩy thành công gần nhất trên máy này.
+    if (!force && localStudents) {
+      const lastPushedCount = Number(cfg.lastPushedStudentCount) || 0;
+      if (lastPushedCount >= 10
+        && localStudents.length < Math.ceil(lastPushedCount * 0.5)) {
+        return {
+          success: false,
+          guard: true,
+          remoteCount: remoteStudentsCount,
+          localCount: localStudents.length,
+          error: `Danh sách trên máy (${localStudents.length}) ít hơn một nửa số CTV `
+            + `đã đẩy lần trước (${lastPushedCount}). Đã chặn đẩy để tránh mất dữ liệu. `
+            + 'Hãy kiểm tra lại hoặc xác nhận ghi đè (force).'
+        };
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // CHỈ PATCH các khoá thực sự thay đổi (so với bản preflight).
     //
     // Firebase PUT tới `path.json` GHI ĐÈ TOÀN BỘ node: mọi khoá không có trong
-    // payload đều bị XOÁ. Payload còn thiếu `students` chính vì máy này chưa
-    // nạp danh sách — nhưng chính việc "không gửi" lại khiến khoá đó bị mất.
-    //
-    // Nghĩa là bản sửa "không ghi danh sách rỗng" (commit d2169b9) chỉ chặn
-    // được việc ghi RỘNG, không chặn được việc XOÁ do khoá vắng mặt.
-    //
-    // PATCH chỉ cập nhật khoá được gửi lên, giữ nguyên phần còn lại.
+    // payload đều bị XOÁ. PATCH chỉ cập nhật khoá được gửi lên, giữ nguyên phần
+    // còn lại. Khoá meta (updatedAt/deviceId/version) luôn được gửi để Cloud
+    // biết lần đồng bộ này; nếu dữ liệu không đổi thì body chỉ còn meta.
+    // -----------------------------------------------------------------------
+    let bodyToSend = payload;
+    if (remote) {
+      bodyToSend = {};
+      Object.keys(payload).forEach(key => {
+        if (PUSH_META_KEYS.includes(key)) {
+          bodyToSend[key] = payload[key];
+          return;
+        }
+        if (stableStringify(payload[key]) === stableStringify(remote[key])) return;
+        bodyToSend[key] = payload[key];
+      });
+    }
+
     try {
       const response = await fetch(authedUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(bodyToSend)
       });
 
       if (!response.ok) {
@@ -2086,6 +2362,10 @@
       cfg.lastCloudUpdatedAt = payload.updatedAt || cfg.lastSyncTime;
       // Không còn thay đổi cục bộ chưa được đẩy
       cfg.localUpdatedAt = 0;
+      // Nhớ số CTV vừa đẩy để chặn lần sau nếu danh sách teo bất thường.
+      if (localStudents) {
+        cfg.lastPushedStudentCount = localStudents.length;
+      }
       saveConfig(cfg);
 
       // Cập nhật luôn nhánh công khai cho trang sinh viên (nếu là trang admin).
@@ -2097,6 +2377,7 @@
       return {
         success: true,
         timestamp: cfg.lastSyncTime,
+        keys: Object.keys(bodyToSend),
         message: 'Đã đẩy dữ liệu lên Đám mây thành công!',
         data: result,
         publicResult
@@ -2291,10 +2572,18 @@
     if (cfg.enabled && cfg.databaseUrl) {
       try {
         if (isStudentMode(cfg)) {
-          // Trang sinh viên: chỉ kéo nhánh công khai + danh sách đề xuất đổi ca.
+          // Trang sinh viên: chỉ kéo nhánh công khai (đã bao gồm swapStatuses).
           await pullPublicFromCloud(cfg);
-          await pullPublicSwaps(cfg);
         } else {
+          // Chưa đăng nhập Google và chưa cấu hình tài khoản đồng bộ thì
+          // không gọi GET nhánh riêng tư (Rules trả 401, chỉ làm nhiễu console).
+          // Người dùng đăng nhập rồi mới tự động kéo.
+          const authUser = typeof getCurrentAuthUser === 'function' ? getCurrentAuthUser() : null;
+          const hasSyncCreds = Boolean(authUser || (cfg.authEmail && cfg.authPassword));
+          if (!hasSyncCreds) {
+            console.info('[CloudSync] Chưa đăng nhập Google — bỏ qua tự động kéo dữ liệu riêng tư.');
+            return;
+          }
           await pullFromCloud(cfg);
         }
       } catch (e) {
@@ -2361,10 +2650,12 @@
 
     // ---- Dữ liệu công khai cho trang sinh viên ----
     publicStudentRecord,
+    publicSwapStatus,
     buildPublicPayload,
     applyPublicPayload,
     pushPublicToCloud,
     pullPublicFromCloud,
+    mergePublicSwapStatuses,
 
     // ---- Yêu cầu từ sinh viên ----
     submitRegistration,

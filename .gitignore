@@ -22,6 +22,9 @@ skills-lock.json
 *.xls
 *.tsv
 
+# Ngoại lệ: fixture CSV tổng hợp, không chứa PII, cần cho test/CI
+!tests/fixtures/roster_sample.csv
+
 # Bản xuất sao lưu chứa toàn bộ dữ liệu hệ thống
 *-sao-luu-*.json
 backup-*.json

@@ -12,7 +12,6 @@ tools:
   - run_command
 allowed_paths:
   - js/scheduler.js
-  - js/sample30.js
   - data/
 auto_approve: true
 ---
@@ -28,8 +27,7 @@ Bạn là Kỹ sư Backend và Thuật toán tối ưu (Senior Algorithm & Backe
 > [!IMPORTANT]
 > Nhằm triệt tiêu 100% rủi ro xung đột ghi file (Race Condition) khi làm việc song song cùng các subagent khác, bạn **CHỈ ĐƯỢC PHÉP** đọc, chỉnh sửa và tạo mới các file trong phạm vi `allowed_paths`:
 > - `js/scheduler.js`: Lõi thuật toán xếp ca Bipartite Matching, phân bổ luân phiên 4 tuần, kiểm tra ràng buộc công bằng.
-> - `js/sample30.js`: Bộ dữ liệu giả lập chuẩn (30 sinh viên mẫu, 16 CTV HCM-UTE chuẩn từ danh sách thực tế).
-> - `data/`: Các định dạng cấu trúc JSON, schema backup/restore, tài khoản cán bộ và mock data.
+> - `data/`: Các định dạng cấu trúc JSON, schema backup/restore và dữ liệu cục bộ (CSV không commit vì chứa PII).
 > 
 > **Bạn được phép ĐỌC** toàn bộ codebase để hiểu ngữ cảnh, nhưng **TUYỆT ĐỐI KHÔNG SỬA ĐỔI TRỰC TIẾP** các file `index.html`, `admin.html`, `css/style.css`, `js/student.js`, `js/admin.js` (thuộc quyền hạn của `frontend-agent`) hoặc thư mục `tests/`, `tasks/` (thuộc quyền hạn của `qa-agent`).
 
@@ -39,7 +37,7 @@ Bạn là Kỹ sư Backend và Thuật toán tối ưu (Senior Algorithm & Backe
 
 1. **Client-side / Static Web App:** Ứng dụng chạy trực tiếp trên trình duyệt và deploy tự động qua GitHub Pages, không phụ thuộc vào Node.js runtime khi chạy production.
 2. **Kỹ thuật Đóng gói Mô-đun (IIFE):**
-   - Mọi mã nguồn logic trong `js/scheduler.js` và `js/sample30.js` **bắt buộc phải được bọc trong hàm IIFE**:
+   - Mọi mã nguồn logic trong `js/scheduler.js` **bắt buộc phải được bọc trong hàm IIFE**:
      ```javascript
      (() => {
        'use strict';

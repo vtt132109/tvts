@@ -109,6 +109,31 @@ global.document = {
 const adminJsPath = path.resolve(__dirname, '../js/admin.js');
 const adminJsContent = fs.readFileSync(adminJsPath, 'utf8');
 
+// Seed tài khoản cục bộ KHÔNG mặc định trước khi eval admin.js.
+// admin.js không còn DEFAULT_ADMIN_USERS: nếu storage trống thì danh sách rỗng
+// và giao diện chuyển sang form "Thiết lập lần đầu". Test cần tài khoản để
+// kiểm thử đăng nhập/PIN, nên tự seed dữ liệu plaintext (legacy) như máy cũ.
+const QA_ADMIN_A = {
+  id: 'usr_qa_truongban',
+  username: 'truongban.qa',
+  password: 'QaTruongBan#2026',
+  pin: '246813',
+  fullName: 'Trưởng Ban Kiểm Thử',
+  role: 'Trưởng ban điều hành',
+  createdAt: Date.now() - 500000
+};
+const QA_ADMIN_B = {
+  id: 'usr_qa_dieuphoi',
+  username: 'dieuphoi.qa',
+  password: 'QaDieuPhoi#2026',
+  pin: '135792',
+  fullName: 'Điều Phối Kiểm Thử',
+  role: 'Điều phối viên tuyển sinh',
+  createdAt: Date.now() - 300000
+};
+const QA_ADMIN_USERS_KEY = 'ts_scheduler_admin_users';
+mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([QA_ADMIN_A, QA_ADMIN_B]));
+
 // Tiện ích dùng chung phải nạp trước (giống thứ tự <script> trong admin.html).
 eval(fs.readFileSync(path.resolve(__dirname, '../js/common.js'), 'utf8'));
 
@@ -148,47 +173,47 @@ runTest('Khởi tạo API xác thực window.AdminAuth thành công', () => {
   assert.strictEqual(AdminAuth.isAuthenticated(), false, 'Mặc định chưa đăng nhập');
 });
 
-runTest('Đăng nhập thành công với tài khoản Trưởng ban (admin / 123)', () => {
+runTest('Đăng nhập thành công với tài khoản Trưởng ban đã seed (truongban.qa)', () => {
   mockSessionStorage.clear();
-  const res = AdminAuth.login('admin', '0000');
-  assert.strictEqual(res.success, true, 'Đăng nhập admin phải thành công');
-  assert.strictEqual(res.user.username, 'admin');
+  const res = AdminAuth.login(QA_ADMIN_A.username, QA_ADMIN_A.password);
+  assert.strictEqual(res.success, true, 'Đăng nhập Trưởng ban phải thành công');
+  assert.strictEqual(res.user.username, QA_ADMIN_A.username);
   assert.strictEqual(res.user.role, 'Trưởng ban điều hành');
   assert.strictEqual(AdminAuth.isAuthenticated(), true, 'Trạng thái đăng nhập phải là true');
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), 'true', 'sessionStorage phải lưu token');
 });
 
-runTest('Đăng nhập thành công với tài khoản Điều phối (diephoi / 123)', () => {
+runTest('Đăng nhập thành công với tài khoản Điều phối đã seed (dieuphoi.qa)', () => {
   mockSessionStorage.clear();
-  const res = AdminAuth.login('diephoi', '0000');
-  assert.strictEqual(res.success, true, 'Đăng nhập diephoi phải thành công');
-  assert.strictEqual(res.user.username, 'diephoi');
+  const res = AdminAuth.login(QA_ADMIN_B.username, QA_ADMIN_B.password);
+  assert.strictEqual(res.success, true, 'Đăng nhập Điều phối phải thành công');
+  assert.strictEqual(res.user.username, QA_ADMIN_B.username);
   assert.strictEqual(res.user.role, 'Điều phối viên tuyển sinh');
   assert.strictEqual(AdminAuth.isAuthenticated(), true);
 });
 
-runTest('Đăng nhập thành công bằng Mã PIN nhanh (9999 & 8888)', () => {
+runTest('Đăng nhập thành công bằng Mã PIN nhanh của hai tài khoản seed', () => {
   mockSessionStorage.clear();
-  const res1 = AdminAuth.loginPin('9999');
-  assert.strictEqual(res1.success, true, 'Mã PIN 9999 phải khớp với Trưởng ban');
-  assert.strictEqual(res1.user.username, 'admin');
+  const res1 = AdminAuth.loginPin(QA_ADMIN_A.pin);
+  assert.strictEqual(res1.success, true, 'PIN của Trưởng ban phải khớp');
+  assert.strictEqual(res1.user.username, QA_ADMIN_A.username);
 
   mockSessionStorage.clear();
-  const res2 = AdminAuth.loginPin('8888');
-  assert.strictEqual(res2.success, true, 'Mã PIN 8888 phải khớp với Điều phối');
-  assert.strictEqual(res2.user.username, 'diephoi');
+  const res2 = AdminAuth.loginPin(QA_ADMIN_B.pin);
+  assert.strictEqual(res2.success, true, 'PIN của Điều phối phải khớp');
+  assert.strictEqual(res2.user.username, QA_ADMIN_B.username);
 });
 
 runTest('Từ chối khi nhập sai mật khẩu hoặc sai username', () => {
   mockSessionStorage.clear();
   AdminAuth.logout();
 
-  const badPwd = AdminAuth.login('admin', 'sai_mat_khau');
+  const badPwd = AdminAuth.login(QA_ADMIN_A.username, 'sai_mat_khau');
   assert.strictEqual(badPwd.success, false, 'Sai mật khẩu phải trả về false');
   assert.strictEqual(AdminAuth.isAuthenticated(), false);
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), null);
 
-  const badUser = AdminAuth.login('hacker', '123');
+  const badUser = AdminAuth.login('khong_ton_tai.qa', '123');
   assert.strictEqual(badUser.success, false, 'Username không tồn tại phải trả về false');
   assert.strictEqual(AdminAuth.isAuthenticated(), false);
 });
@@ -197,13 +222,13 @@ runTest('Từ chối khi nhập sai Mã PIN', () => {
   mockSessionStorage.clear();
   AdminAuth.logout();
 
-  const badPin = AdminAuth.loginPin('0000');
+  const badPin = AdminAuth.loginPin('314159');
   assert.strictEqual(badPin.success, false, 'Mã PIN sai phải trả về false');
   assert.strictEqual(AdminAuth.isAuthenticated(), false);
 });
 
 runTest('Quy trình Đăng Xuất (Logout) xóa sạch phiên và khóa hệ thống', () => {
-  AdminAuth.login('admin', '0000');
+  AdminAuth.login(QA_ADMIN_A.username, QA_ADMIN_A.password);
   assert.strictEqual(AdminAuth.isAuthenticated(), true);
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), 'true');
 
@@ -236,9 +261,9 @@ runTest('Bảo mật mã PIN: Từ chối các mã PIN rỗng, null, khoảng tr
   assert.strictEqual(undefRes.success, false, 'PIN undefined phải bị từ chối');
 
   // Test PIN chứa chữ cái hoặc độ dài bất thường
-  const textRes = AdminAuth.loginPin('admin');
+  const textRes = AdminAuth.loginPin('khong_phai_pin');
   assert.strictEqual(textRes.success, false, 'PIN chữ cái phải bị từ chối');
-  const longRes = AdminAuth.loginPin('999999999999');
+  const longRes = AdminAuth.loginPin('123456789012');
   assert.strictEqual(longRes.success, false, 'PIN sai độ dài phải bị từ chối');
 });
 
@@ -246,8 +271,8 @@ runTest('Bảo mật mã PIN: Phân quyền chính xác và lưu phiên an toàn
   mockSessionStorage.clear();
   AdminAuth.logout();
 
-  // Đăng nhập PIN 9999
-  const pinAdminRes = AdminAuth.loginPin('9999');
+  // Đăng nhập PIN của tài khoản Trưởng ban đã seed
+  const pinAdminRes = AdminAuth.loginPin(QA_ADMIN_A.pin);
   assert.strictEqual(pinAdminRes.success, true);
   assert.strictEqual(pinAdminRes.user.role, 'Trưởng ban điều hành');
   assert.strictEqual(mockSessionStorage.getItem('ts_admin_authenticated'), 'true');
@@ -256,7 +281,7 @@ runTest('Bảo mật mã PIN: Phân quyền chính xác và lưu phiên an toàn
   const storedUserJson = mockSessionStorage.getItem('ts_admin_user_data');
   assert.ok(storedUserJson, 'Phải có dữ liệu người dùng trong session');
   const storedUser = JSON.parse(storedUserJson);
-  assert.strictEqual(storedUser.username, 'admin');
+  assert.strictEqual(storedUser.username, QA_ADMIN_A.username);
 
   // Logout và kiểm tra lại
   AdminAuth.logout();
@@ -278,12 +303,12 @@ runTest('Chống dò PIN: khoá 60 giây sau 5 lần nhập sai đúng định d
     assert.strictEqual(res.success, false, `Lần sai #${i + 1} phải thất bại`);
   }
 
-  const locked = AdminAuth.loginPin('9999');
+  const locked = AdminAuth.loginPin(QA_ADMIN_A.pin);
   assert.strictEqual(locked.success, false,
     'Đang bị khoá thì nhập PIN ĐÚNG cũng phải bị từ chối');
 
   mockLocalStorage.removeItem('ts_admin_login_guard');
-  const unlocked = AdminAuth.loginPin('9999');
+  const unlocked = AdminAuth.loginPin(QA_ADMIN_A.pin);
   assert.strictEqual(unlocked.success, true, 'Hết thời gian khoá thì PIN đúng phải đăng nhập được');
   AdminAuth.logout();
 });
@@ -293,9 +318,9 @@ runTest('Chống dò PIN: nhập sai ĐỊNH DẠNG không bị tính là dò', 
   mockSessionStorage.clear();
   AdminAuth.logout();
 
-  ['', '   ', 'abc', '12', '999999999999'].forEach(pin => AdminAuth.loginPin(pin));
+  ['', '   ', 'abc', '12', '123456789012'].forEach(pin => AdminAuth.loginPin(pin));
 
-  const res = AdminAuth.loginPin('9999');
+  const res = AdminAuth.loginPin(QA_ADMIN_A.pin);
   assert.strictEqual(res.success, true, 'Gõ nhầm/rỗng không được làm khoá tài khoản');
   AdminAuth.logout();
 });
@@ -343,20 +368,140 @@ runTest('Băm mật khẩu: có muối, không lưu plaintext, xác thực đún
     'Hai tài khoản cùng mật khẩu phải ra hash khác nhau');
 });
 
-runTest('Băm mật khẩu: tài khoản còn plaintext tự nâng cấp sau lần đăng nhập đầu', () => {
+runTest('Storage trống: danh sách cán bộ rỗng, KHÔNG seed tài khoản mặc định', () => {
   mockLocalStorage.clear();
   mockSessionStorage.clear();
   AdminAuth.logout();
 
-  const res = AdminAuth.login('admin', '0000');
-  assert.strictEqual(res.success, true, 'Đăng nhập tài khoản mặc định phải thành công');
+  window.adminReloadAdminUsers();
+  assert.strictEqual(AdminAuth.getAdminUsers().length, 0,
+    'Không được tự sinh tài khoản mặc định khi localStorage trống');
+  assert.strictEqual(mockLocalStorage.getItem(QA_ADMIN_USERS_KEY), null,
+    'Không được ghi danh sách mặc định vào storage');
+});
+
+runTest('Băm mật khẩu: tài khoản plaintext legacy tự nâng cấp sau lần đăng nhập đầu', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  const legacyUser = {
+    id: 'usr_legacy_qa',
+    username: 'legacy.qa',
+    password: 'LegacyPass#2026',
+    pin: '112233',
+    fullName: 'Cán Bộ Nâng Cấp',
+    role: 'Điều phối viên tuyển sinh',
+    createdAt: Date.now()
+  };
+  mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([legacyUser]));
+  window.adminReloadAdminUsers();
+
+  const before = AdminAuth.getAdminUsers().find(u => u.username === 'legacy.qa');
+  assert.ok(before && before.password === 'LegacyPass#2026',
+    'Dữ liệu seed phải còn plaintext trước lần đăng nhập đầu');
+
+  const res = AdminAuth.login('legacy.qa', 'LegacyPass#2026');
+  assert.strictEqual(res.success, true, 'Đăng nhập tài khoản legacy phải thành công');
   assert.strictEqual(res.user.password, undefined, 'Sau đăng nhập, plaintext phải bị xoá');
   assert.ok(res.user.passwordHash && res.user.passwordSalt, 'Phải được băm có muối');
 
   AdminAuth.logout();
-  const again = AdminAuth.login('admin', '0000');
+  const again = AdminAuth.login('legacy.qa', 'LegacyPass#2026');
   assert.strictEqual(again.success, true, 'Lần sau phải đăng nhập được bằng hash');
   AdminAuth.logout();
+});
+
+runTest('Tự vô hiệu hoá tài khoản còn dùng credential mặc định cũ (kể cả đã băm)', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+
+  const C = global.window.AdminCredential;
+  const hashedDefault = {
+    id: 'usr_old_diephoi',
+    username: 'diephoi',
+    fullName: 'Điều Phối Cũ',
+    role: 'Điều phối viên tuyển sinh'
+  };
+  C.setUserSecret(hashedDefault, 'password', '0000');
+  C.setUserSecret(hashedDefault, 'pin', '8888');
+
+  const plainDefault = {
+    id: 'usr_old_admin',
+    username: 'admin',
+    password: '0000',
+    pin: '9999',
+    fullName: 'Trưởng Ban Cũ',
+    role: 'Trưởng ban điều hành'
+  };
+
+  mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([
+    plainDefault,
+    hashedDefault,
+    QA_ADMIN_A
+  ]));
+
+  window.adminReloadAdminUsers();
+  const left = AdminAuth.getAdminUsers();
+  assert.strictEqual(left.length, 1, 'Chỉ tài khoản không dùng credential mặc định được giữ');
+  assert.strictEqual(left[0].username, QA_ADMIN_A.username);
+  assert.strictEqual(JSON.parse(mockLocalStorage.getItem(QA_ADMIN_USERS_KEY)).length, 1,
+    'Danh sách trong storage cũng phải được dọn');
+  assert.strictEqual(AdminAuth.login('admin', '0000').success, false,
+    'Tài khoản admin/0000 cũ không được đăng nhập nữa');
+});
+
+runTest('Thiết lập lần đầu: chặn xác nhận PIN sai và tạo được Trưởng ban khi storage trống', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+  window.adminReloadAdminUsers();
+  assert.strictEqual(AdminAuth.getAdminUsers().length, 0, 'Phải bắt đầu từ danh sách rỗng');
+  assert.strictEqual(elementsMap['admin-first-run'].style.display, 'block',
+    'Phải hiện form thiết lập lần đầu khi chưa có tài khoản');
+  assert.strictEqual(elementsMap['admin-auth-tabs'].style.display, 'none',
+    'Phải ẩn tab đăng nhập khi chưa có tài khoản');
+  assert.strictEqual(elementsMap['form-auth-credentials'].style.display, 'none',
+    'Phải ẩn form đăng nhập khi chưa có tài khoản');
+  assert.strictEqual(elementsMap['auth-error-box'].style.display, 'none',
+    'Phải ẩn hộp lỗi đăng nhập khi chưa có tài khoản');
+
+  const form = elementsMap['form-admin-first-run'];
+  assert.ok(form && form.listeners && form.listeners.submit && form.listeners.submit.length > 0,
+    'admin.js phải bind submit cho #form-admin-first-run');
+  const submit = form.listeners.submit[0];
+
+  elementsMap['first-run-fullname'].value = 'Trưởng Ban Khởi Tạo';
+  elementsMap['first-run-username'].value = 'first.run.qa';
+  elementsMap['first-run-password'].value = 'FirstRun#2026';
+  elementsMap['first-run-password-confirm'].value = 'FirstRun#2026';
+  elementsMap['first-run-pin'].value = '112244';
+  elementsMap['first-run-pin-confirm'].value = '112245'; // cố ý lệch
+
+  submit({ preventDefault() {} });
+  assert.strictEqual(AdminAuth.getAdminUsers().length, 0, 'PIN xác nhận lệch không được tạo tài khoản');
+  assert.strictEqual(AdminAuth.isAuthenticated(), false);
+
+  elementsMap['first-run-pin-confirm'].value = '112244';
+  submit({ preventDefault() {} });
+
+  assert.strictEqual(AdminAuth.getAdminUsers().length, 1, 'Phải tạo đúng 1 Trưởng ban');
+  const created = AdminAuth.getAdminUsers()[0];
+  assert.strictEqual(created.username, 'first.run.qa');
+  assert.strictEqual(created.role, 'Trưởng ban điều hành');
+  assert.strictEqual(created.password, undefined, 'Không được lưu mật khẩu thô');
+  assert.ok(created.passwordHash && created.pinHash, 'Mật khẩu/PIN phải được băm');
+  assert.strictEqual(AdminAuth.isAuthenticated(), true, 'Tạo xong phải vào dashboard ngay');
+  assert.strictEqual(elementsMap['admin-first-run'].style.display, 'none',
+    'Sau khi tạo tài khoản, form thiết lập lần đầu phải ẩn đi');
+  assert.notStrictEqual(elementsMap['admin-auth-tabs'].style.display, 'none',
+    'Sau khi tạo tài khoản, tab đăng nhập phải hiện lại cho lần sau');
+
+  const stored = JSON.parse(mockLocalStorage.getItem(QA_ADMIN_USERS_KEY));
+  assert.strictEqual(stored.length, 1);
+  assert.strictEqual(stored[0].username, 'first.run.qa');
+  assert.ok(stored[0].passwordHash && stored[0].pinHash, 'Storage cũng chỉ lưu hash');
 });
 
 // ============================================================================

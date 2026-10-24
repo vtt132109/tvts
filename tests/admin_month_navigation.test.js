@@ -175,6 +175,19 @@ eval(sampleCode);
 const cloudSyncCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'cloud_sync.js'), 'utf-8');
 eval(cloudSyncCode);
 
+// admin.js không còn tài khoản mặc định — seed một Trưởng ban cục bộ trước khi
+// eval để AdminAuth.login() ở Group 2 có tài khoản thật để đăng nhập.
+const QA_MONTH_ADMIN = {
+  id: 'usr_month_qa',
+  username: 'month.qa',
+  password: 'MonthQa#2026',
+  pin: '246814',
+  fullName: 'Trưởng Ban Điều Hướng Tháng',
+  role: 'Trưởng ban điều hành',
+  createdAt: Date.now() - 100000
+};
+mockLocalStorage.setItem('ts_scheduler_admin_users', JSON.stringify([QA_MONTH_ADMIN]));
+
 const adminCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'admin.js'), 'utf-8');
 eval(adminCode);
 
@@ -283,8 +296,8 @@ runTest('2.1: Các hàm điều hướng tháng được xuất khẩu đầy đ
 });
 
 runTest('2.2: Tự động sao lưu Tháng 10 khi chuyển sang Tháng 11', async () => {
-  // Đăng nhập admin
-  window.AdminAuth.login('admin', '0000');
+  // Đăng nhập admin đã seed (không dùng tài khoản mặc định)
+  window.AdminAuth.login(QA_MONTH_ADMIN.username, QA_MONTH_ADMIN.password);
 
   // Đặt dữ liệu lịch Tháng 10
   const students = window.getSample30Students ? window.getSample30Students() : [];

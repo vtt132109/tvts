@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-400%2F400%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-532%2F532%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -77,28 +77,35 @@ tvts/
 │   └── admin.js                         # Logic quản trị (xác thực, xếp ca, bulk, sự kiện, xuất Excel)
 │
 ├── data/
-│   ├── default_students.json            # Danh sách CTV mặc định
-│   └── mock_seed_data.json              # Dữ liệu giả lập cho môi trường demo
+│   └── ds-ctv.csv                       # Danh sách 58 CTV thật (cục bộ, KHÔNG commit vì chứa PII)
+│   # default_students.json & mock_seed_data.json ĐÃ XOÁ: dữ liệu mẫu cũ,
+│   # danh sách chuẩn giờ nhập từ CSV qua Admin → Sinh Viên → Nhập CSV
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 12 bộ kiểm thử tự động — 400 test cases
+├── tests/                               # 18 bộ kiểm thử tự động — 532 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
-│   ├── auth.test.js                     # Xác thực Admin, phân quyền & mã PIN
+│   ├── auth.test.js                     # Xác thực Admin, thiết lập lần đầu & mã PIN
 │   ├── portal.test.js                   # Đóng/mở cổng & tra cứu MSSV
+│   ├── shift_history.test.js            # Lịch sử ca trực nhiều tháng
+│   ├── audit.test.js                    # Nhật ký thao tác quản trị
+│   ├── store.test.js                    # IndexedDB & khôi phục localStorage
+│   ├── common.test.js                   # Tiện ích dùng chung
 │   ├── backup.test.js                   # Sao lưu web 6 tháng & auto-pruning
 │   ├── payroll_events.test.js           # Bảng chấm công tháng & quản lý sự kiện
 │   ├── monthly_registration.test.js     # Đăng ký ca rảnh trọn tháng
-│   ├── cloud_sync.test.js               # Cloud, dữ liệu công khai, yêu cầu ẩn danh & Rules
+│   ├── cloud_sync.test.js               # Cloud guard, dữ liệu công khai, yêu cầu ẩn danh & Rules
 │   ├── student_strict_validation.test.js# Xác thực MSSV nghiêm ngặt
 │   ├── cloud_persistence.test.js        # Chống ghi đè dữ liệu khi tải lại trang
 │   ├── admin_month_navigation.test.js   # Điều hướng tháng & tự động sao lưu
 │   ├── credential_sync_e2e.test.js      # E2E: cấp quyền máy A, đăng nhập máy B (hash)
-│   └── regression_guard.test.js         # Hồi quy: khóa lại các bug đã sửa
+│   ├── csv_import.test.js               # Validate CSV, trùng MSSV, vai trò
+│   ├── student_portal_bugs.test.js      # Năm tuần 4, lịch tháng trước, a11y modal
+│   ├── regression_guard.test.js         # Hồi quy: khóa lại các bug đã sửa
+│   └── fixtures/roster_sample.csv       # CSV tổng hợp cho test (không PII)
 │
 ├── scripts/
-│   ├── clean_code.js                    # Kiểm tra cú pháp, cân bằng thẻ HTML & chạy test
-│   └── seed_mock_data.js                # Nạp dữ liệu giả lập cho môi trường demo
+│   └── clean_code.js                    # Kiểm tra cú pháp, cân bằng thẻ HTML & chạy test
 │
 ├── tasks/                               # Kế hoạch & danh sách nhiệm vụ
 │   ├── plan.md
@@ -166,11 +173,11 @@ npx serve .
 
 ### 🛡️ B. Phân Hệ Bảng Quản Trị (`admin.html`)
 - **Xác thực bảo mật 2 lớp:**
-  - Đăng nhập bằng Tài khoản/Mật khẩu hoặc **Mã PIN Nhanh** (Trưởng ban: `admin` / `0000` / PIN: `9999`; Điều phối: `diephoi` / `0000` / PIN: `8888`).
+  - **Thiết lập lần đầu:** máy chưa có tài khoản cán bộ sẽ hiện form tạo **Trưởng ban** (mật khẩu ≥ 8 ký tự, PIN 6 số). Không còn mật khẩu/PIN mặc định trong mã nguồn.
   - **Chống dò mật khẩu/PIN:** sai 5 lần liên tiếp (đúng định dạng) sẽ tạm khoá 60 giây; gõ nhầm/rỗng không bị tính.
   - **Phiên đăng nhập tự hết hạn sau 12 giờ**, phù hợp máy dùng chung ở văn phòng.
   - Phím tắt mở bí mật từ trang sinh viên: `Ctrl + Shift + A` (hoặc `Cmd + Shift + A`).
-- **Thuật toán luân phiên 4 tuần cho 30 CTV (100% Đều Có Ca):**
+- **Thuật toán luân phiên 4 tuần cho 58 CTV (100% Đều Có Ca):**
   - Đảm bảo mỗi ca trực luôn có đúng **2 bạn (1 Cũ + 1 Mới)**.
   - Phân bổ công bằng luân phiên cả 4 tuần, không một sinh viên nào bị bỏ sót.
 - **Quản lý thời gian mở cổng đăng ký:** Mở tự do, khóa ngay lập tức, hoặc cài đặt đếm ngược theo thời gian thực (+3 ngày, +5 ngày, +7 ngày).
@@ -216,33 +223,38 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (400/400 Tests PASS — 100%)
+### Kết Quả Kiểm Thử (532/532 Tests PASS — 18 bộ, 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
 | 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
-| 2 | Xác Thực, Phân Quyền & Bảo Mật XSS (Auth) | 21/21 |
+| 2 | Xác Thực, Thiết Lập Lần Đầu & Bảo Mật XSS (Auth) | 24/24 |
 | 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
-| 4 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
-| 5 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
-| 6 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 7 | Cloud Sync, Dữ Liệu Công Khai, Yêu Cầu Ẩn Danh & Rules | 195/195 |
-| 8 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
-| 9 | Lưu Trữ Đám Mây & Chống Ghi Đè | 4/4 |
-| 10 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
-| 11 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
-| 12 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **71/71** |
+| 4 | Lịch Sử Ca Trực Nhiều Tháng (Shift History) | 12/12 |
+| 5 | Nhật Ký Thao Tác Quản Trị (Audit Log) | 23/23 |
+| 6 | IndexedDB & Khôi Phục Dữ Liệu (Store) | 19/19 |
+| 7 | Tiện Ích Dùng Chung (Common) | 13/13 |
+| 8 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
+| 9 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
+| 10 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
+| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 240/240 |
+| 12 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
+| 13 | Lưu Trữ Đám Mây & Chống Ghi Đè | 5/5 |
+| 14 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
+| 15 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
+| 16 | Nhập CSV, Trùng MSSV & Vai Trò (CSV Import) | 8/8 |
+| 17 | Năm Tuần 4, Lịch Tháng Trước & A11y Modal | 7/7 |
+| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **72/72** |
 
-**Suite 7** bổ sung 95 kiểm thử cho kiến trúc mới:
-- `directory` công khai chỉ chứa MSSV, họ tên, vai trò và ca rảnh — **không SĐT/email/ngân hàng/hash**.
-- Lịch trực & sự kiện được **quét sạch PII ở mọi cấp** trước khi lên nhánh công khai.
-- Sinh viên gửi đăng ký & đổi ca bằng **phiên ẩn danh**, không hiện giao diện đăng nhập.
-- **Ca rảnh không cần duyệt:** cán bộ đăng nhập Google là app tự kéo và gộp ngay; **đề xuất đổi ca** vẫn vào hàng chờ duyệt riêng.
-- Nút **📥 Kéo Ca Rảnh & Yêu Cầu** chỉ nhận dữ liệu, **không tự xếp lịch và không tự đẩy** lên Cloud.
-- Khi Cloud đang **tắt** (`enabled: false`), mọi thao tác lưu cục bộ (xếp ca, nhập CSV, sao lưu) **không gọi Firebase**.
-- `database.rules.json` có 3 nhánh dữ liệu + `/staff` và `/staff_emails`, chặn sửa yêu cầu của người khác; mỗi cán bộ chỉ đọc được đúng UID hoặc email của chính mình.
+**Cloud Sync (Suite 11)** khóa các hành vi an toàn mới:
+- Preflight `updatedAt` trước khi PATCH; chặn xung đột từ thiết bị khác và chặn danh sách CTV/tài khoản cán bộ teo bất thường (có `force` sau khi xác nhận).
+- Chỉ PATCH các key thực sự đổi; không bao giờ gửi `students`/`adminUsers` rỗng.
+- `tvts_requests/swaps` chỉ staff hoặc chủ sở hữu đọc; trạng thái đổi ca công khai nằm ở `tvts_public.swapStatuses` (không lý do, không tên, không uid).
+- Trang sinh viên chỉ kéo trạng thái đổi ca từ nhánh công khai, không tải toàn bộ yêu cầu.
 
-**Suite 12 (Regression Guard)** là lớp bảo vệ mới, khóa lại các lỗi đã phát hiện và sửa:
+**Suite 16 (CSV)** chặn trùng MSSV, thiếu cột Họ tên/MSSV, cảnh báo thiếu cột vai trò/mã ca lạ; fixture tổng hợp nằm trong `tests/fixtures/roster_sample.csv`.
+
+**Suite 18 (Regression Guard)** khóa lại các lỗi đã phát hiện và sửa:
 - Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
 - `showToast()` **escape HTML** bắt buộc (chống XSS qua tên/MSSV người dùng nhập).
 - Cloud Sync phát `ts:data-changed` kèm danh sách key, bắt `QuotaExceededError`, phát hiện xung đột dữ liệu hai chiều.
@@ -255,6 +267,11 @@ node tests/run_all_tests.js   # hoặc: npm test
 node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ test
 ```
 
+> Workflow deploy `static.yml` có job `test` và `deploy.needs: test`: test hoặc
+> `clean_code` thất bại thì GitHub Pages **không** nhận bản deploy mới. Ngoài ra
+> bước quét bí mật chặn PIN/mật khẩu hardcode ở cả 3 dạng key (`"pin":`, `'pin':`,
+> `pin:`) trong JS được publish.
+
 ---
 
 ## 🔐 7. Kiến Trúc Dữ Liệu & Bảo Mật
@@ -265,7 +282,7 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 |---|---|---|---|
 | `tvts_production_data` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Danh sách đầy đủ, lịch, tài khoản (hash), sao lưu |
 | `tvts_public` | Mọi người (kể cả chưa đăng nhập) | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Bản rút gọn **không PII** + lịch công khai |
-| `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc `swaps` | Sinh viên tạo/sửa yêu cầu gắn `uid`; cán bộ nhận ca rảnh tự động, duyệt đổi ca | Đăng ký ca & đề xuất đổi ca |
+| `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc đúng yêu cầu của mình theo `uid`; trạng thái đổi ca công khai ở `tvts_public.swapStatuses` | Sinh viên tạo/sửa yêu cầu gắn `uid`; cán bộ nhận ca rảnh tự động, duyệt đổi ca | Đăng ký ca & đề xuất đổi ca |
 
 > `/staff` chỉ ghi được trong Firebase Console (`.write: false`). `/staff_emails` do **cán bộ đã có quyền** ghi ngay trong app (nút Cấp Quyền), giá trị phải là boolean `true`.
 > Email key phải viết thường và thay **tất cả** dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`.
@@ -278,7 +295,7 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 - **Cấp quyền trong app (không cần Console):** `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email` → nhập email → **Cấp Quyền**. App ghi `staff_emails/<email đã mã hoá> = true`; người đó chỉ cần đăng nhập Google bằng đúng email ấy, không cần lấy UID. Danh sách bên dưới cho phép **thu hồi** (🗑️) bất cứ lúc nào.
 - **Sinh viên:** **không có trang đăng nhập**. Chỉ nhập MSSV; app tự tạo phiên **Anonymous** để gửi yêu cầu. Sinh viên không cần tài khoản Google/email.
 - **Ca rảnh không chờ duyệt:** sau khi cán bộ đăng nhập Google, app tự kéo `tvts_requests/registrations` và gộp ngay vào danh sách CTV; **không tự xếp lịch**. Cán bộ xem tổng **Lượt ca rảnh đã đăng ký** trên dashboard rồi bấm xếp ca khi sẵn sàng. Đề xuất đổi ca vẫn chờ cán bộ duyệt.
-- Tài khoản nội bộ của app (username/PIN) vẫn dùng để mở bảng quản trị trên máy trực; Google là lớp kiểm soát dữ liệu Cloud.
+- **Tài khoản nội bộ (username/PIN)** dùng để mở bảng quản trị trên máy trực. Máy chưa có tài khoản sẽ hiện **Thiết lập lần đầu**; không còn tài khoản/mật khẩu/PIN mặc định. Nếu quên mật khẩu, đăng nhập **Google cán bộ** (nếu Cloud đã cấu hình) rồi cấp lại quyền, hoặc khôi phục từ bản sao lưu JSON. Google là lớp kiểm soát dữ liệu Cloud.
 - **Web API Key** là mã công khai phía client. Cán bộ nhập một lần trong modal Cloud; app công bố nó trong `tvts_public/clientConfig` để máy sinh viên tạo được phiên ẩn danh.
 
 #### Quy trình ca rảnh (không chờ duyệt)
@@ -306,7 +323,7 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 > Mật khẩu/PIN nội bộ mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
 > nội bộ của Ban Tuyển Sinh.
 
-- **Bắt buộc đổi mật khẩu & PIN** của tài khoản `admin` / `diephoi` ngay sau lần đăng nhập đầu tiên trên mỗi thiết bị.
+- **Thiết lập lần đầu** tài khoản `Trưởng ban` ngay trên máy trống: mật khẩu ≥ 8 ký tự, PIN 6 số, không dùng mật khẩu mặc định.
 - **Không commit** file CSV/XLSX chứa Họ tên, MSSV, SĐT, số tài khoản ngân hàng — đã chặn trong `.gitignore`.
 - **Firebase:** dữ liệu công khai chỉ chứa MSSV/họ tên/vai trò/ca rảnh; SĐT, email, ngân hàng và hash mật khẩu chỉ nằm trong `tvts_production_data` (cán bộ).
 - Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).

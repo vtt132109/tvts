@@ -30,6 +30,8 @@ const suites = [
   { name: 'Lưu Trữ Đám Mây & Chống Ghi Đè Dữ Liệu Khi Tải Lại Trang (Cloud Persistence & Anti-Overwrite)', script: 'cloud_persistence.test.js' },
   { name: 'Điều Hướng Tháng, Hiển Thị Ngày & Tự Động Sao Lưu (Admin Month Navigation & Auto-Backup)', script: 'admin_month_navigation.test.js' },
   { name: 'Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (Credential Sync E2E)', script: 'credential_sync_e2e.test.js' },
+  { name: 'Nhập CSV, Trùng MSSV & Cảnh Báo Vai Trò (CSV Import Validation)', script: 'csv_import.test.js' },
+  { name: 'Cổng Sinh Viên: Năm Tuần 4, Lịch Tháng Trước & A11y Modal (Portal Bug Guards)', script: 'student_portal_bugs.test.js' },
   { name: 'Hồi Quy: Chống Tái Phát Các Bug Đã Sửa (Regression Guard)', script: 'regression_guard.test.js' }
 ];
 

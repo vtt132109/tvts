@@ -1,66 +1,46 @@
 ---
 name: seed-data
-description: "Tự động sinh dữ liệu mẫu (Mock Data) sát với thực tế (30 CTV, lịch luân phiên 4 tuần, sự kiện đi tour, đề xuất đổi ca) và nạp vào ứng dụng/giao diện để người dùng có thể test ngay trên localhost mà không cần tự nhập tay từng dòng."
+description: "Nạp danh sách CTV thật từ file CSV cục bộ (data/ds-ctv.csv — 58 người) vào ứng dụng để kiểm thử trên localhost mà không cần nhập tay từng dòng."
 trigger: /seed-data
 ---
 
-# Workflow: Nạp Dữ Liệu Giả Lập Mẫu Chuẩn (Seed Mock Data)
+# Workflow: Nạp Danh Sách CTV Từ CSV
 
-Quy trình tự động hóa nạp bộ dữ liệu giả lập sát với thực tế vận hành của **Ban Tuyển Sinh HCM-UTE**. Lệnh `/seed-data` giúp kiểm thử toàn diện mọi tính năng (xếp ca tự động, luân phiên 4 tuần, tính bảng công tháng, quản lý sự kiện, đổi ca trực) trên môi trường cục bộ (`http://localhost:8000`) chỉ với một thao tác duy nhất.
+Quy trình nạp danh sách CTV thật của Ban Tuyển Sinh HCM-UTE vào **Hệ Thống Quản Lý Phân Công Lịch Trực**. Dữ liệu mẫu JSON cũ (`default_students.json`, `mock_seed_data.json`) và `js/sample30.js` đã được xoá; nguồn chuẩn hiện tại là file CSV cục bộ, không commit vì chứa PII.
 
 ---
 
 ## ⚡ Các Bước Thực Thi Tự Động (Execution Steps)
 
-Khi người dùng kích hoạt lệnh `/seed-data`, Agent thực hiện tuần tự 5 bước:
+### Bước 1: Kiểm Tra File CSV Nguồn
+- File chuẩn: `data/ds-ctv.csv` (58 dòng dữ liệu: 28 CTV cũ + 30 CTV mới).
+- Cột: `STT`, `Họ và tên`, `MSSV`, `Email`, và cột thứ 5 ghi vai trò (`CTV cũ` / `CTV mới`).
+- File gốc đầy đủ hơn (Khoa, Ngành, SĐT, Ngân hàng) nằm ở thư mục gốc repo; **không được commit** (đã bị `.gitignore` chặn `*.csv`).
 
-### Bước 1: Khởi Tạo Mẫu Dữ Liệu Chuẩn Thực Tế
-Agent nạp dữ liệu từ kho mẫu [js/sample30.js](file:///d:/New%20folder%20(236)/js/sample30.js) và bộ cấu hình chuẩn:
-1. **30 Sinh viên CTV:**
-   - 12 Người Cũ (`role: 'old'`) có kinh nghiệm trực ban.
-   - 18 Người Mới (`role: 'new'`) tập sự tuyển sinh.
-   - Phân bổ ca rảnh thực tế từ Thứ 2 đến Thứ 6 (Sáng & Chiều).
-2. **Cấu Hình Cổng Đăng Ký (`ts_reg_config`):**
-   - Trạng thái: Cổng Mở (`isRegOpen: true`), Chế độ: `always_open`, Đã công bố lịch: `publishSchedule: true`.
-3. **Lịch Phân Công 4 Tuần (`ts_scheduler_month_schedule`):**
-   - Tự động chạy thuật toán `solveMultiWeekSchedule` để xếp đủ 4 tuần luân phiên, bảo đảm mỗi ca trực có đúng 1 Người Cũ và 1 Người Mới.
-4. **Sự Kiện Đi Tour / Ngoại Kiểm Mẫu (`ts_scheduler_events_v1`):**
-   - Sự kiện 1: "Tư Vấn Hướng Nghiệp THPT Gia Định" (Buổi Sáng, 1 công).
-   - Sự kiện 2: "Ngày Hội Mở Trường Open Day UTE 2026" (Cả Ngày, 2 công).
-   - Sự kiện 3: "Hội Thảo Tuyển Sinh Quốc Tế" (Buổi Chiều, 1 công).
-5. **Đề Xuất Đổi Ca Trực Mẫu (`ts_scheduler_swap_requests`):**
-   - 1 đề xuất Chờ duyệt (`status: 'pending'`).
-   - 1 đề xuất Đã duyệt (`status: 'approved'`).
+### Bước 2: Nạp Qua Giao Diện Quản Trị
+1. Mở `admin.html` → đăng nhập.
+2. Vào tab **Quản lý sinh viên** → **📥 Nhập CSV** → chọn file CSV.
+3. Kiểm tra bảng xem trước (MSSV, họ tên, vai trò, ca rảnh) rồi xác nhận nhập.
+4. Nếu đang dùng Cloud: bấm **Đẩy Lên Cloud** sau khi nhập để đồng bộ.
 
-### Bước 2: Nạp Vào Hệ Thống Trực Tuyến & Lưu Trữ Cục Bộ
-Chạy script tự động nạp dữ liệu vào Storage:
-```powershell
-node scripts/seed_mock_data.js
-```
-Hoặc nạp trực tiếp qua Chrome DevTools MCP bằng cách thực thi trong console trình duyệt:
-```javascript
-window.SampleDataEngine && window.SampleDataEngine.loadAllSampleData();
-```
+Không còn script seed JSON. Hàm xử lý là `parseStudentsCsv` trong `js/admin.js`, lưu vào `localStorage` với khóa `ts_scheduler_students`.
 
-### Bước 3: Xác Thực Tính Toàn Vẹn Của Dữ Liệu
-Kiểm tra lại toàn bộ các khóa lưu trữ chuẩn (`STORAGE_KEYS`):
-- `ts_scheduler_students` (30 sinh viên)
-- `ts_scheduler_month_schedule` (4 tuần đầy đủ ca)
-- `ts_reg_config` (Cổng mở & công bố)
-- `ts_scheduler_events_v1` (Danh sách sự kiện có gán sinh viên)
+### Bước 3: Xác Thực Tính Toàn Vẹn Dữ Liệu
+Kiểm tra tối thiểu trong localStorage:
+- `ts_scheduler_students`: đủ 58 hồ sơ, không trùng MSSV, không thiếu họ tên.
+- Vai trò: 28 `old` + 30 `new`.
+- Không có MSSV lạ ngoài danh sách CSV.
 
-### Bước 4: Tự Động Kiểm Thử Trực Quan Trên Trình Duyệt
-Agent truy cập `http://localhost:8000/admin.html` và `http://localhost:8000/index.html` để xác nhận:
-- Bảng lịch trực 4 tuần hiển thị đầy đủ tên CTV.
-- Bảng chấm công tháng hiển thị tổng công chính xác (công VP + công sự kiện).
-- Không có lỗi nào trên Console F12.
+### Bước 4: Kiểm Tra Trực Quan Trên Trình Duyệt
+Mở `http://localhost:8000/admin.html` và `http://localhost:8000/index.html` để xác nhận:
+- Bảng quản lý CTV hiển thị đủ 58 người.
+- Cổng sinh viên tra cứu được MSSV có trong CSV và chặn MSSV lạ.
+- Không có lỗi trên Console F12.
 
 ---
 
 ## 📢 Báo Cáo Hoàn Tất
 
-Sau khi hoàn tất, Agent in bảng tóm tắt:
-- Số lượng CTV đã nạp: 30 (12 Cũ + 18 Mới).
-- Số tuần lịch trực đã giải: 4 tuần.
-- Số sự kiện ngoại kiểm: 3 sự kiện.
-- Link kiểm tra trực tiếp: [Cổng Sinh Viên](http://localhost:8000/index.html) | [Trang Quản Trị](http://localhost:8000/admin.html).
+- Số CTV đã nạp: 58 (28 Cũ + 30 Mới).
+- Nguồn: `data/ds-ctv.csv` (cục bộ, đã kiểm tra không commit).
+- Link kiểm tra: [Cổng Sinh Viên](http://localhost:8000/index.html) | [Trang Quản Trị](http://localhost:8000/admin.html).
