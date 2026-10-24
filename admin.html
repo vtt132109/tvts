@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261024_1505">
+  <link rel="stylesheet" href="css/style.css?v=20261024_1525">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -482,11 +482,14 @@
               <button class="btn btn-primary btn-hero-primary" id="btn-admin-auto-schedule" style="font-weight: 700;">
                 <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH</span>
               </button>
+              <button class="btn btn-secondary" id="btn-admin-manual-schedule" title="Tạo khung lịch trống 4 tuần để gán tay mọi CTV, kể cả người chưa đăng ký ca">
+                <span>🧩 XẾP THỦ CÔNG</span>
+              </button>
               <button class="btn btn-success" id="btn-hero-sync-cloud" onclick="window.adminForceSyncCloud && window.adminForceSyncCloud()" style="font-weight: 700; background: #059669; color: #fff; border-color: #059669;" title="Lưu và đồng bộ toàn bộ dữ liệu lên Cloud Firebase ngay lập tức">
                 <span>☁️ LƯU LÊN CLOUD</span>
               </button>
             </div>
-            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự ghép 1 Chính Thức + 1 Tập Sự mỗi ca.</p>
+            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự ghép 1 Chính Thức + 1 Tập Sự mỗi ca. 🧩 Xếp thủ công tạo khung lịch trống để bạn gán bất kỳ CTV nào, kể cả người chưa đăng ký.</p>
           </section>
 
           <!-- NHÓM 2 · XUẤT & CHIA SẺ -->
@@ -2104,17 +2107,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261024_1505"></script>
+  <script src="js/a11y_modal.js?v=20261024_1525"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261024_1505"></script>
-  <script src="js/month_calendar.js?v=20261024_1505"></script>
-  <script src="js/scheduler.js?v=20261024_1505"></script>
-  <script src="js/roster.js?v=20261024_1505"></script>
-  <script src="js/common.js?v=20261024_1505"></script>
-  <script src="js/audit.js?v=20261024_1505"></script>
-  <script src="js/store.js?v=20261024_1505"></script>
-  <script src="js/admin.js?v=20261024_1505"></script>
+  <script src="js/cloud_sync.js?v=20261024_1525"></script>
+  <script src="js/month_calendar.js?v=20261024_1525"></script>
+  <script src="js/scheduler.js?v=20261024_1525"></script>
+  <script src="js/roster.js?v=20261024_1525"></script>
+  <script src="js/common.js?v=20261024_1525"></script>
+  <script src="js/audit.js?v=20261024_1525"></script>
+  <script src="js/store.js?v=20261024_1525"></script>
+  <script src="js/admin.js?v=20261024_1525"></script>
 </body>
 </html>

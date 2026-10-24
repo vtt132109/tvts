@@ -2584,6 +2584,11 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       triggerAutoSchedule(true);
     });
 
+    // Tạo khung lịch trống 4 tuần để xếp thủ công mọi ngày/CTV
+    document.getElementById('btn-admin-manual-schedule')?.addEventListener('click', () => {
+      window.adminCreateBlankMonth();
+    });
+
 
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
     elements.btnClearSchedule?.addEventListener('click', async () => {      if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
@@ -3280,7 +3285,21 @@ function renderStudentTable() {
 
   function renderShiftSlotHtml(shiftId, slot) {
     if (!slot) {
-      return `<div class="grid-cell shift-duty-slot"><div class="empty-state">Chưa xếp</div></div>`;
+      const info = getShiftInfo(shiftId) || {};
+      return `
+        <div class="grid-cell shift-duty-slot">
+          <div class="shift-slot-header">
+            <span>${escapeHtml(info.dayName || '')}</span>
+            <span class="shift-status-pill empty">Trống</span>
+          </div>
+          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán Chính Thức (kể cả chưa đăng ký)">
+            <span>+ Chưa có Chính Thức</span>
+          </div>
+          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán Tập Sự (kể cả chưa đăng ký)">
+            <span>+ Chưa có Tập Sự</span>
+          </div>
+        </div>
+      `;
     }
 
     const oldMem = slot.oldMember;
@@ -3380,17 +3399,91 @@ function renderStudentTable() {
     renderList(newMembers, elements.fairnessListNew, '#10b981');
   }
 
+  /**
+   * Tạo khung lịch 4 tuần × 10 ca với tất cả ô trống để admin xếp tay.
+   * Không ghi đè ô đã có; chỉ bổ sung tuần/ca còn thiếu.
+   */
+  function ensureBlankMonthSchedule() {
+    const month = state.currentMonth || 10;
+    const year = state.currentYear || 2026;
+
+    if (!state.monthSchedule || !Array.isArray(state.monthSchedule.weeks)) {
+      state.monthSchedule = { month, year, weeks: [] };
+    }
+    state.monthSchedule.month = state.monthSchedule.month || month;
+    state.monthSchedule.year = state.monthSchedule.year || year;
+
+    for (let w = 1; w <= 4; w++) {
+      let week = state.monthSchedule.weeks[w - 1];
+      if (!week) {
+        week = { weekNumber: w, month, year, scheduleTable: {} };
+        state.monthSchedule.weeks[w - 1] = week;
+      }
+      week.weekNumber = week.weekNumber || w;
+      week.month = week.month || month;
+      week.year = week.year || year;
+      if (!week.scheduleTable) week.scheduleTable = {};
+
+      (SHIFTS || []).forEach((shift) => {
+        if (!week.scheduleTable[shift.id]) {
+          week.scheduleTable[shift.id] = {
+            shiftId: shift.id,
+            shiftInfo: shift,
+            oldMember: null,
+            newMember: null,
+            status: 'empty',
+            manuallyEdited: false
+          };
+        } else if (!week.scheduleTable[shift.id].shiftInfo) {
+          week.scheduleTable[shift.id].shiftInfo = shift;
+        }
+      });
+      try { recomputeWeekStats(week); } catch (e) {}
+    }
+
+    state.monthSchedule.weeks = state.monthSchedule.weeks.slice(0, 4);
+    state.twoWeekSchedule = state.monthSchedule;
+    const idx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
+    state.currentSchedule = state.monthSchedule.weeks[idx] || state.monthSchedule.weeks[0];
+    return state.monthSchedule;
+  }
+
+  window.adminCreateBlankMonth = function() {
+    ensureBlankMonthSchedule();
+    saveSchedule(true);
+    renderAll();
+    const filled = state.monthSchedule.weeks.reduce(
+      (n, w) => n + Object.values(w.scheduleTable || {}).filter(s => s && (s.oldMember || s.newMember)).length,
+      0
+    );
+    showToast(
+      `🧩 Đã tạo khung lịch trống 4 tuần × 10 ca (${filled} ô đã có người). Bấm vào bất kỳ ô ca để gán thủ công, kể cả CTV chưa đăng ký.`,
+      'success',
+      8000
+    );
+    auditLog('SCHEDULE_CREATE', 'Tạo khung lịch trống để xếp ca thủ công');
+    try {
+      elements.timetableGrid?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {}
+  };
+
   window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
-    state.reassignModalData = { shiftId, role, weekNumber };
-    const shiftInfo = SHIFT_MAP[shiftId];
+    const effectiveWeek = weekNumber || state.viewWeek || 1;
+    let targetSchedule = state.monthSchedule?.weeks?.[effectiveWeek - 1] || state.currentSchedule;
+
+    // Tháng chưa có lịch / ô ca chưa tồn tại: tạo khung trống ngay tại chỗ
+    // để admin vẫn gán tay được, không cần chạy auto trước.
+    if (!targetSchedule || !targetSchedule.scheduleTable?.[shiftId]) {
+      ensureBlankMonthSchedule();
+      targetSchedule = state.monthSchedule.weeks[effectiveWeek - 1];
+    }
+
+    state.reassignModalData = { shiftId, role, weekNumber: effectiveWeek };
+    const shiftInfo = getShiftInfo(shiftId) || { dayName: shiftId, period: '', time: '' };
     const roleTitle = role === 'old' ? 'Chính Thức' : 'Tập Sự';
-    const targetSchedule = weekNumber && state.monthSchedule?.weeks?.[weekNumber - 1]
-      ? state.monthSchedule.weeks[weekNumber - 1]
-      : state.currentSchedule;
 
     if (elements.modalSlotTitle) {
-      const weekPrefix = weekNumber ? `[Tuần ${weekNumber}] ` : '';
-      elements.modalSlotTitle.textContent = `${weekPrefix}${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
+      elements.modalSlotTitle.textContent = `[Tuần ${effectiveWeek}] ${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
     }
 
     if (elements.modalRoleBadge) {
@@ -3444,6 +3537,12 @@ function renderStudentTable() {
     state.reassignModalData = null;
   }
 
+  /** Lấy metadata ca an toàn cả khi test/trang không nạp SchedulerEngine. */
+  function getShiftInfo(shiftId) {
+    const map = (typeof SHIFT_MAP !== 'undefined' && SHIFT_MAP) || {};
+    return map[shiftId] || null;
+  }
+
   /**
    * Tìm ca khác CÙNG NGÀY mà một CTV đã được xếp trong tuần.
    * Chỉ tính khi chính CTV đó nằm trong ca kia — không phải "có ai đó cùng ngày".
@@ -3480,10 +3579,18 @@ function renderStudentTable() {
     const selectedStudentId = elements.modalCandidateSelect?.value;
     const newStudent = selectedStudentId ? state.students.find(s => s.id === selectedStudentId) : null;
 
-    const slot = targetSchedule.scheduleTable?.[shiftId];
+    let slot = targetSchedule.scheduleTable?.[shiftId];
     if (!slot) {
-      showToast(`Không tìm thấy ca ${shiftId} trong lịch. Lịch có thể đã thay đổi — vui lòng tải lại trang.`, 'error');
-      return;
+      const info = getShiftInfo(shiftId) || { id: shiftId, dayName: shiftId, period: '', time: '' };
+      slot = {
+        shiftId,
+        shiftInfo: info,
+        oldMember: null,
+        newMember: null,
+        status: 'empty',
+        manuallyEdited: false
+      };
+      targetSchedule.scheduleTable[shiftId] = slot;
     }
 
     const realWeekNumber = weekNumber
@@ -3512,7 +3619,7 @@ function renderStudentTable() {
 
       const clash = findStudentDayClash(targetSchedule.scheduleTable, shiftId, newStudent.id);
       if (clash) {
-        const other = SHIFT_MAP[clash.shiftId];
+        const other = getShiftInfo(clash.shiftId);
         const clashLabel = other
           ? `${other.dayName} (${other.period})`
           : clash.shiftId;
@@ -3985,6 +4092,9 @@ window.adminDeleteStudent = async function(studentId) {
           <button type="button" class="btn btn-primary" onclick="document.getElementById('btn-admin-auto-schedule')?.click()">
             <span>⚡ Phân Bổ Ngay</span>
           </button>
+          <button type="button" class="btn btn-secondary" onclick="window.adminCreateBlankMonth && window.adminCreateBlankMonth()" style="margin-left: 0.5rem;">
+            <span>🧩 Tạo Lịch Trống &amp; Xếp Tay</span>
+          </button>
         </div>
       `;
       return;
@@ -4080,7 +4190,21 @@ window.adminDeleteStudent = async function(studentId) {
 
   function renderShiftSlotHtmlForWeek(shiftId, slot, weekNum) {
     if (!slot) {
-      return `<div class="grid-cell shift-duty-slot"><div class="empty-state">Chưa xếp</div></div>`;
+      const info = getShiftInfo(shiftId) || {};
+      return `
+        <div class="grid-cell shift-duty-slot">
+          <div class="shift-slot-header">
+            <span>${escapeHtml(info.dayName || '')}</span>
+            <span class="shift-status-pill empty">Trống</span>
+          </div>
+          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Chính Thức ở Tuần ${weekNum} (kể cả chưa đăng ký)">
+            <span>+ Chưa có Chính Thức</span>
+          </div>
+          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Tập Sự ở Tuần ${weekNum} (kể cả chưa đăng ký)">
+            <span>+ Chưa có Tập Sự</span>
+          </div>
+        </div>
+      `;
     }
 
     const oldMem = slot.oldMember;
