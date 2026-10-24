@@ -529,10 +529,40 @@
     };
   }
 
+  /**
+   * Khôi phục dữ liệu nặng từ bản mirror IndexedDB nếu localStorage đã mất (#16).
+   * Chỉ điền vào chỗ trống, không bao giờ ghi đè dữ liệu đang có. Chạy 1 lần
+   * mỗi phiên (có cờ trong sessionStorage) để tránh vòng lặp tải lại trang.
+   */
+  function bootstrapIndexedDbRecovery() {
+    try {
+      if (!window.TvtsStore || typeof window.TvtsStore.restoreMissingAll !== 'function') return;
+      if (typeof window.TvtsStore.available === 'function' && !window.TvtsStore.available()) return;
+      if (sessionStorage.getItem('ts_store_recovery_done') === '1') return;
+    } catch (e) {
+      return; // sessionStorage bị chặn: bỏ qua, không đoán mò
+    }
+
+    window.TvtsStore.restoreMissingAll().then((restored) => {
+      if (!Array.isArray(restored) || restored.length === 0) return;
+      try { sessionStorage.setItem('ts_store_recovery_done', '1'); } catch (e) {}
+      showToast(
+        `♻️ Đã khôi phục ${restored.length} nhóm dữ liệu (lịch sử tháng / sao lưu) từ bộ nhớ trình duyệt. Đang tải lại trang…`,
+        'info', 4000
+      );
+      setTimeout(() => {
+        try { window.location.reload(); } catch (e) {}
+      }, 1200);
+    }).catch(() => { /* không khôi phục được cũng không sao */ });
+  }
+
   function initAdminPortal() {
     cacheDOMElements();
     initThemeToggle();
     loadAdminUsers();
+    // Trước khi vẽ dữ liệu: nếu localStorage bị mất (hết dung lượng, "Clear site
+    // data"), khôi phục từ bản mirror IndexedDB rồi tải lại trang 1 lần.
+    bootstrapIndexedDbRecovery();
     bindAuthEvents();
     bindUserMgmtEvents();
     // LƯU Ý: bindSwapMgmtEvents / bindBackupCenterEvents / bindCloudSyncEvents
@@ -838,6 +868,7 @@
       bindSwapMgmtEvents();
       bindBackupCenterEvents();
       bindCloudSyncEvents();
+      bindAuditLogEvents();
 
       // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây (1 timer duy nhất)
       regLiveStatusTimer = setInterval(updateRegLiveStatus, 30000);
@@ -966,9 +997,41 @@
     }
   }
 
-  /** Xoá sạch dấu vết phiên đăng nhập (token, hồ sơ, mốc thời gian). */
-  function clearAdminSession() {
+  /**
+   * Ghi nhật ký thao tác quản trị (#10).
+   * Không bao giờ ném lỗi — nhật ký hỏng/hết dung lượng không được phép làm
+   * hỏng thao tác nghiệp vụ đang chạy (AuditLog.log đã tự bọc try/catch).
+   */
+  function auditLog(action, detail) {
     try {
+      if (window.AuditLog && typeof window.AuditLog.log === 'function') {
+        window.AuditLog.log(action, detail);
+      }
+    } catch (e) { /* bỏ qua: nhật ký là phụ, không phải nghiệp vụ */ }
+  }
+
+  /**
+   * Mirror một key nặng sang IndexedDB sau khi đã ghi localStorage (#16).
+   * localStorage vẫn là nguồn đọc chính; IndexedDB chỉ là bản dự phòng dung
+   * lượng lớn. Gộp các lần ghi liên tiếp (debounce) để không clone 2–3MB mỗi
+   * lần bấm lưu lịch, và không bao giờ ném lỗi.
+   */
+  const mirrorTimers = {};
+
+  function mirrorToIndexedDb(key, delay = 1200) {
+    try {
+      if (!window.TvtsStore || typeof window.TvtsStore.mirrorFromLocalStorage !== 'function') return;
+      if (typeof window.TvtsStore.available === 'function' && !window.TvtsStore.available()) return;
+
+      clearTimeout(mirrorTimers[key]);
+      mirrorTimers[key] = setTimeout(() => {
+        try { window.TvtsStore.mirrorFromLocalStorage(key); } catch (e) { /* bỏ qua */ }
+      }, delay);
+    } catch (e) { /* IndexedDB bị chặn (chế độ riêng tư) — bỏ qua */ }
+  }
+
+  /** Xoá sạch dấu vết phiên đăng nhập (token, hồ sơ, mốc thời gian). */
+  function clearAdminSession() {    try {
       sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
       sessionStorage.removeItem(LOGIN_GUARD.SESSION_STARTED_KEY);
@@ -1042,6 +1105,8 @@
         authenticateSuccess(matched);
       } else {
         if (looksLikePassword(password)) registerLoginFailure();
+        // Chỉ ghi tên đăng nhập đã thử — TUYỆT ĐỐI không ghi mật khẩu.
+        auditLog('LOGIN_FAILED', `Sai mật khẩu cho tài khoản "${username}"`);
         showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
       }
     });
@@ -1068,6 +1133,8 @@
         authenticateSuccess(matched);
       } else {
         if (looksLikePin(pin)) registerLoginFailure();
+        // Không ghi giá trị PIN đã nhập.
+        auditLog('LOGIN_FAILED', 'Sai mã PIN đăng nhập nhanh');
         showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
       }
     });
@@ -1105,6 +1172,7 @@
           return { success: true, user: matched };
         }
         if (looksLikePassword(password)) registerLoginFailure();
+        auditLog('LOGIN_FAILED', `Sai mật khẩu cho tài khoản "${uStr}"`);
         showAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
         return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
       },
@@ -1119,10 +1187,13 @@
           return { success: true, user: matched };
         }
         if (looksLikePin(pStr)) registerLoginFailure();
+        auditLog('LOGIN_FAILED', 'Sai mã PIN đăng nhập nhanh');
         showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
         return { success: false, message: 'Mã PIN không đúng!' };
       },
       logout: () => {
+        // Ghi nhật ký TRƯỚC khi xoá phiên, nếu không sẽ mất tên người thực hiện.
+        auditLog('LOGOUT', 'Đăng xuất khỏi trang quản trị');
         clearAdminSession();
         state.isAuthenticated = false;
         state.currentUser = null;
@@ -1191,6 +1262,8 @@
     // fullName/role để vẽ header và phân quyền; thông tin xác thực tra lại từ
     // state.adminUsers khi thực sự cần (đổi mật khẩu).
     persistCurrentUser(user);
+
+    auditLog('LOGIN', `Đăng nhập bằng tài khoản "${user.username}" (${user.role || 'staff'})`);
 
     hideAuthError();
     unlockAdminDashboard();
@@ -1344,6 +1417,9 @@
 
       elements.formChangeCurrentPwd.reset();
       showToast('Đã đổi mật khẩu thành công!', 'success');
+      // Không ghi mật khẩu/PIN vào nhật ký — chỉ ghi sự kiện.
+      auditLog('PASSWORD_CHANGE',
+        `Đổi mật khẩu đăng nhập${newPin ? ' và mã PIN' : ''} của tài khoản "${liveUser.username}"`);
       switchUserMgmtTab('list');
     });
   }
@@ -1554,6 +1630,7 @@
       try {
         localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
         localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: curM, year: curY }));
+        mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
       } catch (e) {}
     } else {
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
@@ -1966,6 +2043,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       allMonths[`${oldYear}-${pad2(oldMonth)}`] = state.monthSchedule;
       try {
         localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
+        mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
       } catch (e) {
         // ⚠️ TRƯỚC ĐÂY `catch (e) {}` — lỗi hết dung lượng bị nuốt hoàn toàn.
         // Người dùng thấy thông báo "Đã chuyển sang Tháng X" trong khi lịch
@@ -1976,6 +2054,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
         const trimmed = trimMonthArchive(allMonths, `${oldYear}-${pad2(oldMonth)}`);
         try {
           localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(trimmed));
+          mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
           showToast(`⚠️ Bộ nhớ đã đầy — đã tự động dọn lịch sử, chỉ giữ ${MAX_MONTH_ARCHIVE} tháng gần nhất (đã lưu lịch tháng ${pad2(oldMonth)}/${oldYear}).`, 'warning', 7000);
         } catch (e2) {
           showToast(`⚠️ BỘ NHỚ TRÌNH DUYỆT ĐÃ ĐẦY — không lưu được lịch tháng ${pad2(oldMonth)}/${oldYear} vào lịch sử. Hãy xoá bớt Sao Lưu cũ trong Trung Tâm Sao Lưu.`, 'error', 9000);
@@ -2034,6 +2113,9 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
     const monthLabel = (targetMonth === 1 && targetYear === 2027) ? 'Tháng 01/2027 (Kỳ 13)' : `Tháng ${pad2(targetMonth)}/${targetYear}`;
     showToast(`📅 Đã chuyển sang ${monthLabel}! Bảng phân công đã được cập nhật ngày tháng tương ứng.`, 'success', 4000);
+    auditLog('MONTH_SWITCH',
+      `Chuyển kỳ trực sang ${pad2(targetMonth)}/${targetYear}`
+      + (availabilityReset.reset ? ` — reset ca rảnh của ${availabilityReset.cleared} CTV` : ''));
   }
 
   function goToNextMonth() {
@@ -2253,8 +2335,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
 
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
-    elements.btnClearSchedule?.addEventListener('click', async () => {
-      if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
+    elements.btnClearSchedule?.addEventListener('click', async () => {      if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
         showToast('Hiện tại chưa có bảng phân công nào để xóa!', 'info');
         return;
       }
@@ -2290,6 +2371,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
         renderUteSheetPreview();
       }
       showToast('Đã xóa sạch toàn bộ bảng phân công 4 tuần! Danh sách sinh viên vẫn được giữ nguyên.', 'success');
+      auditLog('SHIFT_CLEAR', `Xoá toàn bộ bảng phân công ${weeks} tuần (${filled} ca đang có người)`);
     });
 
     // Xóa toàn bộ sinh viên và lịch trực
@@ -2328,6 +2410,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
         renderUteSheetPreview();
       }
       showToast('Đã xóa toàn bộ danh sách sinh viên và làm trống hệ thống!', 'info');
+      auditLog('STUDENT_DELETE', 'Xoá TOÀN BỘ danh sách CTV và bảng phân công');
     };
 
     elements.btnClearStudents?.addEventListener('click', handleClearAllStudents);
@@ -2439,6 +2522,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       runFullSchedule();
       renderAll();
       showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Chính Thức!`, 'success');
+      auditLog('ROLE_CHANGE', `Chuyển ${selectedIds.length} CTV sang Chính Thức`);
     });
 
     elements.btnBulkRoleNew?.addEventListener('click', () => {
@@ -2457,6 +2541,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       runFullSchedule();
       renderAll();
       showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Tập Sự!`, 'success');
+      auditLog('ROLE_CHANGE', `Chuyển ${selectedIds.length} CTV sang Tập Sự`);
     });
 
 elements.btnBulkClearShifts?.addEventListener('click', async () => {
@@ -2486,6 +2571,7 @@ elements.btnBulkClearShifts?.addEventListener('click', async () => {
       runFullSchedule();
       renderAll();
       showToast(`Đã xóa sạch ca rảnh của ${selectedIds.length} sinh viên!`, 'success');
+      auditLog('STUDENT_CLEAR', `Xoá ca rảnh của ${selectedIds.length} CTV đã chọn`);
     });
 
 elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
@@ -2509,6 +2595,7 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
       runFullSchedule();
       renderAll();
       showToast(`Đã xóa ${selectedIds.length} sinh viên khỏi danh sách!`, 'success');
+      auditLog('STUDENT_DELETE', `Xoá ${selectedIds.length} CTV đã chọn khỏi danh sách`);
     });
 
     elements.btnLoadUtePreset?.addEventListener('click', loadUtePresetStudents);
@@ -2545,6 +2632,11 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
         const backupModal = elements.modalBackupCenter || document.getElementById('modal-backup-center');
         if (backupModal && (backupModal.classList.contains('active') || backupModal.style.display === 'flex')) {
           closeBackupCenterModal();
+        }
+        // 8. Modal Nhật ký thao tác (#10)
+        const auditModal = document.getElementById('modal-audit-log');
+        if (auditModal && (auditModal.classList.contains('active') || auditModal.style.display === 'flex')) {
+          closeAuditLogModal();
         }
       }
     });
@@ -2585,10 +2677,12 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
           ? `Đã xếp lịch luân phiên 2 tuần: ${state.twoWeekSchedule.uniqueAssignedCount}/${state.twoWeekSchedule.totalStudents} bạn có ca!`
           : 'Đã hoàn tất phân bổ ca trực 1 cũ + 1 mới!';
         showToast(msg, 'success');
+        auditLog('SCHEDULE_RUN', `Xếp lịch tự động cho ${state.students.length} CTV`);
       }, 350);
     } else {
       runFullSchedule();
       renderAll();
+      auditLog('SCHEDULE_RUN', `Xếp lịch tự động cho ${state.students.length} CTV`);
     }
   }
 
@@ -3176,6 +3270,8 @@ function renderStudentTable() {
     renderAll();
     closeReassignModal();
     showToast(`Đã lưu thay đổi nhân sự trực ${weekNumber ? `Tuần ${weekNumber}` : ''}!`, 'success');
+    auditLog('SHIFT_ASSIGN',
+      `Gán thủ công ca ${shiftId} tuần ${realWeekNumber} cho ${newStudent ? `"${newStudent.fullName}" (${newStudent.studentId})` : 'vị trí trống'}`);
   }
 
   function openAddStudentModal() {
@@ -3257,6 +3353,7 @@ function renderStudentTable() {
           updatedAt: Date.now()
         };
         showToast(`Đã cập nhật sinh viên ${fullName}!`, 'success');
+        auditLog('STUDENT_UPDATE', `Cập nhật CTV "${fullName}" (${studentId})`);
       }
     } else {
       const existing = state.students.find(s => s.studentId.toLowerCase() === studentId.toLowerCase());
@@ -3278,6 +3375,7 @@ function renderStudentTable() {
       };
       state.students.unshift(newStudent);
       showToast(`Đã thêm thành công bạn ${fullName}!`, 'success');
+      auditLog('STUDENT_ADD', `Thêm CTV "${fullName}" (${studentId})`);
     }
 
     saveStudents();
@@ -3305,6 +3403,7 @@ window.adminClearStudentShifts = async function(studentId) {
       runFullSchedule();
       renderAll();
       showToast(`Đã xóa sạch toàn bộ ca rảnh của bạn ${student.fullName} (về 0 ca)!`, 'success');
+      auditLog('STUDENT_CLEAR', `Xoá toàn bộ ca rảnh của CTV "${student.fullName}" (${student.studentId})`);
     }
   };
 
@@ -3325,6 +3424,7 @@ window.adminDeleteStudent = async function(studentId) {
       runFullSchedule();
       renderAll();
       showToast(`Đã xóa bạn ${student.fullName}!`, 'info');
+      auditLog('STUDENT_DELETE', `Xoá CTV "${student.fullName}" (${student.studentId})`);
     }
   };
 
@@ -4404,6 +4504,8 @@ window.adminDeleteStudent = async function(studentId) {
     renderSwapRequestsTable();
     renderAll();
     showToast(`Đã phê duyệt đề xuất của CTV ${req.studentName}! Lịch trực đã được tự động cập nhật.`, 'success');
+    auditLog('SWAP_APPROVE',
+      `Duyệt đổi ca ${req.shiftId} tuần ${req.weekNum}: "${req.studentName}" → "${targetStudent.fullName}"`);
   }
 
   /**
@@ -4493,6 +4595,7 @@ window.adminDeleteStudent = async function(studentId) {
 
     renderSwapRequestsTable();
     showToast(`Đã từ chối đề xuất của CTV ${req.studentName}.`, 'info');
+    auditLog('SWAP_REJECT', `Từ chối đổi ca ${req.shiftId} tuần ${req.weekNum} của "${req.studentName}"`);
   }
 
   /**
@@ -4501,6 +4604,140 @@ window.adminDeleteStudent = async function(studentId) {
    * ==========================================================================
    */
   let pendingRestoreData = null;
+
+  // ==========================================================================
+  // NHẬT KÝ THAO TÁC QUẢN TRỊ (#10) — XEM / LỌC / XUẤT / XOÁ
+  // ==========================================================================
+  // Nhật ký nằm trong localStorage của máy đang dùng (xem js/audit.js).
+  // Đây là công cụ truy vết nội bộ, KHÔNG phải bằng chứng chống sửa đổi:
+  // ai mở DevTools cũng sửa được — vì vậy không dùng nó để phân quyền.
+
+  const AUDIT_FILTER = { group: 'all', query: '' };
+
+  function getAuditModal() {
+    return document.getElementById('modal-audit-log');
+  }
+
+  function renderAuditLog() {
+    const listEl = document.getElementById('audit-list-container');
+    const summaryEl = document.getElementById('audit-summary');
+    if (!listEl || !window.AuditLog) return;
+
+    const stats = window.AuditLog.stats();
+    const items = window.AuditLog.list({ group: AUDIT_FILTER.group, query: AUDIT_FILTER.query });
+
+    // renderTimeline đã escapeHtml toàn bộ nội dung động.
+    listEl.innerHTML = window.AuditLog.renderTimeline(items);
+
+    if (summaryEl) {
+      const groupOption = window.AuditLog.groupOptions().find(o => o.key === AUDIT_FILTER.group);
+      const groupLabel = groupOption ? groupOption.label : 'Tất cả';
+      summaryEl.textContent = `Hiển thị ${items.length}/${stats.total} dòng · nhóm: ${groupLabel} · `
+        + `lưu tối đa ${window.AuditLog.MAX_ENTRIES} dòng trên máy này.`;
+    }
+  }
+
+  function openAuditLogModal() {
+    const modal = getAuditModal();
+    if (!modal) return;
+
+    const groupSelect = document.getElementById('audit-group-filter');
+    if (groupSelect && groupSelect.options.length === 0 && window.AuditLog) {
+      window.AuditLog.groupOptions().forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.key;
+        option.textContent = opt.label;
+        groupSelect.appendChild(option);
+      });
+      groupSelect.value = AUDIT_FILTER.group;
+    }
+
+    const searchInput = document.getElementById('audit-search-input');
+    if (searchInput) searchInput.value = AUDIT_FILTER.query;
+
+    renderAuditLog();
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    if (searchInput) searchInput.focus();
+  }
+
+  function closeAuditLogModal() {
+    const modal = getAuditModal();
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+
+  function exportAuditLogJson() {
+    if (!window.AuditLog) return;
+    try {
+      const blob = new Blob([window.AuditLog.exportJson()], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `TVTS_NhatKyThaoTac_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Đã xuất nhật ký thao tác ra file .json!', 'success');
+    } catch (e) {
+      showToast('Không xuất được nhật ký: ' + (e.message || 'lỗi không rõ'), 'error');
+    }
+  }
+
+  async function handleClearAuditLog() {
+    if (!window.AuditLog) return;
+    const stats = window.AuditLog.stats();
+    if (stats.total === 0) {
+      showToast('Nhật ký đang trống, không có gì để xoá.', 'info');
+      return;
+    }
+
+    const accepted = await confirmDangerAction({
+      title: 'Xoá toàn bộ nhật ký thao tác',
+      message: `Toàn bộ ${stats.total} dòng nhật ký trên máy này sẽ bị xoá. `
+        + 'Thao tác xoá chính nó vẫn được ghi lại thành 1 dòng mới.',
+      losses: [`${stats.total} dòng nhật ký (không thể khôi phục)`],
+      keyword: 'XOA NHAT KY',
+      confirmLabel: 'Xoá nhật ký',
+    });
+    if (!accepted) return;
+
+    const removed = window.AuditLog.clear(state.currentUser);
+    renderAuditLog();
+    showToast(`Đã xoá ${removed} dòng nhật ký thao tác.`, 'info');
+  }
+
+  function bindAuditLogEvents() {
+    document.getElementById('btn-open-audit-log')?.addEventListener('click', openAuditLogModal);
+    document.getElementById('btn-close-audit-modal')?.addEventListener('click', closeAuditLogModal);
+    document.getElementById('btn-close-audit-footer')?.addEventListener('click', closeAuditLogModal);
+
+    const modal = getAuditModal();
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeAuditLogModal();
+      });
+    }
+
+    document.getElementById('audit-group-filter')?.addEventListener('change', (e) => {
+      AUDIT_FILTER.group = e.target.value || 'all';
+      renderAuditLog();
+    });
+
+    document.getElementById('audit-search-input')?.addEventListener('input', (e) => {
+      AUDIT_FILTER.query = e.target.value || '';
+      renderAuditLog();
+    });
+
+    document.getElementById('btn-export-audit')?.addEventListener('click', exportAuditLogJson);
+    document.getElementById('btn-clear-audit')?.addEventListener('click', handleClearAuditLog);
+  }
+
+  window.adminOpenAuditModal = openAuditLogModal;
+  window.adminCloseAuditModal = closeAuditLogModal;
+  window.adminRenderAuditLog = renderAuditLog;
 
   function bindBackupCenterEvents() {
     elements.btnOpenBackupCenter?.addEventListener('click', openBackupCenterModal);
@@ -4698,6 +4935,9 @@ window.adminDeleteStudent = async function(studentId) {
 
         if (elements.backupPreviewBox) elements.backupPreviewBox.style.display = 'block';
         showToast('Đã đọc và xác thực file sao lưu hợp lệ!', 'info');
+        // Ghi nhật ký NGAY khi file hợp lệ (chưa khôi phục) để biết ai đã nạp
+        // file gì; thao tác ghi đè thật vẫn được ghi riêng ở handleConfirmRestore.
+        auditLog('BACKUP_IMPORT', `Nạp file sao lưu "${file.name}" (${studentCount} CTV, ${weekCount} tuần)`);
       } catch (err) {
         showToast('Lỗi khi đọc file sao lưu: File bị hỏng hoặc định dạng JSON sai!', 'error');
       }
@@ -4771,6 +5011,7 @@ async function handleConfirmRestore() {
       }
       if (pendingRestoreData.allMonths && typeof pendingRestoreData.allMonths === 'object') {
         localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(pendingRestoreData.allMonths));
+        mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
       }
 
       window.dispatchEvent(new CustomEvent('ts:data-changed', {
@@ -4790,6 +5031,8 @@ async function handleConfirmRestore() {
       closeBackupCenterModal();
 
       showToast('Khôi phục toàn bộ hệ thống từ bản sao lưu thành công 100%!', 'success');
+      auditLog('BACKUP_RESTORE',
+        `Khôi phục dữ liệu từ file .json (${pendingRestoreData?.students?.length || 0} CTV)`);
     } catch (err) {
       showToast('Đã có lỗi xảy ra trong quá trình ghi dữ liệu khôi phục!', 'error');
     }
@@ -4860,6 +5103,7 @@ async function handleStartNewMonth() {
     closeBackupCenterModal();
 
     showToast('Đã khởi tạo kỳ trực tháng mới thành công! Danh sách sinh viên vẫn được bảo toàn nguyên vẹn.', 'success');
+    auditLog('MONTH_RESET', `Khởi tạo kỳ trực mới: xoá bảng phân công, giữ ${state.students.length} CTV`);
   }
 
   /**
@@ -5288,6 +5532,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
   function saveWebBackups(list) {
     try {
       localStorage.setItem(STORAGE_KEYS.WEB_BACKUPS, JSON.stringify(list));
+      mirrorToIndexedDb(STORAGE_KEYS.WEB_BACKUPS);
 window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.WEB_BACKUPS] } }));
       if (canAutoPushToCloud()) {
         window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] WebBackups push error:', err));
@@ -5425,6 +5670,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     renderWebBackupsTable();
     updateBackupStats();
 
+    auditLog('BACKUP_CREATE', `Tạo bản sao lưu "${backupItem.name}" (${monthKey})`);
     return backupItem;
   }
 
@@ -5607,6 +5853,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       closeBackupCenterModal();
 
       showToast(`Đã khôi phục toàn bộ hệ thống từ "${target.name}" thành công 100%!`, 'success');
+      auditLog('BACKUP_RESTORE', `Khôi phục toàn bộ dữ liệu từ bản sao lưu "${target.name}"`);
     } catch (err) {
       console.error('Lỗi khôi phục web backup:', err);
       showToast('Đã có lỗi xảy ra trong quá trình ghi dữ liệu khôi phục!', 'error');
@@ -5671,6 +5918,7 @@ async function handleDeleteWebBackup(backupId) {
     renderWebBackupsTable();
     updateBackupStats();
     showToast(`Đã xóa bản sao lưu "${target.name}" khỏi web!`, 'info');
+    auditLog('BACKUP_DELETE', `Xoá bản sao lưu "${target.name}" (${target.monthKey || 'không rõ kỳ'})`);
   }
 
   /**
@@ -6636,29 +6884,14 @@ async function handleDeleteEvent(id) {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
+  // Định nghĩa DUY NHẤT nằm ở js/common.js (nạp trước file này) — trước đây
+  // hai cổng chép nguyên xi nhau nên sửa lỗi ở một nơi là nơi kia vẫn sai.
   function formatVNDateTime(isoStr) {
-    if (!isoStr) return '';
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+    return window.CommonUtils.formatVNDateTime(isoStr);
   }
 
   function getRemainingText(targetIso) {
-    const diff = new Date(targetIso).getTime() - Date.now();
-    if (diff <= 0) return 'Đã hết hạn';
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    const remHours = hours % 24;
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (days > 0) {
-      return `Còn ${days} ngày ${remHours} giờ`;
-    }
-    return `Còn ${hours} giờ ${mins} phút`;
+    return window.CommonUtils.getRemainingText(targetIso);
   }
 
   function loadRegConfig() {
@@ -6688,6 +6921,9 @@ async function handleDeleteEvent(id) {
     localStorage.setItem(STORAGE_KEYS.REG_CONFIG, JSON.stringify(state.regConfig));
     if (notify) {
       showToast('Đã lưu cấu hình thời gian mở cổng đăng ký!', 'success');
+      auditLog('SETTINGS_UPDATE',
+        `Cập nhật cấu hình cổng đăng ký: ${state.regConfig.mode}`
+        + `, công bố lịch: ${state.regConfig.publishSchedule ? 'BẬT' : 'TẮT'}`);
       if (elements.configSaveHint) {
         elements.configSaveHint.textContent = `✓ Đã lưu lúc ${new Date().toLocaleTimeString('vi-VN')}`;
         setTimeout(() => {
@@ -7592,6 +7828,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
           const res = await window.CloudSyncManager.revokeStaffEmail(email);
           if (res.success) {
             showToast(`Đã thu hồi quyền của ${email}.`, 'info');
+            auditLog('ACCOUNT_REVOKE', `Thu hồi quyền Cloud của email "${email}"`);
             await refreshStaffEmails();
           } else {
             showToast('Không thu hồi được: ' + res.error, 'error');
@@ -7644,6 +7881,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
       if (res.success) {
         showToast(`Đã cấp quyền cho ${res.email}. Người này chỉ cần đăng nhập Google bằng email đó.`, 'success');
+        auditLog('ACCOUNT_GRANT', `Cấp quyền Cloud cho email "${res.email}"`);
         if (input) input.value = '';
         await refreshStaffEmails();
       } else {
