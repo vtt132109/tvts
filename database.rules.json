@@ -1,29 +1,29 @@
 {
   "rules": {
     "tvts_production_data": {
-      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
-      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)"
+      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
+      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)"
     },
 
     "tvts_public": {
       ".read": true,
-      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)"
+      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)"
     },
 
     "tvts_requests": {
-      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
+      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
 
       "registrations": {
         "$mssv": {
-          ".read": "auth != null && (data.child('uid').val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
-          ".write": "auth != null && (root.child('tvts_requests').child('mssv_owner').child($mssv).val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
+          ".read": "auth != null && (data.child('uid').val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
+          ".write": "auth != null && (root.child('tvts_requests').child('mssv_owner').child($mssv).val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
           ".validate": "newData.hasChildren(['mssv','month','shifts','status','uid','submittedAt']) && newData.child('mssv').val() === $mssv && newData.child('uid').val().length <= 128 && newData.child('submittedAt').val().length <= 40"
         }
       },
 
       "mssv_owner": {
         "$mssv": {
-          ".read": "auth != null && (data.val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
+          ".read": "auth != null && (data.val() === auth.uid || (auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)))",
           ".write": "auth != null && newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)",
           ".validate": "newData.isString() && newData.val().length <= 64"
         }
@@ -32,7 +32,7 @@
       "swaps": {
         ".read": true,
         "$swapId": {
-          ".write": "auth != null && ((auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)) || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (data.exists() && data.child('uid').val() === auth.uid && data.child('status').val() === 'pending' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'cancelled'))",
+          ".write": "auth != null && ((auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)) || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (data.exists() && data.child('uid').val() === auth.uid && data.child('status').val() === 'pending' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'cancelled'))",
           ".validate": "newData.hasChildren(['id','studentId','status','uid','createdAt']) && newData.child('id').val() === $swapId && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'approved' || newData.child('status').val() === 'rejected' || newData.child('status').val() === 'cancelled')"
         }
       }
@@ -46,8 +46,8 @@
     },
 
     "staff_emails": {
-      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
-      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'owner@example.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
+      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
+      ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
       "$emailKey": {
         ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && !root.child('staff_emails').exists() && $emailKey === auth.token.email.toLowerCase().replace('.', '%2E')",
         ".validate": "newData.isBoolean()"

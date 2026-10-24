@@ -270,7 +270,7 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 > `/staff` chỉ ghi được trong Firebase Console (`.write: false`). `/staff_emails` do **cán bộ đã có quyền** ghi ngay trong app (nút Cấp Quyền), giá trị phải là boolean `true`.
 > Email key phải viết thường và thay **tất cả** dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`.
 > Rules chỉ chấp nhận tài khoản Google đã xác thực email (`email_verified === true`, `sign_in_provider === 'google.com'`).
-> `database.rules.json` chứa `owner@example.com` — **thay bằng email Google của Trưởng ban** trước khi Publish. Đây là tài khoản khởi động duy nhất, sau đó cấp quyền cho người khác ngay trong app.
+> `database.rules.json` đã điền sẵn email Google của Trưởng ban. Nếu đổi người giữ quyền khởi động, sửa **cả 10 chỗ** trong file trước khi Publish. Sau đó cấp quyền cho người khác ngay trong app.
 
 ### 7.2 Đăng nhập
 
