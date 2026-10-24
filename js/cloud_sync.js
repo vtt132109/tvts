@@ -79,6 +79,16 @@
     return 'Không đăng nhập được tài khoản đồng bộ: ' + c;
   }
 
+  /** Bổ sung hướng dẫn khi Firebase trả 401/403 vì Rules. */
+  function withAuthGuidance(message) {
+    const msg = String(message || 'Lỗi kết nối Firebase Cloud');
+    if (/401|403|Permission denied/i.test(msg)) {
+      return msg
+        + ' — Hãy đăng nhập Google bằng email đã được cấp quyền (staff_emails) hoặc UID trong /staff.';
+    }
+    return msg;
+  }
+
   /**
    * Lấy đối tượng Auth của Firebase SDK (compat) nếu trang đã nạp SDK.
    * Trả về null khi trang không nạp SDK (ví dụ môi trường Node test).
@@ -2392,7 +2402,7 @@
     } catch (err) {
       return {
         success: false,
-        error: err.message || 'Lỗi kết nối Firebase Cloud'
+        error: withAuthGuidance(err.message || 'Lỗi kết nối Firebase Cloud')
       };
     }
   }
@@ -2498,7 +2508,7 @@
     } catch (err) {
       return {
         success: false,
-        error: err.message || 'Lỗi kết nối Firebase Cloud'
+        error: withAuthGuidance(err.message || 'Lỗi kết nối Firebase Cloud')
       };
     }
   }
@@ -2535,6 +2545,17 @@
       if (timeoutId) clearTimeout(timeoutId);
 
       if (res.ok) {
+        // Firebase REST có thể trả HTTP 200 kèm {"error":"Permission denied"}
+        // khi Rules chặn đọc. Trước đây testConnection báo thành công giả.
+        let data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+        if (data && typeof data === 'object' && data.error) {
+          const detail = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+          return {
+            success: false,
+            message: withAuthGuidance('Firebase từ chối đọc: ' + detail)
+          };
+        }
         return {
           success: true,
           message: 'Kết nối Firebase thành công! Cơ sở dữ liệu hoạt động bình thường.'
@@ -2543,7 +2564,7 @@
         const txt = await res.text();
         return {
           success: false,
-          message: `Firebase trả về mã lỗi HTTP ${res.status} (${res.statusText}). Vui lòng kiểm tra quyền đọc (Rules) hoặc API Key.`
+          message: withAuthGuidance(`Firebase trả về mã lỗi HTTP ${res.status} (${res.statusText}). Vui lòng kiểm tra quyền đọc (Rules) hoặc API Key.`)
         };
       }
     } catch (err) {

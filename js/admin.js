@@ -276,6 +276,23 @@
         || accountUsesSecret(user, 'pin', def.pin)));
   }
 
+  // Ba tài khoản cũ đã được chủ dự án xác nhận xoá ngày 2026-10-24. Chỉ purge
+  // MỘT LẦN trên mỗi trình duyệt (flag bên dưới), để sau này có thể tạo lại
+  // username nếu muốn mà không bị xoá lặp lại.
+  const RETIRED_ADMIN_USERNAMES = new Set(['thien', 'phuong', 'diephoi']);
+  const RETIRED_PURGE_FLAG = 'ts_admin_retired_purge_20261024';
+
+  function purgeRetiredAdminsOnce(list) {
+    let alreadyPurged = false;
+    try { alreadyPurged = localStorage.getItem(RETIRED_PURGE_FLAG) === '1'; } catch (e) {}
+    if (alreadyPurged) return { list, removed: 0, alreadyPurged: true };
+    const kept = (Array.isArray(list) ? list : []).filter(
+      user => !RETIRED_ADMIN_USERNAMES.has(String((user && user.username) || '').toLowerCase())
+    );
+    try { localStorage.setItem(RETIRED_PURGE_FLAG, '1'); } catch (e) {}
+    return { list: kept, removed: (Array.isArray(list) ? list.length : 0) - kept.length, alreadyPurged: false };
+  }
+
   function findUserByPassword(username, password) {
     const target = String(username || '').trim().toLowerCase();
     if (!target) return null;
@@ -768,8 +785,29 @@
       };
       authenticateSuccess(adminUser);
       const viaLabel = access.via === 'email' ? 'email đã cấp trước' : 'UID';
+
+      // Máy mới đăng nhập Google: kéo ngay dữ liệu riêng tư từ Cloud để không
+      // làm việc trên danh sách/lịch cũ. pullFromCloud có guard xung đột riêng.
+      let pulledPrivate = false;
+      try {
+        const pullPrivate = await window.CloudSyncManager.pullFromCloud();
+        if (pullPrivate && pullPrivate.success) {
+          pulledPrivate = true;
+          loadAdminUsers();
+          loadData();
+          renderAll();
+          if (typeof window.renderEventsTable === 'function') window.renderEventsTable();
+        } else if (pullPrivate && pullPrivate.error) {
+          showToast('Không kéo được dữ liệu Cloud: ' + pullPrivate.error, 'warning', 7000);
+        }
+      } catch (pullErr) {
+        console.warn('[Admin] Kéo dữ liệu Cloud sau Google login thất bại:', pullErr && pullErr.message);
+      }
+
       updateAdminGoogleStatus(
-        `✅ Đã xác thực ${user.email || user.uid} (qua ${viaLabel}). Ca rảnh sẽ được nhận tự động.`,
+        `✅ Đã xác thực ${user.email || user.uid} (qua ${viaLabel}).`
+          + (pulledPrivate ? ' Đã kéo dữ liệu Cloud.' : '')
+          + ' Ca rảnh sẽ được nhận tự động.',
         'success'
       );
       // Nhận ca rảnh ngay sau khi đăng nhập; không chờ cán bộ bấm duyệt.
@@ -968,8 +1006,11 @@
       const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
       if (raw) {
         const list = JSON.parse(raw);
-        const safeList = (Array.isArray(list) ? list : []).filter(user => !isLegacyDefaultAdmin(user));
-        const purgedCount = (Array.isArray(list) ? list.length : 0) - safeList.length;
+        const legacyFiltered = (Array.isArray(list) ? list : []).filter(user => !isLegacyDefaultAdmin(user));
+        const legacyRemoved = (Array.isArray(list) ? list.length : 0) - legacyFiltered.length;
+        const retiredResult = purgeRetiredAdminsOnce(legacyFiltered);
+        const safeList = retiredResult.list;
+        const purgedCount = legacyRemoved + retiredResult.removed;
         state.adminUsers = safeList;
         if (purgedCount > 0) {
           // Không auto-push ở đây: máy có thể chưa đăng nhập Cloud. Người dùng
@@ -977,8 +1018,8 @@
           try {
             localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(safeList));
           } catch (e) {}
-          console.warn(`[Security] Đã vô hiệu hoá ${purgedCount} tài khoản dùng mật khẩu/PIN mặc định cũ.`);
-          auditLog('SECURITY_PURGE', `Vô hiệu hoá ${purgedCount} tài khoản dùng mật khẩu/PIN mặc định cũ`);
+          console.warn(`[Security] Đã vô hiệu hoá ${purgedCount} tài khoản không còn được phép (mặc định cũ/đã nghỉ).`);
+          auditLog('SECURITY_PURGE', `Vô hiệu hoá ${purgedCount} tài khoản không còn được phép`);
         }
       } else {
         // KHÔNG seed tài khoản mặc định. Máy trống nghĩa là chưa thiết lập:

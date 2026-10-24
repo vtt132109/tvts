@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-537%2F537%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-542%2F542%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -82,7 +82,7 @@ tvts/
 │   # danh sách chuẩn giờ nhập từ CSV qua Admin → Sinh Viên → Nhập CSV
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 18 bộ kiểm thử tự động — 537 test cases
+├── tests/                               # 18 bộ kiểm thử tự động — 542 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, thiết lập lần đầu & mã PIN
@@ -223,12 +223,12 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (537/537 Tests PASS — 18 bộ, 100%)
+### Kết Quả Kiểm Thử (542/542 Tests PASS — 18 bộ, 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
 | 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
-| 2 | Xác Thực, Thiết Lập Lần Đầu & Bảo Mật XSS (Auth) | 24/24 |
+| 2 | Xác Thực, Thiết Lập Lần Đầu & Bảo Mật XSS (Auth) | 25/25 |
 | 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
 | 4 | Lịch Sử Ca Trực Nhiều Tháng (Shift History) | 12/12 |
 | 5 | Nhật Ký Thao Tác Quản Trị (Audit Log) | 23/23 |
@@ -237,14 +237,14 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 8 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 9 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 10 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 245/245 |
+| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 248/248 |
 | 12 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 13 | Lưu Trữ Đám Mây & Chống Ghi Đè | 5/5 |
 | 14 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
 | 15 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
 | 16 | Nhập CSV, Trùng MSSV & Vai Trò (CSV Import) | 8/8 |
 | 17 | Năm Tuần 4, Lịch Tháng Trước & A11y Modal | 7/7 |
-| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **72/72** |
+| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **73/73** |
 
 **Cloud Sync (Suite 11)** khóa các hành vi an toàn mới:
 - Preflight `updatedAt` trước khi PATCH; chặn xung đột từ thiết bị khác và chặn danh sách CTV/tài khoản cán bộ teo bất thường (có `force` sau khi xác nhận).
@@ -296,7 +296,7 @@ node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ t
 - **Sinh viên:** **không có trang đăng nhập**. Chỉ nhập MSSV; app tự tạo phiên **Anonymous** để gửi yêu cầu. Sinh viên không cần tài khoản Google/email.
 - **Ca rảnh không chờ duyệt:** sau khi cán bộ đăng nhập Google, app tự kéo `tvts_requests/registrations` và gộp ngay vào danh sách CTV; **không tự xếp lịch**. Cán bộ xem tổng **Lượt ca rảnh đã đăng ký** trên dashboard rồi bấm xếp ca khi sẵn sàng. Đề xuất đổi ca vẫn chờ cán bộ duyệt.
 - **Tài khoản nội bộ (username/PIN)** dùng để mở bảng quản trị trên máy trực. Máy chưa có tài khoản sẽ hiện **Thiết lập lần đầu**; không còn tài khoản/mật khẩu/PIN mặc định. Nếu quên mật khẩu, đăng nhập **Google cán bộ** (nếu Cloud đã cấu hình) rồi cấp lại quyền, hoặc khôi phục từ bản sao lưu JSON. Google là lớp kiểm soát dữ liệu Cloud.
-- **Role theo từng trang:** `admin.html` khai báo `tvts-cloud-role=admin`, `index.html` khai báo `student`. Role **không được lưu** vào config Cloud dùng chung localStorage — tránh việc mở trang sinh viên làm admin bị chặn đẩy dữ liệu.
+- **Role theo từng trang:** `admin.html` khai báo `tvts-cloud-role=admin`, `index.html` khai báo `student`. Role **không được lưu** vào config Cloud dùng chung localStorage — tránh việc mở trang sinh viên làm admin bị chặn đẩy dữ liệu. Sau khi đăng nhập Google, admin tự kéo dữ liệu riêng tư từ Cloud.
 - **Web API Key** là mã công khai phía client. Cán bộ nhập một lần trong modal Cloud; app công bố nó trong `tvts_public/clientConfig` để máy sinh viên tạo được phiên ẩn danh.
 
 #### Quy trình ca rảnh (không chờ duyệt)
