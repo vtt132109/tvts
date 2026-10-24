@@ -465,17 +465,42 @@ runTest('3.16: Nhập CSV KHÔNG được nhận nhầm chuỗi chứa "cu" là 
     'Phải so khớp cả giá trị (^...$) thay vì khớp chuỗi con');
 });
 
-runTest('3.14: saveManualReassignment phải kiểm tra ca rảnh + vai trò + trùng ngày', () => {
+runTest('3.14: Xếp thủ công cho phép override nhưng phải cảnh báo rõ', () => {
   const fn = adminJs.match(/function saveManualReassignment\(\) \{[\s\S]*?\n  \}/);
   assert.ok(fn, 'Không tìm thấy saveManualReassignment');
   const body = fn[0];
-  assert.ok(/KHÔNG đăng ký rảnh ca/.test(body),
-    'Phải chặn gán ca ngoài ca SV đã đăng ký rảnh');
-  assert.ok(/role !== 'old'/.test(body) && /role !== 'new'/.test(body),
-    'Phải chặn gán sai vai trò');
-  assert.ok(/cùng ngày/.test(body), 'Phải chặn trùng ca trong cùng ngày');
+  assert.ok(/chưa đăng ký rảnh ca/.test(body),
+    'Phải cảnh báo khi gán CTV chưa đăng ký ca');
+  assert.ok(/vai trò/.test(body), 'Phải cảnh báo khi trái vai trò');
+  assert.ok(/cùng ngày/.test(body), 'Phải cảnh báo khi trùng ca trong cùng ngày');
+  assert.ok(/window\.confirm/.test(body),
+    'Phải cho admin xác nhận và vẫn gán được (override), không chặn cứng');
+  assert.ok(!/Vui lòng chọn người khác hoặc cập nhật ca rảnh trước/.test(body),
+    'Không được chặn cứng người chưa đăng ký ca rảnh');
   assert.ok(/recomputeWeekStats/.test(body),
     'Phải tính lại summary/combinedStats — nếu không số "X/40 ca" và thanh công bằng bị sai');
+  assert.ok(/const eligibleStudents = state\.students\.filter\(Boolean\)/.test(adminJs),
+    'Modal gán thủ công phải liệt kê toàn bộ CTV, không lọc cứng theo vai trò');
+});
+
+runTest('3.15: findStudentDayClash chỉ bắt khi đúng CTV đã có ca cùng ngày', () => {
+  const fn = adminJs.match(/function findStudentDayClash\([\s\S]*?\n  \}/);
+  assert.ok(fn, 'Không tìm thấy findStudentDayClash');
+  // eslint-disable-next-line no-new-func
+  const helper = new Function('SHIFT_MAP', fn[0] + '\nreturn findStudentDayClash;')({
+    T2_S: { dayKey: 'T2' }, T2_C: { dayKey: 'T2' }, T3_S: { dayKey: 'T3' }
+  });
+  const table = {
+    T2_S: { oldMember: { id: 'a' } },
+    T2_C: { oldMember: null },
+    T3_S: { oldMember: { id: 'a' } }
+  };
+  assert.strictEqual(helper(table, 'T2_C', 'a')?.shiftId, 'T2_S',
+    'Phải phát hiện CTV a đã có ca T2_S cùng ngày');
+  assert.strictEqual(helper(table, 'T2_C', 'b'), null,
+    'Không được báo trùng chỉ vì ca khác cùng ngày có người khác');
+  assert.strictEqual(helper(table, 'T3_S', 'a'), null,
+    'Khác ngày thì không phải trùng');
 });
 
 runTest('3.5: pullFromCloud phát hiện xung đột dữ liệu', () => {

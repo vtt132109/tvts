@@ -3279,6 +3279,8 @@ function renderStudentTable() {
 
     const oldMem = slot.oldMember;
     const newMem = slot.newMember;
+    const oldRoleMismatch = !!(oldMem && oldMem.role && oldMem.role !== 'old');
+    const newRoleMismatch = !!(newMem && newMem.role && newMem.role !== 'new');
 
     let statusPill = '';
     if (slot.status === 'full') {
@@ -3288,11 +3290,14 @@ function renderStudentTable() {
     } else {
       statusPill = `<span class="shift-status-pill empty">Trống</span>`;
     }
+    if (oldRoleMismatch || newRoleMismatch) {
+      statusPill += ` <span class="shift-status-pill warning" title="Ca này đang có người trái vai trò do xếp thủ công">⚠️ Trái vai trò</span>`;
+    }
 
     const oldCard = oldMem ? `
       <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
         <div class="member-info">
-          <span class="member-role-tag">🎓 Chính Thức</span>
+          <span class="member-role-tag">🎓 Chính Thức${oldRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
           <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
         </div>
@@ -3307,7 +3312,7 @@ function renderStudentTable() {
     const newCard = newMem ? `
       <div class="duty-member-card role-new" title="Tập Sự">
         <div class="member-info">
-          <span class="member-role-tag">🌱 Tập Sự</span>
+          <span class="member-role-tag">🌱 Tập Sự${newRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
           <span class="member-name">${escapeHtml(newMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
         </div>
@@ -3387,25 +3392,36 @@ function renderStudentTable() {
       elements.modalRoleBadge.className = `badge ${role === 'old' ? 'badge-role-old' : 'badge-role-new'}`;
     }
 
-    const eligibleStudents = state.students.filter(s => s.role === role);
+    const eligibleStudents = state.students.filter(Boolean);
     const currentAssigned = targetSchedule?.scheduleTable?.[shiftId]?.[role === 'old' ? 'oldMember' : 'newMember'];
 
     let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
 
+    // Xếp thủ công: liệt kê TOÀN BỘ CTV, kể cả người chưa đăng ký ca nào.
+    // Ưu tiên: đang được gán > đúng vai trò > có đăng ký rảnh ca này.
+    const rankStudent = (s) => {
+      const isAvailable = (s.availableShifts || []).includes(shiftId) ? 1 : 0;
+      return (currentAssigned?.id === s.id ? 4 : 0)
+        + (s.role === role ? 2 : 0)
+        + isAvailable;
+    };
     eligibleStudents.sort((a, b) => {
-      const aAvail = (a.availableShifts || []).includes(shiftId) ? 1 : 0;
-      const bAvail = (b.availableShifts || []).includes(shiftId) ? 1 : 0;
-      return bAvail - aAvail;
+      const diff = rankStudent(b) - rankStudent(a);
+      if (diff !== 0) return diff;
+      return String(a.fullName || '').localeCompare(String(b.fullName || ''), 'vi');
     });
 
     eligibleStudents.forEach(s => {
       const isAvailable = (s.availableShifts || []).includes(shiftId);
       const isSelected = currentAssigned?.id === s.id;
+      const roleLabel = s.role === 'old' ? 'Chính Thức' : 'Tập Sự';
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
+      const mismatchLabel = s.role !== role ? ` · ⚠️ Trái vai trò (${roleLabel})` : '';
+      const selectedLabel = isSelected ? ' · Đang gán' : '';
 
       selectHtml += `
         <option value="${escapeHtml(s.id)}" ${isSelected ? 'selected' : ''}>
-          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}
+          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${mismatchLabel}${selectedLabel}
         </option>
       `;
     });
@@ -3420,6 +3436,26 @@ function renderStudentTable() {
   function closeReassignModal() {
     elements.reassignModal?.classList.remove('active');
     state.reassignModalData = null;
+  }
+
+  /**
+   * Tìm ca khác CÙNG NGÀY mà một CTV đã được xếp trong tuần.
+   * Chỉ tính khi chính CTV đó nằm trong ca kia — không phải "có ai đó cùng ngày".
+   */
+  function findStudentDayClash(scheduleTable, targetShiftId, studentId) {
+    if (!scheduleTable || !studentId) return null;
+    const map = (typeof SHIFT_MAP !== 'undefined' && SHIFT_MAP) || {};
+    const targetDay = (map[targetShiftId] && map[targetShiftId].dayKey)
+      || String(targetShiftId).split('_')[0];
+    const hit = Object.entries(scheduleTable).find(([sid, slot]) => {
+      if (sid === targetShiftId || !slot) return false;
+      const assigned = (slot.oldMember && slot.oldMember.id === studentId)
+        || (slot.newMember && slot.newMember.id === studentId);
+      if (!assigned) return false;
+      const day = (map[sid] && map[sid].dayKey) || String(sid).split('_')[0];
+      return day === targetDay;
+    });
+    return hit ? { shiftId: hit[0], slot: hit[1] } : null;
   }
 
   function saveManualReassignment() {
@@ -3444,46 +3480,53 @@ function renderStudentTable() {
       return;
     }
 
-    // Chặn gán sai vai trò: một Tập Sự không thể đảm nhiệm vị trí Chính Thức
-    // (và ngược lại). Trước đây chỉ gán thẳng, phá vỡ luật 1 Cũ + 1 Mới.
-    if (newStudent && role === 'old' && newStudent.role !== 'old') {
-      showToast(`${newStudent.fullName} là Tập Sự, không thể đảm nhiệm vị trí Người Cũ (Kinh Nghiệm)!`, 'error');
-      return;
-    }
-    if (newStudent && role === 'new' && newStudent.role !== 'new') {
-      showToast(`${newStudent.fullName} là Chính Thức, không thể đảm nhiệm vị trí Người Mới (Tập Sự)!`, 'error');
-      return;
-    }
-
-    // KIỂM TRA CA RẢNH. Modal có cả danh sách "⚠️ Không đăng ký rảnh" và trước
-    // đây cho phép chọn -> gán ca vượt ngoài ca SV đã đăng ký.
     const realWeekNumber = weekNumber
       || ((state.monthSchedule?.weeks || []).findIndex(w => w === targetSchedule) + 1)
       || state.currentWeek
       || 1;
+
+    // XẾP THỦ CÔNG: admin được phép gán bất kỳ CTV nào, kể cả chưa đăng ký
+    // rảnh, trái vai trò hoặc đã có ca cùng ngày. Chỉ cảnh báo + xác nhận,
+    // không chặn cứng — yêu cầu vận hành thực tế của Ban Điều Hành.
+    const warnings = [];
     if (newStudent) {
-      const declared = newStudent.monthlyAvailableShifts
-        ? (newStudent.monthlyAvailableShifts[realWeekNumber] || newStudent.monthlyAvailableShifts[String(realWeekNumber)])
-        : newStudent.availableShifts;
-      // monthlyAvailableShifts có thể là mảng rỗng (nghĩa là KHÔNG rảnh)
-      if (Array.isArray(declared) && !declared.includes(shiftId)) {
-        showToast(`${newStudent.fullName} KHÔNG đăng ký rảnh ca ${shiftId} ở tuần ${realWeekNumber}! Vui lòng chọn người khác hoặc cập nhật ca rảnh trước.`, 'error');
-        return;
+      const roleLabel = newStudent.role === 'old' ? 'Chính Thức' : 'Tập Sự';
+      const slotLabel = role === 'old' ? 'Chính Thức' : 'Tập Sự';
+      if (newStudent.role !== role) {
+        warnings.push(`${newStudent.fullName} là ${roleLabel}, nhưng vị trí đang chọn là ${slotLabel}.`);
       }
 
-      // Chặn trùng ca cùng ngày (vd gán cả T2_S và T2_C cho một người).
-      const dayKey = (window.SchedulerEngine?.SHIFT_MAP || {})[shiftId]?.dayKey
-        || String(shiftId).split('_')[0];
-      const clash = Object.entries(targetSchedule.scheduleTable).some(([sid, other]) => {
-        if (sid === shiftId) return false;
-        if (other.oldMember?.id === newStudent.id || other.newMember?.id === newStudent.id) return false;
-        const oKey = (window.SchedulerEngine?.SHIFT_MAP || {})[sid]?.dayKey || String(sid).split('_')[0];
-        return oKey === dayKey;
-      });
-      if (clash) {
-        showToast(`${newStudent.fullName} đã được xếp một ca khác trong cùng ngày ${dayKey} ở tuần này!`, 'error');
-        return;
+      const declared = newStudent.monthlyAvailableShifts
+        ? (newStudent.monthlyAvailableShifts[realWeekNumber]
+          || newStudent.monthlyAvailableShifts[String(realWeekNumber)])
+        : newStudent.availableShifts;
+      if (Array.isArray(declared) && !declared.includes(shiftId)) {
+        warnings.push(`${newStudent.fullName} chưa đăng ký rảnh ca ${shiftId} ở tuần ${realWeekNumber}.`);
       }
+
+      const clash = findStudentDayClash(targetSchedule.scheduleTable, shiftId, newStudent.id);
+      if (clash) {
+        const other = SHIFT_MAP[clash.shiftId];
+        const clashLabel = other
+          ? `${other.dayName} (${other.period})`
+          : clash.shiftId;
+        warnings.push(`${newStudent.fullName} đã được xếp ca ${clashLabel} cùng ngày trong tuần này.`);
+      }
+
+      const otherMember = role === 'old' ? slot.newMember : slot.oldMember;
+      if (otherMember && otherMember.id === newStudent.id) {
+        warnings.push(`${newStudent.fullName} đang ở vị trí còn lại của chính ca này.`);
+      }
+    }
+
+    if (warnings.length > 0) {
+      const proceed = typeof window.confirm === 'function'
+        ? window.confirm(
+          '⚠️ Phân công thủ công vượt ràng buộc:\n\n- ' + warnings.join('\n- ')
+            + '\n\nVẫn tiếp tục gán?'
+        )
+        : true;
+      if (!proceed) return;
     }
 
     if (role === 'old') {
