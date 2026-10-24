@@ -771,8 +771,12 @@
           parsed.databaseUrl = DEFAULT_CONFIG.databaseUrl;
           parsed.enabled = true;
         }
+        // `role` là thuộc tính của TỪNG TRANG, không phải của tài khoản/máy.
+        // localStorage dùng chung giữa index.html và admin.html, nên nếu tin
+        // `parsed.role` thì trang sinh viên lưu 'student' sẽ làm admin.html
+        // tưởng nhầm mình là trang sinh viên và chặn mọi lần đẩy Cloud.
         return Object.assign({}, DEFAULT_CONFIG, parsed, {
-          role: getDeclaredRole() || parsed.role || DEFAULT_CONFIG.role,
+          role: getDeclaredRole() || DEFAULT_CONFIG.role,
           deviceId: getOrCreateDeviceId()
         });
       }
@@ -782,7 +786,7 @@
     if (window.TVTS_CLOUD_CONFIG && typeof window.TVTS_CLOUD_CONFIG === 'object') {
       const embedded = window.TVTS_CLOUD_CONFIG;
       return Object.assign({}, DEFAULT_CONFIG, embedded, {
-        role: getDeclaredRole() || embedded.role || DEFAULT_CONFIG.role,
+        role: getDeclaredRole() || DEFAULT_CONFIG.role,
         deviceId: getOrCreateDeviceId()
       });
     }
@@ -846,9 +850,12 @@
   function saveConfig(cfg) {
     try {
       const clean = Object.assign({}, getConfig(), cfg);
+      // Không lưu role vào localStorage: role do meta/window của từng trang
+      // quyết định. Nhờ vậy trang sinh viên không thể làm hỏng chế độ admin.
+      delete clean.role;
       localStorage.setItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(clean));
       notifyStatusChange();
-      return { success: true, config: clean };
+      return { success: true, config: Object.assign({}, clean, { role: getDeclaredRole() || DEFAULT_CONFIG.role }) };
     } catch (e) {
       return { success: false, error: e.message };
     }

@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0f172a">
+  <!-- Trang admin: luôn khai báo role để không bị config 'student' dùng chung localStorage ghi đè. -->
+  <meta name="tvts-cloud-role" content="admin">
   <!-- Trang admin: sau khi đẩy dữ liệu riêng tư thành công, tự cập nhật nhánh công khai. -->
   <meta name="tvts-publish-public" content="true">
   <title>Bảng Điều Hành Quản Trị & Xếp Ca - Tư Vấn Tuyển Sinh</title>
@@ -16,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261024_1252">
+  <link rel="stylesheet" href="css/style.css?v=20261024_1345">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -2102,17 +2104,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261024_1252"></script>
+  <script src="js/a11y_modal.js?v=20261024_1345"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261024_1252"></script>
-  <script src="js/month_calendar.js?v=20261024_1252"></script>
-  <script src="js/scheduler.js?v=20261024_1252"></script>
-  <script src="js/roster.js?v=20261024_1252"></script>
-  <script src="js/common.js?v=20261024_1252"></script>
-  <script src="js/audit.js?v=20261024_1252"></script>
-  <script src="js/store.js?v=20261024_1252"></script>
-  <script src="js/admin.js?v=20261024_1252"></script>
+  <script src="js/cloud_sync.js?v=20261024_1345"></script>
+  <script src="js/month_calendar.js?v=20261024_1345"></script>
+  <script src="js/scheduler.js?v=20261024_1345"></script>
+  <script src="js/roster.js?v=20261024_1345"></script>
+  <script src="js/common.js?v=20261024_1345"></script>
+  <script src="js/audit.js?v=20261024_1345"></script>
+  <script src="js/store.js?v=20261024_1345"></script>
+  <script src="js/admin.js?v=20261024_1345"></script>
 </body>
 </html>
