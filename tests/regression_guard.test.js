@@ -24,6 +24,9 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
+// Fixture CSV tổng hợp duy nhất được phép track: không chứa PII thật, chỉ dùng
+// cho test/CI. Mọi CSV/XLSX/XLS khác vẫn bị cấm track.
+const ALLOWED_TRACKED_FIXTURES = new Set(['tests/fixtures/roster_sample.csv']);
 // CHUẨN HOÁ line ending về \n.
 // File nguồn trong repo dùng CRLF (Windows), nên regex có dạng `;\n  }` sẽ
 // KHÔNG khớp vì thực tế là `;\r\n  }`. Đây là nguyên nhân khiến nhiều test
@@ -878,8 +881,9 @@ runTest('6.10: data/admin_accounts.json phải KHÔNG còn trong git index', () 
     'git ls-files trả về danh sách rỗng — không kiểm chứng được git index');
   assert.ok(!tracked.includes('data/admin_accounts.json'),
     'data/admin_accounts.json vẫn còn được git track — sẽ tiếp tục bị deploy công khai');
-  assert.ok(!tracked.some(f => /\.(csv|xlsx|xls)$/i.test(f)),
-    'Không được track file bảng tính (chứa PII)');
+  assert.ok(!tracked.some(f => /\.(csv|xlsx|xls)$/i.test(f) && !ALLOWED_TRACKED_FIXTURES.has(f)),
+    'Không được track file bảng tính chứa PII (ngoài fixture synthetic)' + 
+    `: ${tracked.filter(f => /\.(csv|xlsx|xls)$/i.test(f) && !ALLOWED_TRACKED_FIXTURES.has(f)).join(', ')}`);
 });
 
 runTest('6.4: File PII không còn được git track', () => {
@@ -893,7 +897,8 @@ runTest('6.4: File PII không còn được git track', () => {
   } catch (e) {
     return; // Không có git (VD: CI artifact) -> bỏ qua
   }
-  const pii = tracked.filter(f => /\.(csv|xlsx|xls)$/i.test(f));
+  const pii = tracked.filter(f => /\.(csv|xlsx|xls)$/i.test(f)
+    && !ALLOWED_TRACKED_FIXTURES.has(f));
   assert.strictEqual(pii.length, 0,
     `Còn file PII được track trong git: ${pii.join(', ')}`);
 });
