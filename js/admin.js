@@ -1802,11 +1802,32 @@
     }
   }
 
+  let lastCloudPushWarningAt = 0;
+  /** Push nền nhưng KHÔNG im lặng nuốt lỗi: cảnh báo người dùng nếu chưa lên Cloud. */
+  function pushCloudWithWarning() {
+    if (!window.CloudSyncManager || typeof window.CloudSyncManager.pushToCloud !== 'function') return;
+    window.CloudSyncManager.pushToCloud().then((res) => {
+      if (res && !res.success && res.error) {
+        const now = Date.now();
+        if (now - lastCloudPushWarningAt > 5000) {
+          lastCloudPushWarningAt = now;
+          showToast(
+            'Đã lưu trên máy nhưng CHƯA đẩy được lên Cloud: ' + res.error,
+            'warning',
+            8000
+          );
+        }
+      }
+    }).catch((err) => {
+      console.warn('[CloudSync] Push error:', err && err.message);
+    });
+  }
+
   function saveStudents(syncImmediate = true) {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
     if (window.CloudSyncManager) {
       if (syncImmediate && canAutoPushToCloud()) {
-        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+        pushCloudWithWarning();
       } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
         window.CloudSyncManager.triggerAutoPush();
       }
@@ -1844,7 +1865,7 @@
     }
     if (window.CloudSyncManager) {
       if (syncImmediate && canAutoPushToCloud()) {
-        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Push error:', err));
+        pushCloudWithWarning();
       } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
         window.CloudSyncManager.triggerAutoPush();
       }
@@ -1921,13 +1942,9 @@ function reapplyManualSlots(monthSchedule) {
           result.skipped.push(`${wk}/${shiftId}: CTV #${id} không còn trong danh sách`);
           return undefined; // undefined = lỗi, null = xoá hẳn
         }
-        const declared = st.monthlyAvailableShifts
-          ? (st.monthlyAvailableShifts[weekIdx + 1] || st.monthlyAvailableShifts[String(weekIdx + 1)])
-          : st.availableShifts;
-        if (Array.isArray(declared) && !declared.includes(shiftId)) {
-          result.skipped.push(`${wk}/${shiftId}: ${st.fullName} không còn rảnh ca này`);
-          return undefined;
-        }
+        // KHÔNG kiểm tra ca rảnh/vai trò ở đây: ca đã được admin gán tay thì
+        // phải được giữ nguyên qua mọi lần auto-schedule. Việc cảnh báo đã
+        // diễn ra lúc gán; reapply không được tự ý xoá quyết định thủ công.
         return st;
       };
 
@@ -1935,19 +1952,8 @@ function reapplyManualSlots(monthSchedule) {
       const newM = resolve(override.newId);
       if (oldM === undefined || newM === undefined) return;
 
-      if (oldM && newM && oldM.id === newM.id) {
-        result.skipped.push(`${wk}/${shiftId}: không thể gán cùng 1 người cho cả 2 vị trí`);
-        return;
-      }
-      if (oldM && oldM.role !== 'old') {
-        result.skipped.push(`${wk}/${shiftId}: ${oldM.fullName} không phải Chính Thức`);
-        return;
-      }
-      if (newM && newM.role !== 'new') {
-        result.skipped.push(`${wk}/${shiftId}: ${newM.fullName} không phải Tập Sự`);
-        return;
-      }
-
+      // Giữ đúng lựa chọn thủ công, kể cả trường hợp cùng một người ở cả 2 vị
+      // trí hoặc trái vai trò. UI sẽ hiển thị cảnh báo tương ứng.
       slot.oldMember = oldM;
       slot.newMember = newM;
       slot.status = (oldM && newM) ? 'full' : ((oldM || newM) ? 'partial' : 'empty');
@@ -1985,7 +1991,7 @@ function runFullSchedule() {
       }
       if (reapplied.skipped.length > 0) {
         console.warn('[Admin] Bỏ qua phân công chỉnh tay không còn hợp lệ:', reapplied.skipped);
-        showToast(`⚠️ Có ${reapplied.skipped.length} phân công chỉnh tay không còn hợp lệ (CTV đã bị xoá / không còn rảnh ca) và đã được bỏ qua. Xem Console để biết chi tiết.`, 'warning', 8000);
+        showToast(`⚠️ Có ${reapplied.skipped.length} phân công chỉnh tay không còn hợp lệ (CTV đã bị xoá / ô ca không còn) và đã được bỏ qua. Xem Console để biết chi tiết.`, 'warning', 8000);
       }
     }
 
@@ -2314,7 +2320,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
     // 5. Đồng bộ lên Firebase Cloud (chỉ khi Cloud đang bật)
     if (canAutoPushToCloud()) {
-      window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] Month switch error:', err));
+      pushCloudWithWarning();
     }
 
     const monthLabel = (targetMonth === 1 && targetYear === 2027) ? 'Tháng 01/2027 (Kỳ 13)' : `Tháng ${pad2(targetMonth)}/${targetYear}`;
@@ -4079,6 +4085,8 @@ window.adminDeleteStudent = async function(studentId) {
 
     const oldMem = slot.oldMember;
     const newMem = slot.newMember;
+    const oldRoleMismatch = !!(oldMem && oldMem.role && oldMem.role !== 'old');
+    const newRoleMismatch = !!(newMem && newMem.role && newMem.role !== 'new');
 
     let statusPill = '';
     if (slot.status === 'full') {
@@ -4088,11 +4096,14 @@ window.adminDeleteStudent = async function(studentId) {
     } else {
       statusPill = `<span class="shift-status-pill empty">Trống</span>`;
     }
+    if (oldRoleMismatch || newRoleMismatch) {
+      statusPill += ` <span class="shift-status-pill warning" title="Ca này đang có người trái vai trò do xếp thủ công">⚠️ Trái vai trò</span>`;
+    }
 
     const oldCard = oldMem ? `
       <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
         <div class="member-info">
-          <span class="member-role-tag">🎓 Chính Thức</span>
+          <span class="member-role-tag">🎓 Chính Thức${oldRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
           <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
         </div>
@@ -4107,7 +4118,7 @@ window.adminDeleteStudent = async function(studentId) {
     const newCard = newMem ? `
       <div class="duty-member-card role-new" title="Tập Sự">
         <div class="member-info">
-          <span class="member-role-tag">🌱 Tập Sự</span>
+          <span class="member-role-tag">🌱 Tập Sự${newRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
           <span class="member-name">${escapeHtml(newMem.fullName)}</span>
           <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
         </div>
@@ -6008,7 +6019,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       mirrorToIndexedDb(STORAGE_KEYS.WEB_BACKUPS);
 window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORAGE_KEYS.WEB_BACKUPS] } }));
       if (canAutoPushToCloud()) {
-        window.CloudSyncManager.pushToCloud().catch(err => console.warn('[CloudSync] WebBackups push error:', err));
+        pushCloudWithWarning();
       }
     } catch (err) {
       console.error('Lỗi khi lưu bản sao lưu web:', err);

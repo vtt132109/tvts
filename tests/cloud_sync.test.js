@@ -2279,6 +2279,50 @@ console.log('\n▶ [GROUP 16] Kiểm Tra Kết Nối Firebase:');
 }
 
 // -----------------------------------------------------------------------------
+// GROUP 17: Không mất dữ liệu local khi push thất bại / pull Cloud rỗng
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 17] Chống Ghi Đè Khi Push Thất Bại:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([
+    { id: 'local_1', studentId: 'L1', fullName: 'Local One', role: 'old', availableShifts: [] }
+  ]));
+  csm.saveConfig({ enabled: true, databaseUrl: 'https://guard-db.firebaseio.com' });
+
+  env.window.fetch = async () => ({
+    ok: false, status: 401, statusText: 'Unauthorized',
+    text: async () => 'Permission denied'
+  });
+  env.sandbox.fetch = env.window.fetch;
+  const push = await csm.pushToCloud();
+  assert(push.success === false, '17.1: Push 401 phải trả thất bại');
+  assert(Number(csm.getConfig().localUpdatedAt) > 0,
+    '17.1b: Push thất bại phải giữ cờ localUpdatedAt (dữ liệu chưa lên Cloud)');
+
+  // Cloud rỗng/updatedAt=0; phải hỏi trước khi ghi đè local.
+  env.window.fetch = async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    json: async () => ({ updatedAt: 0, students: [] }),
+    text: async () => '{}'
+  });
+  env.sandbox.fetch = env.window.fetch;
+  env.window.confirm = () => false;
+  const pullBlocked = await csm.pullFromCloud();
+  assert(pullBlocked.success === false && pullBlocked.conflict === true,
+    '17.2: Local có thay đổi chưa đẩy phải chặn pull Cloud rỗng khi người dùng Cancel');
+
+  env.window.confirm = () => true;
+  const pullAccepted = await csm.pullFromCloud();
+  assert(pullAccepted.success === true,
+    '17.3: Người dùng OK thì được phép ghi đè bằng bản Cloud');
+  assert(Number(csm.getConfig().localUpdatedAt) === 0,
+    '17.3b: Sau khi chấp nhận pull, phải xoá cờ localUpdatedAt');
+}
+
+// -----------------------------------------------------------------------------
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');
