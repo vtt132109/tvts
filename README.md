@@ -177,7 +177,7 @@ npx serve .
   - **Chống dò mật khẩu/PIN:** sai 5 lần liên tiếp (đúng định dạng) sẽ tạm khoá 60 giây; gõ nhầm/rỗng không bị tính.
   - **Phiên đăng nhập tự hết hạn sau 12 giờ**, phù hợp máy dùng chung ở văn phòng.
   - Phím tắt mở bí mật từ trang sinh viên: `Ctrl + Shift + A` (hoặc `Cmd + Shift + A`).
-- **Xếp ca thủ công toàn quyền:** nút **🧩 XẾP THỦ CÔNG** tạo khung lịch trống 4 tuần × 10 ca nếu tháng chưa có lịch; bấm vào bất kỳ ô ca trống nào để gán **mọi CTV**, kể cả người chưa đăng ký ca rảnh. Hệ thống cảnh báo nếu chưa đăng ký, trái vai trò, trùng ca cùng ngày hoặc trùng người trong cùng ca; admin vẫn xác nhận để gán. Ca trái vai trò được đánh dấu ⚠️ trên bảng.
+- **Xếp ca thủ công toàn quyền:** nút **🧩 XẾP THỦ CÔNG** tạo khung lịch trống 4 tuần × 10 ca nếu tháng chưa có lịch; bấm vào bất kỳ ô ca trống nào để gán **mọi CTV**, kể cả người chưa đăng ký ca rảnh. Nếu danh sách CTV đang rỗng, app hướng dẫn **Nhập CSV** hoặc đăng nhập Google để kéo 58 CTV trước. Hệ thống cảnh báo nếu chưa đăng ký, trái vai trò, trùng ca cùng ngày hoặc trùng người trong cùng ca; admin vẫn xác nhận để gán. Ca trái vai trò được đánh dấu ⚠️ trên bảng.
 - **Thuật toán luân phiên 4 tuần cho 58 CTV (100% Đều Có Ca):**
   - Đảm bảo mỗi ca trực luôn có đúng **2 bạn (1 Cũ + 1 Mới)**.
   - Phân bổ công bằng luân phiên cả 4 tuần, không một sinh viên nào bị bỏ sót.
