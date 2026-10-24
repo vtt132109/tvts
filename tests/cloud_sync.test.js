@@ -2243,6 +2243,42 @@ console.log('\n▶ [GROUP 15] Auto-Pull Khi Chưa Đăng Nhập:');
 }
 
 // -----------------------------------------------------------------------------
+// GROUP 16: testConnection không báo thành công giả
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 16] Kiểm Tra Kết Nối Firebase:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://test-connection.firebaseio.com'
+  });
+
+  env.window.fetch = async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    json: async () => ({ error: 'Permission denied' }),
+    text: async () => '{"error":"Permission denied"}'
+  });
+  env.sandbox.fetch = env.window.fetch;
+  const denied = await csm.testConnection(csm.getConfig());
+  assert(denied.success === false && /Permission denied/.test(denied.message || ''),
+    '16.1: HTTP 200 + {"error"} phải báo thất bại, không được báo thành công giả');
+  assert(/đăng nhập Google/i.test(denied.message || ''),
+    '16.1b: Lỗi 401/403 phải kèm hướng dẫn đăng nhập Google');
+
+  env.window.fetch = async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    json: async () => null,
+    text: async () => 'null'
+  });
+  env.sandbox.fetch = env.window.fetch;
+  const empty = await csm.testConnection(csm.getConfig());
+  assert(empty.success === true,
+    '16.2: Cloud rỗng (body null) vẫn là kết nối hợp lệ');
+}
+
+// -----------------------------------------------------------------------------
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');

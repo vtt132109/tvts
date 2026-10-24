@@ -210,7 +210,7 @@ firebase deploy --only database --project <project-id>
 | `tvts_requests/swaps` cho phép đọc công khai MSSV/uid/lý do | **Đã xử lý (2026-10-24):** chỉ staff đọc cả collection, chủ sở hữu đọc đúng yêu cầu của mình; trạng thái công khai nằm ở `tvts_public.swapStatuses` (không lý do/tên/uid). |
 | PATCH mù có thể ghi đè dữ liệu Cloud | **Đã xử lý (2026-10-24):** preflight `updatedAt`, chặn xung đột, guard CTA/tài khoản teo bất thường, chỉ PATCH key thay đổi; force chỉ sau khi xác nhận. |
 | Deploy có thể lên production dù test đỏ | **Đã xử lý (2026-10-24):** `static.yml` có job `test`, `deploy.needs: test`; quét PIN/mật khẩu cả 3 dạng key trong `_site/js`. |
-| Cloud còn 3 tài khoản profile-only (`thien`, `phuong`, `diephoi`) | **Đã xử lý (2026-10-24):** xoá khỏi `tvts_production_data/adminUsers`; chỉ còn `admin` dạng hash, không plaintext. |
+| Cloud còn 3 tài khoản profile-only (`thien`, `phuong`, `diephoi`) | **Đã xử lý (2026-10-24):** xoá khỏi `tvts_production_data/adminUsers`; admin purge **một lần** 3 username này khỏi localStorage trên mỗi máy khi nạp danh sách. Chỉ còn `admin` dạng hash, không plaintext. |
 | Dữ liệu công khai chứa SĐT/email/số tài khoản/hash | **Đã sửa:** `tvts_public` chỉ nhận `id`, `studentId`, `fullName`, `role`, `faculty`, `className`, ca rảnh, lịch; **lịch/sự kiện được quét sạch PII ở mọi cấp**; test `9.1-9.32`, `10.17-10.20` chặn tái diễn |
 | Cán bộ dùng chung tài khoản Firebase Email/Password | **Đã sửa:** UI admin dùng **Google Login**; quyền Cloud kiểm tra UID trong `/staff` hoặc email trong `/staff_emails`; Email/Password chỉ còn fallback trong code/test |
 | Sinh viên phải có tài khoản mới đăng ký/đổi ca được | **Đã sửa:** không có trang đăng nhập; app tự tạo phiên **Anonymous** và gửi vào `tvts_requests` |

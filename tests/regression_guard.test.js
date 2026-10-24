@@ -1584,6 +1584,15 @@ runTest('6.14: Ghi đè Cloud chỉ được force sau khi người dùng xác n
     'Auto-push không được tự động force');
 });
 
+runTest('6.15: Google login phải tự kéo dữ liệu Cloud trước khi làm việc', () => {
+  const block = adminJs.match(/async function handleAdminGoogleLogin\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(block, 'Thiếu handleAdminGoogleLogin()');
+  const authIdx = block[0].indexOf('authenticateSuccess');
+  const pullIdx = block[0].indexOf('pullFromCloud');
+  assert.ok(authIdx !== -1 && pullIdx > authIdx,
+    'Sau authenticateSuccess phải gọi pullFromCloud để máy mới nhận dữ liệu mới nhất');
+});
+
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round(passed / (total || 1) * 100)}%)`);

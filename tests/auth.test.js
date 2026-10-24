@@ -452,6 +452,42 @@ runTest('Tự vô hiệu hoá tài khoản còn dùng credential mặc định c
     'Tài khoản admin/0000 cũ không được đăng nhập nữa');
 });
 
+runTest('Purge một lần 3 tài khoản cũ thien/phuong/diephoi trên máy', () => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
+  AdminAuth.logout();
+  mockLocalStorage.removeItem('ts_admin_retired_purge_20261024');
+
+  const retiredProfiles = [
+    { id: 'usr_old_thien', username: 'thien', fullName: 'Thiện Cũ', role: 'Trưởng ban điều hành' },
+    { id: 'usr_old_phuong', username: 'phuong', fullName: 'Phương Cũ', role: 'Trưởng ban điều hành' },
+    { id: 'usr_old_diephoi', username: 'diephoi', fullName: 'Điều Phối Cũ', role: 'Điều phối viên tuyển sinh' }
+  ];
+  mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([...retiredProfiles, QA_ADMIN_A]));
+
+  window.adminReloadAdminUsers();
+  let users = AdminAuth.getAdminUsers();
+  assert.strictEqual(users.length, 1, 'Phải xoá 3 tài khoản đã nghỉ, chỉ giữ tài khoản hợp lệ');
+  assert.strictEqual(users[0].username, QA_ADMIN_A.username);
+  assert.strictEqual(mockLocalStorage.getItem('ts_admin_retired_purge_20261024'), '1',
+    'Phải đặt cờ purge một lần');
+
+  // Cờ một lần: nếu sau này tạo lại username phuong thì KHÔNG bị xoá lặp lại.
+  const recreated = {
+    id: 'usr_recreated_phuong',
+    username: 'phuong',
+    password: 'Phuong#2026',
+    pin: '334455',
+    fullName: 'Phương Mới',
+    role: 'Điều phối viên tuyển sinh'
+  };
+  mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([QA_ADMIN_A, recreated]));
+  window.adminReloadAdminUsers();
+  users = AdminAuth.getAdminUsers();
+  assert.strictEqual(users.length, 2, 'Sau purge một lần, username tạo lại phải được giữ');
+  assert.ok(users.some(u => u.username === 'phuong'));
+});
+
 runTest('Thiết lập lần đầu: chặn xác nhận PIN sai và tạo được Trưởng ban khi storage trống', () => {
   mockLocalStorage.clear();
   mockSessionStorage.clear();
