@@ -133,6 +133,8 @@ require('../js/scheduler.js');
 // 3. Nạp và kích hoạt Student Portal Logic
 const studentJsPath = path.resolve(__dirname, '../js/student.js');
 const studentJsContent = fs.readFileSync(studentJsPath, 'utf8');
+// Tiện ích dùng chung phải nạp trước (giống thứ tự <script> trong index.html).
+eval(fs.readFileSync(path.resolve(__dirname, '../js/common.js'), 'utf8'));
 eval(studentJsContent);
 
 // Test Runner Helpers

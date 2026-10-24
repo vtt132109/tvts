@@ -16,7 +16,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261024_1115">
+  <link rel="stylesheet" href="css/style.css?v=20261024_1143">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -292,6 +292,11 @@
           <!-- Nút Trung Tâm Sao Lưu & Dữ Liệu (Task 27) -->
           <button type="button" class="btn btn-secondary btn-sm" id="btn-open-backup-center" onclick="window.adminOpenBackupModal && window.adminOpenBackupModal()" title="Sao lưu và Phục hồi cơ sở dữ liệu (.json)" style="font-weight: 700;">
             <span>💾 Sao Lưu & Dữ Liệu</span>
+          </button>
+
+          <!-- Nút Nhật Ký Thao Tác (#10) -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-open-audit-log" onclick="window.adminOpenAuditModal && window.adminOpenAuditModal()" title="Xem nhật ký thao tác quản trị (lưu trên máy này)" style="font-weight: 700;">
+            <span>🧾 Nhật Ký</span>
           </button>
 
           <!-- Nút Trung Tâm Đồng Bộ Đám Mây (Cloud Sync) -->
@@ -2001,18 +2006,63 @@
     </div>
   </div>
 
+  <!-- ====================================================================
+       MODAL 9: NHẬT KÝ THAO TÁC QUẢN TRỊ (#10)
+       Lưu cục bộ trên máy đang dùng (localStorage), tối đa 200 dòng.
+       ==================================================================== -->
+  <div class="modal-overlay modal-backdrop" id="modal-audit-log" role="dialog" aria-modal="true" aria-labelledby="modal-audit-log-title" tabindex="-1" style="display: none;">
+    <div class="modal-content" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-audit-log-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>🧾 Nhật Ký Thao Tác Quản Trị</span>
+        </h3>
+        <button type="button" class="modal-close" id="btn-close-audit-modal" aria-label="Đóng hộp thoại">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="audit-toolbar">
+          <label class="audit-search-wrap" for="audit-search-input">
+            <span class="audit-search-icon" aria-hidden="true">🔍</span>
+            <input type="search" id="audit-search-input" class="audit-search-input"
+                   placeholder="Tìm theo tên CTV, MSSV, thao tác…" autocomplete="off">
+          </label>
+          <select id="audit-group-filter" class="audit-group-select" aria-label="Lọc theo nhóm thao tác"></select>
+        </div>
+
+        <div class="audit-summary" id="audit-summary"></div>
+
+        <div class="audit-list-container" id="audit-list-container"></div>
+
+        <div class="audit-disclaimer">
+          ℹ️ Nhật ký chỉ lưu trên trình duyệt này (không đồng bộ Cloud) và chỉ để truy vết.
+          Người có quyền truy cập máy vẫn có thể sửa hoặc xoá — không dùng làm bằng chứng pháp lý.
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-export-audit">⬇️ Xuất JSON</button>
+          <button type="button" class="btn btn-danger-outline btn-sm" id="btn-clear-audit">🧹 Xoá nhật ký</button>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-audit-footer">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container (Accessibility compliant) -->
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261024_1115"></script>
+  <script src="js/a11y_modal.js?v=20261024_1143"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261024_1115"></script>
-  <script src="js/month_calendar.js?v=20261024_1115"></script>
-  <script src="js/scheduler.js?v=20261024_1115"></script>
-  <script src="js/roster.js?v=20261024_1115"></script>
-  <script src="js/admin.js?v=20261024_1115"></script>
+  <script src="js/cloud_sync.js?v=20261024_1143"></script>
+  <script src="js/month_calendar.js?v=20261024_1143"></script>
+  <script src="js/scheduler.js?v=20261024_1143"></script>
+  <script src="js/roster.js?v=20261024_1143"></script>
+  <script src="js/common.js?v=20261024_1143"></script>
+  <script src="js/audit.js?v=20261024_1143"></script>
+  <script src="js/store.js?v=20261024_1143"></script>
+  <script src="js/admin.js?v=20261024_1143"></script>
 </body>
 </html>

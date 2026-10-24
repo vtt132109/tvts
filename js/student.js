@@ -805,29 +805,13 @@ function paintSlotAvailability() {
     });
   }
 
+  // Định nghĩa DUY NHẤT nằm ở js/common.js (nạp trước file này).
   function formatVNDateTime(isoStr) {
-    if (!isoStr) return '';
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+    return window.CommonUtils.formatVNDateTime(isoStr);
   }
 
   function getRemainingText(targetIso) {
-    const diff = new Date(targetIso).getTime() - Date.now();
-    if (diff <= 0) return 'Đã hết hạn';
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    const remHours = hours % 24;
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (days > 0) {
-      return `Còn ${days} ngày ${remHours} giờ`;
-    }
-    return `Còn ${hours} giờ ${mins} phút`;
+    return window.CommonUtils.getRemainingText(targetIso);
   }
 
   /**
@@ -2040,6 +2024,290 @@ function paintSlotAvailability() {
     elements.lookupResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // ==========================================================================
+  // LỊCH SỬ CA TRỰC CÁ NHÂN (tổng hợp nhiều tháng)
+  // ==========================================================================
+
+  /** Số tháng tối đa đưa vào lịch sử (chống phình DOM khi kho lưu trữ quá dài). */
+  const SHIFT_HISTORY_MAX_MONTHS = 24;
+
+  /** '2026-10' — khoá tháng dùng chung với kho lưu trữ của Admin. */
+  function monthKeyOf(month, year) {
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    if (!m || !y) return '';
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+
+  /** Chuẩn hoá mốc tháng từ khoá 'YYYY-MM' hoặc từ chính object lịch. */
+  function resolveMonthMeta(rawKey, schedule) {
+    let month = null;
+    let year = null;
+    const match = /^(\d{4})-(\d{1,2})$/.exec(String(rawKey || '').trim());
+    if (match) {
+      year = parseInt(match[1], 10);
+      month = parseInt(match[2], 10);
+    }
+    if ((!month || !year) && schedule && typeof schedule === 'object') {
+      month = parseInt(schedule.month, 10) || null;
+      year = parseInt(schedule.year, 10) || null;
+    }
+    if (!month || !year || month < 1 || month > 12) return null;
+    return {
+      key: monthKeyOf(month, year),
+      month,
+      year,
+      label: formatMonthLabel(month, year)
+    };
+  }
+
+  /**
+   * Gom mọi lịch tháng đang có trên máy: kho lưu trữ ALL_MONTHS, các bản sao
+   * lưu web, tháng đang áp dụng và cache tháng liền trước.
+   *
+   * KHÔNG gọi getPrevMonthSchedule() ở đây vì hàm đó có thể tự sinh lịch mẫu —
+   * đưa dữ liệu tự sinh vào "lịch sử đã trực" là bịa lịch sử.
+   */
+  function collectArchivedMonthSchedules() {
+    const byKey = new Map();
+
+    const accept = (rawKey, schedule, source) => {
+      if (!schedule || typeof schedule !== 'object') return;
+      const meta = resolveMonthMeta(rawKey, schedule);
+      if (!meta) return;
+      const existing = byKey.get(meta.key);
+      // Nguồn thật (archive/current/previous) thắng bản sao lưu.
+      if (existing && existing.source !== 'backup' && source === 'backup') return;
+      byKey.set(meta.key, Object.assign(meta, { schedule, source }));
+    };
+
+    // 1. Kho lưu trữ toàn bộ tháng do Admin ghi khi chuyển kỳ
+    try {
+      const rawAll = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
+      if (rawAll) {
+        const all = JSON.parse(rawAll) || {};
+        Object.entries(all).forEach(([key, entry]) => {
+          if (!entry) return;
+          accept(key, entry.schedule || entry, 'archive');
+        });
+      }
+    } catch (e) {
+      // Kho lưu trữ hỏng (JSON lỗi, hết quota...) → coi như chưa có tháng nào.
+      // Không log kèm stack: đây là dữ liệu cũ của máy, không phải lỗi code.
+      console.warn('[Portal] Bỏ qua kho lưu trữ tháng không đọc được.');
+    }
+
+    // 2. Bản sao lưu web (mỗi bản chứa payload.monthSchedule)
+    try {
+      const rawBackups = localStorage.getItem(STORAGE_KEYS.WEB_BACKUPS);
+      if (rawBackups) {
+        const backups = JSON.parse(rawBackups) || [];
+        backups.forEach(b => {
+          const sched = b && b.payload && b.payload.monthSchedule;
+          if (sched) accept(b.monthKey || b.key, sched, 'backup');
+        });
+      }
+    } catch (e) {}
+
+    // 3. Tháng đang áp dụng
+    const cur = getActiveMonth();
+    accept(monthKeyOf(cur.month, cur.year), readMonthScheduleStore(), 'current');
+
+    // 4. Cache tháng liền trước (chỉ đọc, không tự sinh)
+    const prev = getPrevActiveMonth();
+    try {
+      const cachedPrev = localStorage.getItem(STORAGE_KEYS.PREV_MONTH_SCHEDULE);
+      if (cachedPrev) {
+        const parsed = JSON.parse(cachedPrev);
+        if (parsed
+          && parseInt(parsed.month, 10) === prev.month
+          && parseInt(parsed.year, 10) === prev.year) {
+          accept(monthKeyOf(prev.month, prev.year), parsed, 'previous');
+        }
+      }
+    } catch (e) {}
+
+    // Mới nhất lên đầu (khoá 'YYYY-MM' so sánh chuỗi là đủ)
+    return Array.from(byKey.values()).sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+  }
+
+  /**
+   * Ngày diễn ra ca trực, suy ra từ MonthCalendarHelper.
+   * shiftId dạng 'T2_S' -> lấy ngày Thứ Hai của tuần tương ứng.
+   */
+  function resolveShiftDate(year, month, weekNum, shiftId) {
+    const dayKey = String(shiftId || '').split('_')[0];
+    if (!dayKey) return null;
+
+    let weeks = [];
+    try {
+      weeks = buildMonthWeeksConfig(month, year) || [];
+    } catch (e) {
+      return null;
+    }
+
+    const week = weeks[parseInt(weekNum, 10) - 1];
+    const day = week && week.days ? week.days[dayKey] : null;
+    const dateStr = day && day.dateStr;
+    if (!dateStr) return null;
+
+    const parts = String(dateStr).split('/');
+    if (parts.length !== 2) return null;
+    const d = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (!d || !m) return null;
+    return new Date(year, m - 1, d);
+  }
+
+  /** Gắn nhãn ngày và trạng thái thời gian (sắp tới / hôm nay / đã qua). */
+  function decorateHistoryShift(shift, monthMeta) {
+    shift.timing = 'unknown';
+    shift.dateLabel = '';
+
+    const date = resolveShiftDate(monthMeta.year, monthMeta.month, shift.weekNum, shift.shiftId);
+    if (date && !isNaN(date.getTime())) {
+      shift.dateLabel = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((date.getTime() - today.getTime()) / 86400000);
+      if (diffDays > 0) shift.timing = 'upcoming';
+      else if (diffDays === 0) shift.timing = 'today';
+      else shift.timing = 'past';
+    }
+    return shift;
+  }
+
+  /**
+   * Tổng hợp lịch sử trực của một MSSV trên toàn bộ các tháng lưu trong máy.
+   * Hàm thuần (chỉ đọc localStorage) — không ghi gì, không gọi mạng.
+   */
+  function buildStudentShiftHistory(mssv, options) {
+    const target = String(mssv || '').trim().toLowerCase();
+    const limit = (options && options.limit) || SHIFT_HISTORY_MAX_MONTHS;
+    const history = {
+      mssv: target,
+      months: [],
+      totalShifts: 0,
+      totalMonths: 0,
+      upcomingShifts: 0,
+      passedShifts: 0,
+      limited: false
+    };
+    if (!target) return history;
+
+    const all = collectArchivedMonthSchedules();
+    const picked = all.slice(0, limit);
+    history.limited = all.length > picked.length;
+
+    picked.forEach(meta => {
+      const shifts = extractStudentShiftsFromSchedule(target, meta.schedule);
+      if (!shifts || shifts.length === 0) return;
+
+      const decorated = shifts
+        .map(s => decorateHistoryShift(s, meta))
+        .sort((a, b) => {
+          if (a.date && b.date) return a.date - b.date;
+          if (a.date) return -1;
+          if (b.date) return 1;
+          return (a.weekNum - b.weekNum) || String(a.shiftId).localeCompare(String(b.shiftId));
+        });
+
+      decorated.forEach(s => {
+        if (s.timing === 'upcoming' || s.timing === 'today') history.upcomingShifts++;
+        else if (s.timing === 'past') history.passedShifts++;
+      });
+
+      history.months.push(Object.assign({}, meta, { shifts: decorated, count: decorated.length }));
+      history.totalShifts += decorated.length;
+    });
+
+    history.totalMonths = history.months.length;
+    return history;
+  }
+
+  const HISTORY_TIMING_LABELS = {
+    upcoming: { text: '⏳ Sắp tới', cls: 'upcoming' },
+    today: { text: '📍 Hôm nay', cls: 'today' },
+    past: { text: '✓ Đã qua', cls: 'past' },
+    unknown: { text: '', cls: 'unknown' }
+  };
+
+  /** Khối "Lịch sử ca trực" hiển thị trong Thẻ Cá Nhân. */
+  function renderShiftHistorySection(history) {
+    const head = `
+      <div class="shift-history-head">
+        <h4>📜 Lịch sử ca trực của bạn</h4>
+        <span class="shift-history-count">${history ? `${history.totalMonths} tháng · ${history.totalShifts} ca` : '0 ca'}</span>
+      </div>
+    `;
+
+    if (!history || history.totalMonths === 0) {
+      return `
+        <div class="shift-history-card" id="student-shift-history">
+          ${head}
+          <div class="shift-history-empty">
+            Chưa có dữ liệu ca trực từ các tháng trước. Khi Ban Điều Hành chốt lịch,
+            ca trực của bạn sẽ được lưu vào đây để tra cứu lại.
+          </div>
+        </div>
+      `;
+    }
+
+    const activeMonth = getActiveMonth();
+    const activeKey = monthKeyOf(activeMonth.month, activeMonth.year);
+
+    const monthsHtml = history.months.map(m => {
+      const isActive = m.key === activeKey;
+      const shiftsHtml = m.shifts.map(s => {
+        const badge = HISTORY_TIMING_LABELS[s.timing] || HISTORY_TIMING_LABELS.unknown;
+        return `
+          <li class="history-shift-item timing-${badge.cls}">
+            <span class="history-shift-week">Tuần ${escapeHtml(String(s.weekNum))}</span>
+            <span class="history-shift-main">
+              <strong>${escapeHtml(s.shift.dayName)}</strong>
+              <span class="history-shift-time">${escapeHtml(s.shift.period)} · ${escapeHtml(s.shift.time)}</span>
+            </span>
+            ${s.dateLabel ? `<span class="history-shift-date">${escapeHtml(s.dateLabel)}</span>` : ''}
+            ${badge.text ? `<span class="history-shift-badge">${badge.text}</span>` : ''}
+          </li>
+        `;
+      }).join('');
+
+      return `
+        <details class="shift-history-month"${isActive ? ' open' : ''}>
+          <summary>
+            <span class="history-month-label">${escapeHtml(m.label)}</span>
+            ${isActive ? '<span class="history-month-tag">Kỳ hiện tại</span>' : ''}
+            <span class="history-month-count">${m.count} ca</span>
+          </summary>
+          <ul class="history-shift-list">${shiftsHtml}</ul>
+        </details>
+      `;
+    }).join('');
+
+    return `
+      <div class="shift-history-card" id="student-shift-history">
+        ${head}
+        <div class="shift-history-stats">
+          <div class="history-stat">
+            <span class="history-stat-value">${history.totalShifts}</span>
+            <span class="history-stat-label">Tổng ca đã nhận</span>
+          </div>
+          <div class="history-stat">
+            <span class="history-stat-value">${history.totalMonths}</span>
+            <span class="history-stat-label">Số tháng tham gia</span>
+          </div>
+          <div class="history-stat">
+            <span class="history-stat-value">${history.upcomingShifts}</span>
+            <span class="history-stat-label">Ca sắp tới</span>
+          </div>
+        </div>
+        <div class="shift-history-months">${monthsHtml}</div>
+        ${history.limited ? `<div class="shift-history-note">Chỉ hiển thị ${SHIFT_HISTORY_MAX_MONTHS} tháng gần nhất.</div>` : ''}
+      </div>
+    `;
+  }
+
   /**
    * Render Thẻ Lịch Trực Cá Nhân Điện Tử (Task 2 & Task 4)
    * Tuyệt đối KHÔNG có dặn dò trang phục và KHÔNG hiển thị vai trò
@@ -2059,6 +2327,9 @@ function paintSlotAvailability() {
         mySwaps = allSwaps.filter(s => s.studentId?.toLowerCase() === student.studentId?.toLowerCase());
       }
     } catch (e) {}
+
+    // Lịch sử trực tổng hợp toàn bộ các tháng còn lưu trong máy
+    const shiftHistory = buildStudentShiftHistory(student.studentId);
 
     const renderShiftList = (shifts, isCurrent) => {
       if (!shifts || shifts.length === 0) {
@@ -2184,6 +2455,9 @@ function paintSlotAvailability() {
             <div id="lookup-shifts-prev" class="personal-shifts-list" style="display: none; margin-top: 1rem;">
               ${prevShiftsHtml}
             </div>
+
+            <!-- Lịch Sử Ca Trực Nhiều Tháng -->
+            ${renderShiftHistorySection(shiftHistory)}
 
             <!-- Lịch Sử Đổi Ca -->
             ${swapsHtml}
@@ -2624,7 +2898,11 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     getMonthlyShifts: () => monthlyAvailableShifts,
     loadAllStudents,
     switchRegWeek,
-    renderMonthOverview
+    renderMonthOverview,
+    // #12: lịch sử ca trực nhiều tháng
+    buildShiftHistory: (mssv, options) => buildStudentShiftHistory(mssv, options),
+    collectArchivedMonthSchedules,
+    renderShiftHistorySection
   };
 
   window.studentOpenSwapModal = (shiftId = null, weekNum = null, specificMssv = null) => {

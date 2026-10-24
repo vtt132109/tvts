@@ -140,6 +140,8 @@ global.document = {
 const adminJsPath = path.resolve(__dirname, '../js/admin.js');
 const adminJsContent = fs.readFileSync(adminJsPath, 'utf8');
 
+// Tiện ích dùng chung phải nạp trước (giống thứ tự <script> trong admin.html).
+eval(fs.readFileSync(path.resolve(__dirname, '../js/common.js'), 'utf8'));
 eval(adminJsContent);
 
 const { WebBackupManager } = global.window;
