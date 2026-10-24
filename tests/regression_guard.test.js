@@ -1621,6 +1621,23 @@ runTest('6.15: Google login phải tự kéo dữ liệu Cloud trước khi làm
     'Sau authenticateSuccess phải gọi pullFromCloud để máy mới nhận dữ liệu mới nhất');
 });
 
+runTest('3.16: Tạo lịch trống để xếp tay mọi ngày/CTV', () => {
+  assert.ok(/function ensureBlankMonthSchedule\s*\(/.test(adminJs),
+    'Thiếu ensureBlankMonthSchedule để tạo khung 4 tuần × 10 ca');
+  assert.ok(/window\.adminCreateBlankMonth = function/.test(adminJs),
+    'Thiếu nút/hàm adminCreateBlankMonth');
+  const fn = adminJs.match(/function ensureBlankMonthSchedule\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(fn, 'Không tìm thấy ensureBlankMonthSchedule');
+  assert.ok(/\(SHIFTS \|\| \[\]\)\.forEach/.test(fn[0]),
+    'Phải tạo đủ các ca từ SchedulerEngine.SHIFTS');
+  assert.ok(/oldMember: null/.test(fn[0]) && /newMember: null/.test(fn[0]),
+    'Khung mới phải có ô Chính thức/Tập sự trống');
+  assert.ok(/Chưa có Chính Thức/.test(adminJs) && /Chưa có Tập Sự/.test(adminJs),
+    'Ô ca trống phải bấm được để mở modal gán tay');
+  assert.ok(/id="btn-admin-manual-schedule"/.test(adminHtml),
+    'admin.html phải có nút Xếp thủ công');
+});
+
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round(passed / (total || 1) * 100)}%)`);
