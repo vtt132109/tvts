@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-543%2F543%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-548%2F548%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -82,7 +82,7 @@ tvts/
 │   # danh sách chuẩn giờ nhập từ CSV qua Admin → Sinh Viên → Nhập CSV
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 18 bộ kiểm thử tự động — 543 test cases
+├── tests/                               # 18 bộ kiểm thử tự động — 548 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, thiết lập lần đầu & mã PIN
@@ -224,7 +224,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (543/543 Tests PASS — 18 bộ, 100%)
+### Kết Quả Kiểm Thử (548/548 Tests PASS — 18 bộ, 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -238,7 +238,7 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 8 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
 | 9 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
 | 10 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 248/248 |
+| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 253/253 |
 | 12 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
 | 13 | Lưu Trữ Đám Mây & Chống Ghi Đè | 5/5 |
 | 14 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
@@ -250,6 +250,7 @@ node tests/run_all_tests.js   # hoặc: npm test
 **Cloud Sync (Suite 11)** khóa các hành vi an toàn mới:
 - Preflight `updatedAt` trước khi PATCH; chặn xung đột từ thiết bị khác và chặn danh sách CTV/tài khoản cán bộ teo bất thường (có `force` sau khi xác nhận).
 - Chỉ PATCH các key thực sự đổi; không bao giờ gửi `students`/`adminUsers` rỗng.
+- Nếu push Cloud thất bại (401/mất mạng), app **cảnh báo rõ** thay vì im lặng; `localUpdatedAt` được giữ lại để lần kéo sau **hỏi trước khi ghi đè** dữ liệu local.
 - `tvts_requests/swaps` chỉ staff hoặc chủ sở hữu đọc; trạng thái đổi ca công khai nằm ở `tvts_public.swapStatuses` (không lý do, không tên, không uid).
 - Trang sinh viên chỉ kéo trạng thái đổi ca từ nhánh công khai, không tải toàn bộ yêu cầu.
 

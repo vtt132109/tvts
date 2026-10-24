@@ -375,20 +375,23 @@ runTest('3.10: runFullSchedule() KHÔNG được xoá phân công đã chỉnh t
     'handleApproveSwap phải ghi nhận ô đã chỉnh');
 });
 
-runTest('3.11: Ô chỉnh tay được kiểm tra lại khi áp dụng lại (không tạo lịch sai)', () => {
-  // Nếu áp lại mù quáng, CTV đã bị xoá hoặc không còn rảnh ca sẽ bị gán
-  // vào lịch -> lịch không hợp lệ lại quay về.
+runTest('3.11: Ô chỉnh tay được giữ nguyên qua auto-schedule, kể cả override', () => {
+  // Ca admin đã gán tay phải được giữ nguyên qua mọi lần auto-schedule.
+  // Chỉ bỏ khi CTV không còn tồn tại/ô không còn; KHÔNG được tự ý bỏ vì
+  // "không còn rảnh ca" hoặc "trái vai trò" — đó chính là quyết định thủ công.
   const fn = adminJs.match(/function reapplyManualSlots\(monthSchedule\) \{[\s\S]*?\n  return result;\n\}/);
   assert.ok(fn, 'Không tìm thấy reapplyManualSlots');
   const body = fn[0];
   assert.ok(/không còn trong danh sách/.test(body),
     'Phải bỏ qua ô tham chiếu CTV không còn tồn tại');
-  assert.ok(/không còn rảnh ca này/.test(body),
-    'Phải bỏ qua ô tham chiếu ca CTV không còn rảnh');
-  assert.ok(/role !== 'old'/.test(body) && /role !== 'new'/.test(body),
-    'Phải bỏ qua ô gán sai vai trò (Chính Thức / Tập Sự)');
-  assert.ok(/oldM\.id === newM\.id/.test(body),
-    'Phải chặn gán cùng một người cho cả hai vị trí trong một ca');
+  assert.ok(!/không còn rảnh ca này/.test(body),
+    'KHÔNG được bỏ ca gán tay vì CTV chưa đăng ký rảnh');
+  assert.ok(!/role !== 'old'|role !== 'new'|không phải Chính Thức|không phải Tập Sự/.test(body),
+    'KHÔNG được bỏ ca gán tay vì trái vai trò');
+  assert.ok(!/oldM\.id === newM\.id/.test(body),
+    'Không được tự bỏ ca gán tay cùng một người ở 2 vị trí — UI đã cảnh báo khi gán');
+  assert.ok(/slot\.oldMember = oldM/.test(body) && /slot\.newMember = newM/.test(body),
+    'Phải áp lại đúng oldMember/newMember đã gán tay');
   assert.ok(/result\.skipped\.push/.test(body) && /showToast/.test(adminJs),
     'Ô bị bỏ qua phải được báo cho người dùng, không im lặng');
 });

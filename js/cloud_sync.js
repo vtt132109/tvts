@@ -2152,6 +2152,14 @@
     }
   }
 
+  /** Đánh dấu local có thay đổi chưa đẩy, để pull không ghi đè âm thầm. */
+  function markLocalDirty(cfg) {
+    try {
+      cfg.localUpdatedAt = Date.now();
+      saveConfig(cfg);
+    } catch (e) {}
+  }
+
   // Đẩy dữ liệu từ LocalStorage lên Firebase Cloud (Push)
   //
   // options.force === true: bỏ qua cảnh báo xung đột / guard thu nhỏ danh sách.
@@ -2236,6 +2244,7 @@
       }
 
       if (preflightError && !force) {
+        markLocalDirty(cfg);
         return {
           success: false,
           error: 'Không kiểm tra được dữ liệu trên Cloud trước khi đẩy nên đã dừng lại '
@@ -2290,6 +2299,10 @@
             + 'Hãy kéo dữ liệu mới nhất trước, hoặc xác nhận ghi đè (force) nếu chắc chắn.'
         };
       }
+
+      // Đã qua kiểm tra xung đột: từ đây local có thay đổi chưa chắc lên Cloud.
+      // Đánh dấu dirty NGAY để guard/pull sau đó không ghi đè âm thầm.
+      markLocalDirty(cfg);
 
       // GUARD 1: danh sách cục bộ teo bất thường so với bản trên Cloud.
       if (localStudents && remoteStudentsCount > 0) {
@@ -2348,6 +2361,7 @@
     }
 
     try {
+      markLocalDirty(cfg);
       const response = await fetch(authedUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2465,29 +2479,33 @@
         };
       }
 
-      // Phát hiện xung đột: Cloud có bản mới hơn bản lần cuối máy này đồng bộ không?
-      const lastCloudUpdatedAt = cfg.lastCloudUpdatedAt || 0;
-      const cloudUpdatedAt = data.updatedAt || 0;
-      if (lastCloudUpdatedAt && cloudUpdatedAt && cloudUpdatedAt > lastCloudUpdatedAt) {
-        const localTouchedAt = cfg.localUpdatedAt || 0;
-        if (localTouchedAt > cloudUpdatedAt) {
-          // Máy này có thay đổi mới hơn cả Cloud -> hỏi người dùng trước khi ghi đè
+      // Chống mất dữ liệu local: nếu máy có thay đổi chưa đẩy, KHÔNG được
+      // âm thầm overwrite bằng Cloud (kể cả khi Cloud rỗng/không có updatedAt).
+      // Trước đây chỉ hỏi khi cloudUpdatedAt > lastCloudUpdatedAt; trường hợp
+      // máy mới tạo lịch local rồi push 401, lần sau mở app kéo Cloud rỗng và
+      // mất sạch ca vừa gán tay.
+      const lastCloudUpdatedAt = Number(cfg.lastCloudUpdatedAt) || 0;
+      const cloudUpdatedAt = Number(data.updatedAt) || 0;
+      const localTouchedAt = Number(cfg.localUpdatedAt) || 0;
+      if (localTouchedAt > 0) {
+        const cloudChangedSinceLastSync = lastCloudUpdatedAt > 0
+          && cloudUpdatedAt > lastCloudUpdatedAt;
+        const localMayBeNewer = !lastCloudUpdatedAt || localTouchedAt > cloudUpdatedAt;
+        if (cloudChangedSinceLastSync || localMayBeNewer) {
           const ok = typeof window.confirm === 'function'
             ? window.confirm(
-              '⚠️ Phát hiện xung đột dữ liệu:\n\n' +
-              '• Máy này vừa có thay đổi LÚC NÀY (chưa kịp đẩy lên Đám mây).\n' +
-              '• Đám mây cũng có bản cập nhật từ thiết bị khác.\n\n' +
-              'Chọn "OK" để GHI ĐÈ dữ liệu trên máy bằng bản từ Đám mây.\n' +
-              'Chọn "Cancel" để GIỮ dữ liệu trên máy và bỏ qua lần kéo này.'
+              '⚠️ Máy này có thay đổi CHƯA đẩy lên Đám mây.\n\n'
+              + 'Kéo dữ liệu bây giờ sẽ GHI ĐÈ các thay đổi đó bằng bản trên Cloud.\n'
+              + 'Chọn "OK" để ghi đè, "Cancel" để giữ dữ liệu trên máy và bỏ qua lần kéo này.'
             )
-            : true;
+            : false;
 
           if (!ok) {
             return {
               success: false,
               conflict: true,
-              error: 'Đã bỏ qua kéo dữ liệu để giữ thay đổi cục bộ.',
-              message: 'Phát hiện xung đột dữ liệu — đã giữ bản trên máy này.'
+              error: 'Đã bỏ qua kéo dữ liệu để giữ thay đổi cục bộ chưa đẩy.',
+              message: 'Phát hiện thay đổi local chưa đẩy — đã giữ bản trên máy này.'
             };
           }
         }
@@ -2497,6 +2515,14 @@
       if (!applyRes.success) {
         throw new Error(applyRes.error);
       }
+
+      // Đã chấp nhận bản Cloud (hoặc local không có thay đổi) -> xoá cờ dirty
+      // để lần mở trang sau không hỏi lại.
+      try {
+        const freshCfg = getConfig();
+        freshCfg.localUpdatedAt = 0;
+        saveConfig(freshCfg);
+      } catch (e) {}
 
       return {
         success: true,
