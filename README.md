@@ -1,6 +1,6 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-542%2F542%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-543%2F543%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
@@ -82,7 +82,7 @@ tvts/
 │   # danh sách chuẩn giờ nhập từ CSV qua Admin → Sinh Viên → Nhập CSV
 │   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
 │
-├── tests/                               # 18 bộ kiểm thử tự động — 542 test cases
+├── tests/                               # 18 bộ kiểm thử tự động — 543 test cases
 │   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
 │   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
 │   ├── auth.test.js                     # Xác thực Admin, thiết lập lần đầu & mã PIN
@@ -177,6 +177,7 @@ npx serve .
   - **Chống dò mật khẩu/PIN:** sai 5 lần liên tiếp (đúng định dạng) sẽ tạm khoá 60 giây; gõ nhầm/rỗng không bị tính.
   - **Phiên đăng nhập tự hết hạn sau 12 giờ**, phù hợp máy dùng chung ở văn phòng.
   - Phím tắt mở bí mật từ trang sinh viên: `Ctrl + Shift + A` (hoặc `Cmd + Shift + A`).
+- **Xếp ca thủ công toàn quyền:** admin chọn được **mọi CTV**, kể cả người chưa đăng ký ca rảnh. Hệ thống cảnh báo nếu chưa đăng ký, trái vai trò, trùng ca cùng ngày hoặc trùng người trong cùng ca; admin vẫn xác nhận để gán. Ca trái vai trò được đánh dấu ⚠️ trên bảng.
 - **Thuật toán luân phiên 4 tuần cho 58 CTV (100% Đều Có Ca):**
   - Đảm bảo mỗi ca trực luôn có đúng **2 bạn (1 Cũ + 1 Mới)**.
   - Phân bổ công bằng luân phiên cả 4 tuần, không một sinh viên nào bị bỏ sót.
@@ -223,7 +224,7 @@ Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc 
 node tests/run_all_tests.js   # hoặc: npm test
 ```
 
-### Kết Quả Kiểm Thử (542/542 Tests PASS — 18 bộ, 100%)
+### Kết Quả Kiểm Thử (543/543 Tests PASS — 18 bộ, 100%)
 
 | # | Bộ Kiểm Thử | Kết Quả |
 |---|---|---|
@@ -244,7 +245,7 @@ node tests/run_all_tests.js   # hoặc: npm test
 | 15 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
 | 16 | Nhập CSV, Trùng MSSV & Vai Trò (CSV Import) | 8/8 |
 | 17 | Năm Tuần 4, Lịch Tháng Trước & A11y Modal | 7/7 |
-| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **73/73** |
+| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **74/74** |
 
 **Cloud Sync (Suite 11)** khóa các hành vi an toàn mới:
 - Preflight `updatedAt` trước khi PATCH; chặn xung đột từ thiết bị khác và chặn danh sách CTV/tài khoản cán bộ teo bất thường (có `force` sau khi xác nhận).
