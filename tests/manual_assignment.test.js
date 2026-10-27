@@ -350,6 +350,71 @@ runTest('Gán tay: KHÔNG mở hộp thoại confirm, không thể bị "chặn 
   assert.strictEqual(slot.oldMember.fullName, 'Tran Thi B');
 });
 
+/**
+ * Dựng tình huống máy CHỈ có "lịch 1 tuần" kiểu cũ (ts_scheduler_schedule_result)
+ * và CHƯA có lịch tháng — đúng trạng thái của máy đã dùng bản cũ trước đây.
+ * Trong đó ca T3_C đã có người xếp từ trước.
+ */
+function seedLegacyWeekSchedule() {
+  seed();
+  const table = {};
+  ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(d => {
+    ['S', 'C'].forEach(p => {
+      const id = `${d}_${p}`;
+      table[id] = {
+        shiftId: id,
+        shiftInfo: { id, dayKey: d, dayName: `Thứ ${d.slice(1)}`, period: p === 'S' ? 'Sáng' : 'Chiều', time: '' },
+        oldMember: null,
+        newMember: null,
+        status: 'empty'
+      };
+    });
+  });
+  table['T3_C'].oldMember = { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A', role: 'old' };
+  table['T3_C'].status = 'partial';
+  LS.setItem('ts_scheduler_schedule_result', JSON.stringify({ scheduleTable: table, stats: {} }));
+  LS.removeItem('ts_scheduler_month_result');
+  LS.removeItem('ts_scheduler_manual_slots');
+}
+
+runTest('Máy chỉ có lịch 1 TUẦN cũ: gán tay phải tạo lịch THÁNG, lưu được và lưới tháng hiện tên', () => {
+  seedLegacyWeekSchedule();
+  H.loadData();
+  assert.strictEqual(H.getState().monthSchedule, null, 'Ban đầu chưa có lịch tháng');
+
+  assignViaUi('T2_S', 'old', 1, 's_1');
+
+  const after = H.getState();
+  assert.ok(after.monthSchedule && after.monthSchedule.weeks.length === 4,
+    'Phải tạo lịch THÁNG 4 tuần khi gán tay (không ghi vào object tuần rời)');
+
+  const raw = LS.getItem('ts_scheduler_month_result');
+  assert.notStrictEqual(raw, 'null', 'Không được ghi chuỗi "null" vào lịch tháng');
+  assert.ok(raw && raw !== '', 'Phải có lịch tháng trong storage');
+
+  const saved = JSON.parse(raw);
+  assert.strictEqual(saved.weeks[0].scheduleTable['T2_S'].oldMember.fullName, 'Nguyen Van A',
+    'Ca vừa gán phải nằm trong lịch THÁNG đã lưu');
+
+  // Đây là triệu chứng người dùng thấy: lưới tháng (chế độ Toàn cảnh) vẫn trống
+  H.renderMasterMonthGrid();
+  const master = Object.values(els).find(e =>
+    typeof e.innerHTML === 'string' && e.innerHTML.includes('master-week-section-4'));
+  assert.ok(master, 'Phải render được lưới tháng');
+  assert.ok(master.innerHTML.includes('Nguyen Van A'),
+    'Lưới tháng phải hiển thị người vừa gán — nếu không thì "báo đã lưu mà không thấy gì"');
+});
+
+runTest('Tạo lịch tháng từ lịch tuần cũ: giữ nguyên ca đã xếp trước đó', () => {
+  seedLegacyWeekSchedule();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_2');
+
+  const saved = JSON.parse(LS.getItem('ts_scheduler_month_result'));
+  assert.strictEqual(saved.weeks[0].scheduleTable['T3_C'].oldMember.fullName, 'Nguyen Van A',
+    'Ca T3_C của lịch cũ phải được chuyển sang lịch tháng, không được mất');
+});
+
 // ============================================================================
 // GROUP 3: GIAO DIỆN — KHÔNG CÒN NÚT "XẾP THỦ CÔNG", LƯỚI LUÔN BẤM ĐƯỢC
 // ============================================================================

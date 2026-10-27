@@ -3510,13 +3510,40 @@ function renderStudentTable() {
   window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
     if (promptImportRosterIfEmpty()) return;
     const effectiveWeek = weekNumber || state.viewWeek || 1;
-    let targetSchedule = state.monthSchedule?.weeks?.[effectiveWeek - 1] || state.currentSchedule;
 
-    // Tháng chưa có lịch / ô ca chưa tồn tại: tạo khung trống ngay tại chỗ
-    // để admin vẫn gán tay được, không cần chạy auto trước.
-    if (!targetSchedule || !targetSchedule.scheduleTable?.[shiftId]) {
+    // ⚠️ Phải có "lịch THÁNG" thật thì mới gán tay được.
+    //
+    // Trước đây chỗ này lấy `state.monthSchedule?.weeks?.[w-1] || state.currentSchedule`:
+    // máy còn lịch 1 TUẦN kiểu cũ (ts_scheduler_schedule_result) nhưng chưa có
+    // lịch tháng -> thao tác gán ghi vào object tuần rời, còn `monthSchedule`
+    // vẫn null. Hệ quả: toast báo "Đã lưu" nhưng lưới tháng vẫn trống, và
+    // saveSchedule() xoá luôn key tháng -> F5 là mất sạch.
+    let targetSchedule = state.monthSchedule?.weeks?.[effectiveWeek - 1];
+    const hasMonthWeek = !!(targetSchedule && targetSchedule.scheduleTable);
+
+    if (!hasMonthWeek) {
+      // Giữ lại dữ liệu của lịch tuần cũ (nếu có) trước khi ensureBlank ghi đè
+      // state.currentSchedule, để không mất ca đã xếp trước đó.
+      const legacyWeek = (state.currentSchedule && state.currentSchedule.scheduleTable)
+        ? state.currentSchedule
+        : null;
+
       ensureBlankMonthSchedule();
       targetSchedule = state.monthSchedule.weeks[effectiveWeek - 1];
+
+      if (legacyWeek && targetSchedule) {
+        Object.keys(legacyWeek.scheduleTable).forEach(sid => {
+          const oldSlot = legacyWeek.scheduleTable[sid];
+          if (!oldSlot) return;
+          if (!(oldSlot.oldMember || oldSlot.newMember)) return;
+          const newSlot = targetSchedule.scheduleTable[sid];
+          if (!newSlot || newSlot.oldMember || newSlot.newMember) return;
+          newSlot.oldMember = oldSlot.oldMember || null;
+          newSlot.newMember = oldSlot.newMember || null;
+          newSlot.status = (newSlot.oldMember && newSlot.newMember) ? 'full' : 'partial';
+        });
+        try { recomputeWeekStats(targetSchedule); } catch (e) {}
+      }
     }
 
     state.reassignModalData = { shiftId, role, weekNumber: effectiveWeek };
@@ -3700,8 +3727,25 @@ function renderStudentTable() {
 
     state.currentSchedule = targetSchedule;
     state.twoWeekSchedule = state.monthSchedule;
-    localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+
+    // Không bao giờ ghi chuỗi "null" vào key tháng: trước đây nếu
+    // state.monthSchedule là null thì chỗ này ghi "null" rồi saveSchedule()
+    // lại xoá key, nên ca vừa gán biến mất sau khi tải lại trang.
+    if (state.monthSchedule && Array.isArray(state.monthSchedule.weeks)) {
+      localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+    }
     saveSchedule(true);
+
+    // Đọc lại từ storage để giao diện chắc chắn khớp dữ liệu vừa ghi.
+    try {
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || 'null');
+      if (persisted && Array.isArray(persisted.weeks)) {
+        state.monthSchedule = persisted;
+        state.twoWeekSchedule = persisted;
+        state.currentSchedule = persisted.weeks[realWeekNumber - 1] || persisted.weeks[0];
+      }
+    } catch (e) { /* storage lỗi: giữ nguyên state hiện tại */ }
+
     window.dispatchEvent(new CustomEvent('ts:data-changed', {
       detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SCHEDULE] }
     }));
