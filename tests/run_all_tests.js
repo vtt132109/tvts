@@ -22,6 +22,7 @@ const suites = [
   { name: 'Nhật Ký Thao Tác Quản Trị (Admin Audit Log)', script: 'audit.test.js' },
   { name: 'Lớp Lưu Trữ IndexedDB & Khôi Phục Dữ Liệu (IndexedDB Store)', script: 'store.test.js' },
   { name: 'Tiện Ích Dùng Chung & Chống Lệch Module (Common Utils)', script: 'common.test.js' },
+  { name: 'Gán Ca Thủ Công & Xếp Tự Động Phải Né (Manual Assignment)', script: 'manual_assignment.test.js' },
   { name: 'Quản Lý Sao Lưu Web 6 Tháng (Web Backup Manager)', script: 'backup.test.js' },
   { name: 'Quản Lý Sự Kiện & Bảng Chấm Công Tháng (Payroll & Events)', script: 'payroll_events.test.js' },
   { name: 'Đăng Ký Ca Rảnh Trọn Tháng & Hiển Thị Ngày (Monthly Registration)', script: 'monthly_registration.test.js' },

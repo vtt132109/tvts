@@ -1872,23 +1872,64 @@
     }
   }
 
+  /** Khoá tháng cho sổ tay gán ca, ví dụ '2026-10'. */
+  function manualSlotMonthKey(month, year) {
+    const m = parseInt(month, 10) || state.currentMonth || 10;
+    const y = parseInt(year, 10) || state.currentYear || 2026;
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+
+  /** Đọc thô sổ tay gán ca: { 'YYYY-MM': { '1': { T2_S: {...} } } }. */
+  function readManualSlotMap() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
+      return (raw && typeof raw === 'object') ? raw : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
+   * Lấy phần ghi tay của MỘT tháng.
+   * Dữ liệu cũ (chưa có khoá tháng, chỉ có { '1': {...} }) được coi là của
+   * tháng đang xét — nhờ vậy bản đang chạy không mất các ca đã gán trước đó.
+   */
+  function getManualSlotBucket(map, month, year) {
+    const key = manualSlotMonthKey(month, year);
+    if (map[key] && typeof map[key] === 'object') return map[key];
+    const keys = Object.keys(map);
+    const isLegacyFlat = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
+    return isLegacyFlat ? map : {};
+  }
+
   /** Ghi nhận ô ca đã được chỉnh tay, để không mất khi xếp lại lịch.
  * @param {number} weekNumber - 1..4
  * @param {string} shiftId - ví dụ 'T2_S'
  * @param {object} slot - { oldMember, newMember }
+ * @param {number} [month] - tháng của lịch đang sửa (mặc định: kỳ đang áp dụng)
+ * @param {number} [year]
  */
-function recordManualSlot(weekNumber, shiftId, slot) {
+function recordManualSlot(weekNumber, shiftId, slot, month, year) {
   try {
-    let map = {};
-    try {
-      map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
-    } catch (e) { map = {}; }
+    const map = readManualSlotMap();
+    const key = manualSlotMonthKey(month, year);
+
+    // Dữ liệu cũ dạng phẳng -> chuyển sang dạng theo tháng trước khi ghi.
+    if (!map[key]) {
+      const keys = Object.keys(map);
+      if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+        map[key] = map;
+        keys.forEach(k => { delete map[k]; });
+      } else {
+        map[key] = {};
+      }
+    }
 
     const wk = String(weekNumber || 1);
-    if (!map[wk]) map[wk] = {};
-    // Chỉ lưu tham chiếu nhẹ (id + tên) chứ không nhân bản cả hồ sơ SV,
+    if (!map[key][wk]) map[key][wk] = {};
+    // Chỉ lưu tham chiếu nhẹ (id) chứ không nhân bản cả hồ sơ SV,
     // tránh phình localStorage.
-    map[wk][shiftId] = {
+    map[key][wk][shiftId] = {
       oldId: slot.oldMember ? slot.oldMember.id : null,
       newId: slot.newMember ? slot.newMember.id : null,
       at: Date.now()
@@ -1913,15 +1954,17 @@ function reapplyManualSlots(monthSchedule) {
   const result = { applied: 0, skipped: [] };
   if (!monthSchedule || !monthSchedule.weeks) return result;
 
-  let map = {};
-  try {
-    map = JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_SLOTS) || '{}') || {};
-  } catch (e) { return result; }
+  const rawMap = readManualSlotMap();
+  // CHỈ áp dụng ca gán tay của ĐÚNG tháng này. Trước đây sổ tay chỉ khoá theo
+  // tuần (1..4) nên sang tháng mới vẫn bị áp lại người của tháng cũ.
+  const map = getManualSlotBucket(rawMap, monthSchedule.month, monthSchedule.year);
+  if (!map || Object.keys(map).length === 0) return result;
 
   const byId = {};
   state.students.forEach(s => { if (s && s.id) byId[s.id] = s; });
 
   Object.keys(map).forEach(wk => {
+    if (!/^\d+$/.test(wk)) return;
     const weekIdx = parseInt(wk, 10) - 1;
     const weekData = monthSchedule.weeks[weekIdx];
     if (!weekData || !weekData.scheduleTable) return;
@@ -2582,11 +2625,6 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     // Tự động phân bổ lịch
     elements.btnAutoSchedule?.addEventListener('click', () => {
       triggerAutoSchedule(true);
-    });
-
-    // Tạo khung lịch trống 4 tuần để xếp thủ công mọi ngày/CTV
-    document.getElementById('btn-admin-manual-schedule')?.addEventListener('click', () => {
-      window.adminCreateBlankMonth();
     });
 
 
@@ -3469,26 +3507,6 @@ function renderStudentTable() {
     return true;
   }
 
-  window.adminCreateBlankMonth = function() {
-    if (promptImportRosterIfEmpty()) return;
-    ensureBlankMonthSchedule();
-    saveSchedule(true);
-    renderAll();
-    const filled = state.monthSchedule.weeks.reduce(
-      (n, w) => n + Object.values(w.scheduleTable || {}).filter(s => s && (s.oldMember || s.newMember)).length,
-      0
-    );
-    showToast(
-      `🧩 Đã tạo khung lịch trống 4 tuần × 10 ca (${filled} ô đã có người). Bấm vào bất kỳ ô ca để gán thủ công, kể cả CTV chưa đăng ký.`,
-      'success',
-      8000
-    );
-    auditLog('SCHEDULE_CREATE', 'Tạo khung lịch trống để xếp ca thủ công');
-    try {
-      elements.timetableGrid?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) {}
-  };
-
   window.adminOpenReassignModal = function(shiftId, role, weekNumber = null) {
     if (promptImportRosterIfEmpty()) return;
     const effectiveWeek = weekNumber || state.viewWeek || 1;
@@ -3680,7 +3698,7 @@ function renderStudentTable() {
     // Ghi nhận để lần xếp lịch tự động sau (đổi vai trò hàng loạt, nhập CSV,
     // thêm/xoá SV) không xoá mất thay đổi này.
     slot.manuallyEdited = true;
-    recordManualSlot(realWeekNumber, shiftId, slot);
+    recordManualSlot(realWeekNumber, shiftId, slot, targetSchedule.month, targetSchedule.year);
     targetSchedule.timestamp = Date.now();
 
     state.currentSchedule = targetSchedule;
@@ -4104,38 +4122,70 @@ window.adminDeleteStudent = async function(studentId) {
     const curMonth = state.currentMonth || 10;
     const curYear = state.currentYear || 2026;
 
+    // Khung tháng trống để VẼ (không ghi vào state/localStorage).
+    // Nhờ vậy tháng chưa xếp lịch vẫn có đủ 40 ô bấm được để gán tay,
+    // không cần nút "tạo lịch trống" riêng.
+    const buildBlankMonthForRender = () => {
+      const weeks = [];
+      for (let w = 1; w <= 4; w++) {
+        const scheduleTable = {};
+        (SHIFTS || []).forEach(shift => {
+          scheduleTable[shift.id] = {
+            shiftId: shift.id,
+            shiftInfo: shift,
+            oldMember: null,
+            newMember: null,
+            status: 'empty'
+          };
+        });
+        weeks.push({ weekNumber: w, month: curMonth, year: curYear, scheduleTable });
+      }
+      return { month: curMonth, year: curYear, weeks };
+    };
+
+    let blankNotice = '';
+
     if (!state.monthSchedule || !state.monthSchedule.weeks || state.monthSchedule.weeks.length === 0) {
-      elements.adminMasterMonthContainer.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md); width: 100%;">
-          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
-          <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công Tháng ${String(curMonth).padStart(2, '0')}/${curYear}</h3>
-          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
-            Nhấn "⚡ TỰ ĐỘNG PHÂN BỔ LỊCH TRỰC" ở trên để hệ thống tự động phân bổ trọn vẹn cả 4 tuần trong tháng!
-          </p>
-          <button type="button" class="btn btn-primary" onclick="document.getElementById('btn-admin-auto-schedule')?.click()">
-            <span>⚡ Phân Bổ Ngay</span>
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="window.adminCreateBlankMonth && window.adminCreateBlankMonth()" style="margin-left: 0.5rem;">
-            <span>🧩 Tạo Lịch Trống &amp; Xếp Tay</span>
-          </button>
-          ${state.students.length === 0 ? `
-            <p style="font-size:0.82rem; color:#b45309; margin-top:0.75rem;">
-              ⚠️ Danh sách CTV đang rỗng — hãy nhập CSV hoặc đăng nhập Google để kéo 58 CTV trước.
+      if (state.students.length === 0) {
+        elements.adminMasterMonthContainer.innerHTML = `
+          <div style="text-align: center; padding: 3rem 1.5rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: var(--radius-md); width: 100%;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
+            <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.35rem;">Chưa Có Bảng Phân Công Tháng ${String(curMonth).padStart(2, '0')}/${curYear}</h3>
+            <p style="font-size:0.88rem; color:#b45309; margin-bottom:0.75rem;">
+              ⚠️ Danh sách CTV đang rỗng — hãy nhập CSV hoặc đăng nhập Google để kéo 58 CTV trước, rồi mới gán tay được.
             </p>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('btn-open-import-modal')?.click()" style="margin-top:0.35rem;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('btn-open-import-modal')?.click()">
               📥 Nhập Danh Sách CTV
             </button>
-          ` : ''}
+            <button type="button" class="btn btn-primary" style="margin-left: 0.5rem;" onclick="document.getElementById('btn-admin-auto-schedule')?.click()">
+              <span>⚡ Phân Bổ Ngay</span>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      blankNotice = `
+        <div class="admin-blank-month-notice">
+          <span>✍️ <strong>Tháng ${String(curMonth).padStart(2, '0')}/${curYear} chưa có lịch.</strong>
+          Bấm trực tiếp vào ô ca bên dưới để gán tay bất kỳ CTV nào (kể cả người chưa đăng ký rảnh).</span>
+          <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('btn-admin-auto-schedule')?.click()">
+            ⚡ Tự động phân bổ
+          </button>
         </div>
       `;
-      return;
     }
+
+    // Tháng trống -> dùng khung tạm để vẽ; tháng có lịch -> dùng dữ liệu thật.
+    const monthData = (state.monthSchedule && state.monthSchedule.weeks && state.monthSchedule.weeks.length > 0)
+      ? state.monthSchedule
+      : buildBlankMonthForRender();
 
     let calendarWeeks = [];
     if (window.SchedulerEngine && window.SchedulerEngine.MonthCalendarHelper) {
       calendarWeeks = window.SchedulerEngine.MonthCalendarHelper.getMonthWeeks(curMonth, curYear);
-    } else if (state.monthSchedule && state.monthSchedule.calendarWeeks) {
-      calendarWeeks = state.monthSchedule.calendarWeeks;
+    } else if (monthData.calendarWeeks) {
+      calendarWeeks = monthData.calendarWeeks;
     }
 
     const days = [
@@ -4146,9 +4196,9 @@ window.adminDeleteStudent = async function(studentId) {
       { key: 'T6', name: 'Thứ Sáu', sub: 'Thứ 6' }
     ];
 
-    let html = '';
+    let html = blankNotice;
 
-    state.monthSchedule.weeks.forEach((weekObj, wIdx) => {
+    monthData.weeks.forEach((weekObj, wIdx) => {
       const weekNum = wIdx + 1;
       const weekCal = calendarWeeks[wIdx] || null;
       const dateRangeStr = weekCal ? ` (${weekCal.startDateStr} - ${weekCal.endDateStr}/${curYear})` : '';
@@ -5107,7 +5157,7 @@ window.adminDeleteStudent = async function(studentId) {
     // Trước đây bỏ qua bước này -> bảng SV, thanh công bằng và số ca đều lệch.
     recomputeWeekStats(weekData);
     // Giữ lại để không mất khi hệ thống xếp lại lịch tự động.
-    recordManualSlot(weekNumber, req.shiftId, slot);
+    recordManualSlot(weekNumber, req.shiftId, slot, weekData.month, weekData.year);
 
     state.currentSchedule = weekData;
     state.twoWeekSchedule = state.monthSchedule;
@@ -5731,6 +5781,17 @@ async function handleStartNewMonth() {
     // lịch tháng mới bằng lịch cũ.
     state.twoWeekSchedule = state.monthSchedule;
     state.currentSchedule = state.monthSchedule.weeks[0];
+
+    // Bảng phân công đã bị xoá sạch -> sổ tay gán ca của tháng này cũng phải
+    // xoá, nếu không lần "xếp tự động" sau sẽ áp lại đúng những người vừa bị xoá.
+    try {
+      const manualMap = readManualSlotMap();
+      const resetKey = manualSlotMonthKey(state.monthSchedule.month, state.monthSchedule.year);
+      if (manualMap[resetKey]) {
+        delete manualMap[resetKey];
+        localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(manualMap));
+      }
+    } catch (e) { /* không xoá được cũng không chặn nghiệp vụ */ }
 
     window.dispatchEvent(new CustomEvent('ts:data-changed', {
       detail: { keys: [STORAGE_KEYS.MONTH_SCHEDULE, STORAGE_KEYS.SCHEDULE, STORAGE_KEYS.SWAP_REQUESTS] }
@@ -7052,6 +7113,12 @@ async function handleDeleteEvent(id) {
     saveSchedule,
     runFullSchedule,
     switchAdminMonth,
+    // Dùng cho kiểm thử giao diện: dựng lại lưới tháng / lưới tuần.
+    renderMasterMonthGrid,
+    renderTimetable,
+    // Dùng cho kiểm thử: sổ tay gán ca theo tháng.
+    recordManualSlot,
+    reapplyManualSlots,
     getState: () => ({ ...state })
   };
 
