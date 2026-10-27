@@ -1727,6 +1727,27 @@
     });
   }
 
+  /**
+   * Bổ sung `id` còn thiếu hoặc bị trùng cho danh sách CTV.
+   * Nguồn dữ liệu Cloud/CSV cũ có bản ghi chỉ có studentId + fullName.
+   */
+  function normalizeStudentIds() {
+    if (!Array.isArray(state.students)) return;
+    const used = new Set();
+    state.students.forEach((s, i) => {
+      if (!s || typeof s !== 'object') return;
+      let id = s.id ? String(s.id).trim() : '';
+      if (!id || used.has(id)) {
+        const base = s.studentId ? String(s.studentId).trim() : ('idx' + i);
+        id = 's_' + base;
+        let n = 1;
+        while (used.has(id)) { id = 's_' + base + '_' + (n++); }
+      }
+      s.id = id;
+      used.add(id);
+    });
+  }
+
   function loadData() {
     try {
       const rawStudents = localStorage.getItem(STORAGE_KEYS.STUDENTS);
@@ -1750,8 +1771,12 @@
         }
       }
 
-      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
-      const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+      // Bảo đảm mọi CTV có `id` ổn định và duy nhất. Dữ liệu Cloud cũ có thể
+      // thiếu `id`; khi đó mọi option trong hộp thoại gán ca từng có cùng
+      // value "undefined" nên chọn ai cũng bị hiểu là "để trống".
+      normalizeStudentIds();
+
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);      const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
 
       if (rawMonth) {
         state.monthSchedule = JSON.parse(rawMonth);
@@ -3574,7 +3599,7 @@ function renderStudentTable() {
       }
     }
 
-    state.reassignModalData = { shiftId, role, weekNumber: effectiveWeek };
+    state.reassignModalData = { shiftId, role, weekNumber: effectiveWeek, candidates: [] };
     const shiftInfo = getShiftInfo(shiftId) || { dayName: shiftId, period: '', time: '' };
     const roleTitle = role === 'old' ? 'Chính Thức' : 'Tập Sự';
 
@@ -3606,20 +3631,26 @@ function renderStudentTable() {
       return String(a.fullName || '').localeCompare(String(b.fullName || ''), 'vi');
     });
 
-    eligibleStudents.forEach(s => {
+    eligibleStudents.forEach((s, idx) => {
       const isAvailable = (s.availableShifts || []).includes(shiftId);
-      const isSelected = currentAssigned?.id === s.id;
+      const isSelected = currentAssigned?.id && currentAssigned.id === s.id;
       const roleLabel = s.role === 'old' ? 'Chính Thức' : 'Tập Sự';
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
       const mismatchLabel = s.role !== role ? ` · ⚠️ Trái vai trò (${roleLabel})` : '';
       const selectedLabel = isSelected ? ' · Đang gán' : '';
 
+      // value = CHỈ SỐ trong danh sách ứng viên, không phải student.id.
+      // Dữ liệu Cloud cũ có thể thiếu `id` (khi đó mọi option cùng value
+      // "undefined") khiến thao tác chọn người bị hiểu là "để trống".
       selectHtml += `
-        <option value="${escapeHtml(s.id)}" ${isSelected ? 'selected' : ''}>
+        <option value="${idx}" ${isSelected ? 'selected' : ''}>
           ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${mismatchLabel}${selectedLabel}
         </option>
       `;
     });
+
+    // Lưu lại đúng thứ tự ứng viên để lúc lưu đọc được người đã chọn.
+    state.reassignModalData.candidates = eligibleStudents.slice();
 
     if (elements.modalCandidateSelect) {
       elements.modalCandidateSelect.innerHTML = selectHtml;
@@ -3672,8 +3703,31 @@ function renderStudentTable() {
       return;
     }
 
-    const selectedStudentId = elements.modalCandidateSelect?.value;
-    const newStudent = selectedStudentId ? state.students.find(s => s.id === selectedStudentId) : null;
+    // Đọc người được chọn. Option dùng value = chỉ số trong danh sách ứng viên
+    // (xem adminOpenReassignModal) nên không phụ thuộc việc CTV có `id` hay không.
+    const rawSelected = elements.modalCandidateSelect ? String(elements.modalCandidateSelect.value) : '';
+    const candidates = (state.reassignModalData && state.reassignModalData.candidates) || [];
+    let newStudent = null;
+
+    if (rawSelected !== '') {
+      const pickedIdx = parseInt(rawSelected, 10);
+      if (Number.isInteger(pickedIdx) && candidates[pickedIdx]) {
+        newStudent = candidates[pickedIdx];
+      } else {
+        // Tương thích ngược: option kiểu cũ dùng student.id làm value.
+        newStudent = state.students.find(s => s.id === rawSelected) || null;
+      }
+
+      if (!newStudent) {
+        // KHÔNG được coi là "để trống": đó là cách âm thầm xoá ca của người khác.
+        showToast(
+          '⚠️ Không xác định được CTV bạn vừa chọn nên chưa ghi gì cả. Vui lòng mở lại ô ca và chọn lại.',
+          'error',
+          9000
+        );
+        return;
+      }
+    }
 
     let slot = targetSchedule.scheduleTable?.[shiftId];
     if (!slot) {
