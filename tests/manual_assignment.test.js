@@ -1,0 +1,389 @@
+/**
+ * ============================================================================
+ * AUTOMATED TEST SUITE: GÁN CA THỦ CÔNG & XẾP TỰ ĐỘNG PHẢI "NÉ" CA GÁN TAY
+ * ============================================================================
+ * Bối cảnh: Ban Điều Hành báo "không gán được thủ công" và "xếp tự động xoá
+ * mất ca đã gán tay". Bộ test này khoá lại 6 hành vi:
+ *
+ * 1. Bấm vào ô ca trống -> chọn CTV -> lưu: ô ca có người, lịch được ghi.
+ * 2. Sổ tay gán ca lưu THEO THÁNG ('YYYY-MM'), không còn khoá phẳng theo tuần.
+ * 3. Chạy xếp lịch tự động -> ca gán tay KHÔNG bị ghi đè (kể cả trái vai trò,
+ *    chưa đăng ký rảnh).
+ * 4. Ca gán tay của tháng khác KHÔNG bị áp sang tháng đang xem.
+ * 5. Chọn "-- Để trống --" thì xoá người ở ô đó, và vẫn trống sau khi auto.
+ * 6. Tháng chưa có lịch vẫn vẽ đủ 40 ô bấm được (không cần nút "xếp thủ công"
+ *    riêng) và nút đó đã bị gỡ khỏi giao diện.
+ */
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+
+// 1. Môi trường giả lập ------------------------------------------------------
+class MockStorage {
+  constructor() { this.store = {}; }
+  getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; }
+  setItem(k, v) { this.store[k] = String(v); }
+  removeItem(k) { delete this.store[k]; }
+  clear() { this.store = {}; }
+}
+
+const LS = new MockStorage();
+const SS = new MockStorage();
+const els = {};
+
+function mockEl(id = '', tag = 'div') {
+  const e = {
+    id, tagName: tag.toUpperCase(), style: {},
+    classList: {
+      _c: new Set(),
+      add(c) { this._c.add(c); }, remove(c) { this._c.delete(c); },
+      contains(c) { return this._c.has(c); },
+      toggle(c, f) { if (f === undefined) f = !this._c.has(c); if (f) this._c.add(c); else this._c.delete(c); return f; }
+    },
+    value: '', textContent: '', innerHTML: '', checked: false, disabled: false, listeners: {},
+    addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); },
+    dispatchEvent(ev) { (this.listeners[ev.type || ev] || []).forEach(fn => fn(ev)); },
+    appendChild(c) { return c; }, removeChild(c) { return c; }, remove() {},
+    querySelector() { return null; }, querySelectorAll() { return []; }, closest() { return null; },
+    setAttribute() {}, removeAttribute() {}, getAttribute() { return null; }, hasAttribute() { return false; },
+    focus() {}, scrollIntoView() {},
+    click() { (this.listeners.click || []).forEach(fn => fn({ type: 'click', target: this })); }
+  };
+  if (id) els[id] = e;
+  return e;
+}
+
+global.localStorage = LS;
+global.sessionStorage = SS;
+global.confirm = () => true;
+global.prompt = (m, d) => d;
+global.alert = () => {};
+global.Blob = class { constructor() { this.size = 0; } };
+global.URL = { createObjectURL: () => 'blob:x', revokeObjectURL() {} };
+global.Event = class { constructor(t) { this.type = t; } };
+global.CustomEvent = class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } };
+global.FileReader = class { readAsText() {} };
+global.setInterval = () => 1;
+global.clearInterval = () => {};
+
+global.window = {
+  addEventListener: () => {}, dispatchEvent: () => {},
+  matchMedia: () => ({ matches: false }),
+  localStorage: LS, sessionStorage: SS,
+  confirm: global.confirm, prompt: global.prompt, alert: global.alert,
+  setInterval: () => 1, clearInterval: () => {}, scrollY: 0, print() {},
+  location: { href: '' }
+};
+
+global.document = {
+  readyState: 'complete',
+  documentElement: mockEl('html', 'html'),
+  body: mockEl('body', 'body'),
+  getElementById: (id) => els[id] || mockEl(id),
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  createElement: (t) => mockEl('', t),
+  addEventListener: () => {}
+};
+
+// 2. Dữ liệu mẫu + phiên đăng nhập ------------------------------------------
+const STUDENTS = [
+  {
+    id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A', role: 'old',
+    availableShifts: ['T2_S'],
+    monthlyAvailableShifts: { 1: ['T2_S'], 2: ['T2_S'], 3: [], 4: [] }
+  },
+  {
+    id: 's_2', studentId: '2211005', fullName: 'Tran Thi B', role: 'new',
+    availableShifts: ['T2_S'],
+    monthlyAvailableShifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] }
+  }
+];
+
+function seed() {
+  LS.clear();
+  SS.clear();
+  LS.setItem('ts_scheduler_students', JSON.stringify(STUDENTS));
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 10, year: 2026 }));
+  LS.setItem('ts_scheduler_admin_users', JSON.stringify([
+    { id: 'u1', username: 'admin', fullName: 'TB', role: 'admin', password: 'x', pin: '1234' }
+  ]));
+  SS.setItem('ts_admin_authenticated', 'true');
+  SS.setItem('ts_admin_user_data', JSON.stringify({ id: 'u1', username: 'admin', fullName: 'TB', role: 'admin' }));
+}
+
+// 3. Nạp mã nguồn thật ------------------------------------------------------
+// Phải seed TRƯỚC khi nạp admin.js: lúc nạp, admin.js kiểm tra phiên đăng nhập
+// và chỉ khi đã đăng nhập mới bind sự kiện cho nút "Xác Nhận Thay Đổi".
+seed();
+
+require(path.join(ROOT, 'js', 'month_calendar.js'));
+require(path.join(ROOT, 'js', 'scheduler.js'));
+require(path.join(ROOT, 'js', 'common.js'));
+require(path.join(ROOT, 'js', 'audit.js'));
+require(path.join(ROOT, 'js', 'store.js'));
+eval(fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8'));
+
+const H = global.window.adminTestHelper;
+assert.ok(H, 'admin.js phải export window.adminTestHelper');
+
+// 4. Test runner ------------------------------------------------------------
+let passed = 0;
+let total = 0;
+
+function runTest(name, fn) {
+  total++;
+  try {
+    fn();
+    console.log(`  ✓ [PASS] ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ [FAIL] ${name}: ${err.message}`);
+    console.error(err.stack);
+  }
+}
+
+/** Đọc ô ca trong lịch tháng đã lưu. */
+function savedSlot(weekNum, shiftId) {
+  const sched = JSON.parse(LS.getItem('ts_scheduler_month_result') || 'null');
+  if (!sched) return null;
+  return sched.weeks[weekNum - 1].scheduleTable[shiftId] || null;
+}
+
+function manualMap() {
+  return JSON.parse(LS.getItem('ts_scheduler_manual_slots') || '{}');
+}
+
+/** Gán tay qua đúng luồng giao diện: mở modal -> chọn người -> bấm lưu. */
+function assignViaUi(shiftId, role, weekNum, studentId) {
+  global.window.adminOpenReassignModal(shiftId, role, weekNum);
+  els['modal-candidate-select'].value = studentId || '';
+  els['btn-save-modal'].click();
+}
+
+console.log('================================================================');
+console.log('✍️  BẮT ĐẦU KIỂM THỬ - GÁN CA THỦ CÔNG & XẾP TỰ ĐỘNG PHẢI NÉ');
+console.log('================================================================\n');
+
+// ============================================================================
+// GROUP 1: GÁN TAY QUA GIAO DIỆN
+// ============================================================================
+runTest('Gán tay: mở modal từ ô ca trống, chọn CTV, lưu -> ô ca có người', () => {
+  seed();
+  H.loadData();
+  assert.strictEqual(H.getState().monthSchedule, null, 'Ban đầu chưa có lịch tháng');
+
+  assignViaUi('T2_S', 'old', 1, 's_1');
+
+  const slot = savedSlot(1, 'T2_S');
+  assert.ok(slot, 'Phải tạo được ô ca T2_S tuần 1');
+  assert.strictEqual(slot.oldMember && slot.oldMember.fullName, 'Nguyen Van A');
+  assert.strictEqual(slot.status, 'partial', 'Chỉ có 1 người -> Thiếu 1 bạn');
+  assert.strictEqual(slot.manuallyEdited, true, 'Ô ca phải được đánh dấu là gán tay');
+});
+
+runTest('Gán tay: chọn "-- Để trống --" thì xoá người khỏi ô ca', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assert.ok(savedSlot(1, 'T2_S').oldMember, 'Bước 1: phải gán được');
+
+  assignViaUi('T2_S', 'old', 1, '');
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember, null, 'Chọn để trống phải xoá người');
+});
+
+runTest('Gán tay: sổ tay lưu theo THÁNG, không phải khoá phẳng theo tuần', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+
+  const map = manualMap();
+  assert.ok(map['2026-10'], 'Phải có nhánh tháng 2026-10, thực tế: ' + JSON.stringify(map));
+  assert.ok(map['2026-10']['1']['T2_S'], 'Phải có bản ghi tuần 1 / ca T2_S');
+  assert.strictEqual(map['2026-10']['1']['T2_S'].oldId, 's_1');
+});
+
+// ============================================================================
+// GROUP 2: XẾP TỰ ĐỘNG PHẢI "NÉ" CA GÁN TAY
+// ============================================================================
+runTest('Xếp tự động: KHÔNG ghi đè ca đã gán tay (đúng vai trò, có đăng ký rảnh)', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assignViaUi('T2_S', 'new', 1, 's_2');
+
+  H.runFullSchedule();
+
+  const slot = savedSlot(1, 'T2_S');
+  assert.strictEqual(slot.oldMember.fullName, 'Nguyen Van A', 'Vị trí Chính Thức phải giữ nguyên');
+  assert.strictEqual(slot.newMember.fullName, 'Tran Thi B', 'Vị trí Tập Sự phải giữ nguyên');
+  assert.strictEqual(slot.status, 'full');
+});
+
+runTest('Xếp tự động: giữ cả ca gán TRÁI vai trò / người chưa đăng ký rảnh', () => {
+  seed();
+  H.loadData();
+  // s_2 là Tập Sự nhưng gán vào vị trí Chính Thức ở tuần 2 (tuần này s_2 không đăng ký rảnh)
+  assignViaUi('T3_C', 'old', 2, 's_2');
+  assert.strictEqual(savedSlot(2, 'T3_C').oldMember.fullName, 'Tran Thi B', 'Bước 1: phải gán được');
+
+  H.runFullSchedule();
+
+  const slot = savedSlot(2, 'T3_C');
+  assert.strictEqual(slot.oldMember && slot.oldMember.fullName, 'Tran Thi B',
+    'Quyết định gán tay không được bị xếp tự động xoá');
+});
+
+runTest('Xếp tự động: ca gán tay đã chọn "Để trống" vẫn trống sau khi auto', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assignViaUi('T2_S', 'old', 1, '');
+
+  H.runFullSchedule();
+
+  const slot = savedSlot(1, 'T2_S');
+  assert.strictEqual(slot.oldMember, null, 'Auto không được tự điền lại người vào ô đã xoá tay');
+});
+
+runTest('Xếp tự động: ca gán tay của THÁNG KHÁC không bị áp sang tháng này', () => {
+  seed();
+  H.loadData();
+
+  // Ghi tay cho tháng 10
+  H.recordManualSlot(1, 'T2_S', {
+    oldMember: { id: 's_1', fullName: 'Nguyen Van A' },
+    newMember: null
+  }, 10, 2026);
+
+  // Lịch tháng 11 (rỗng) — không được dính người của tháng 10
+  const novSchedule = {
+    month: 11, year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: { shiftId: 'T2_S', shiftInfo: { dayName: 'Thứ Hai' }, oldMember: null, newMember: null, status: 'empty' }
+      }
+    }]
+  };
+  const resNov = H.reapplyManualSlots(novSchedule);
+  assert.strictEqual(resNov.applied, 0, 'Không được áp ca gán tay của tháng 10 sang tháng 11');
+  assert.strictEqual(novSchedule.weeks[0].scheduleTable.T2_S.oldMember, null);
+
+  // Cùng lịch nhưng là tháng 10 -> phải áp
+  const octSchedule = JSON.parse(JSON.stringify(novSchedule));
+  octSchedule.month = 10;
+  const resOct = H.reapplyManualSlots(octSchedule);
+  assert.strictEqual(resOct.applied, 1, 'Đúng tháng thì phải áp lại');
+  assert.strictEqual(octSchedule.weeks[0].scheduleTable.T2_S.oldMember.fullName, 'Nguyen Van A');
+});
+
+runTest('Sổ tay: dữ liệu cũ (khoá phẳng theo tuần) vẫn được áp dụng', () => {
+  seed();
+  H.loadData();
+  // Định dạng cũ: { "1": { "T2_S": {...} } }
+  LS.setItem('ts_scheduler_manual_slots', JSON.stringify({
+    1: { T2_S: { oldId: 's_1', newId: null, at: Date.now() } }
+  }));
+
+  const sched = {
+    month: 10, year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: { shiftId: 'T2_S', shiftInfo: {}, oldMember: null, newMember: null, status: 'empty' }
+      }
+    }]
+  };
+  const res = H.reapplyManualSlots(sched);
+  assert.strictEqual(res.applied, 1, 'Phải đọc được định dạng cũ để không mất ca đã gán');
+  assert.strictEqual(sched.weeks[0].scheduleTable.T2_S.oldMember.id, 's_1');
+});
+
+runTest('Sổ tay: CTV đã bị xoá khỏi danh sách thì bỏ qua và báo cảnh báo', () => {
+  seed();
+  H.loadData();
+  LS.setItem('ts_scheduler_manual_slots', JSON.stringify({
+    '2026-10': { 1: { T2_S: { oldId: 's_khong_ton_tai', newId: null, at: Date.now() } } }
+  }));
+
+  const sched = {
+    month: 10, year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: { shiftId: 'T2_S', shiftInfo: {}, oldMember: null, newMember: null, status: 'empty' }
+      }
+    }]
+  };
+  const res = H.reapplyManualSlots(sched);
+  assert.strictEqual(res.applied, 0, 'Không được gán người không còn tồn tại');
+  assert.ok(res.skipped.length > 0, 'Phải ghi nhận lý do bỏ qua');
+  assert.strictEqual(sched.weeks[0].scheduleTable.T2_S.oldMember, null);
+});
+
+// ============================================================================
+// GROUP 3: GIAO DIỆN — KHÔNG CÒN NÚT "XẾP THỦ CÔNG", LƯỚI LUÔN BẤM ĐƯỢC
+// ============================================================================
+runTest('Giao diện: tháng chưa có lịch vẫn vẽ đủ 40 ô bấm được để gán tay', () => {
+  seed();
+  H.loadData();
+  assert.strictEqual(H.getState().monthSchedule, null, 'Chưa có lịch tháng');
+
+  H.renderMasterMonthGrid();
+
+  // Lưới tháng = container chứa đủ 4 khối tuần.
+  const container = Object.values(els).find(e =>
+    typeof e.innerHTML === 'string'
+    && e.innerHTML.includes('master-week-section-4')
+    && e.innerHTML.includes('adminOpenReassignModal'));
+  assert.ok(container, 'Lưới tháng phải render các ô ca bấm được');
+
+  // Mỗi ca có 2 ô bấm được (Chính Thức + Tập Sự): 4 tuần × 10 ca × 2 = 80.
+  const calls = container.innerHTML.match(/adminOpenReassignModal\(/g) || [];
+  assert.strictEqual(calls.length, 80, '4 tuần × 10 ca × 2 vị trí = 80 ô bấm được, thực tế: ' + calls.length);
+  assert.ok(container.innerHTML.includes('admin-blank-month-notice'),
+    'Phải có dải nhắc "bấm vào ô ca để gán tay"');
+  assert.ok(!container.innerHTML.includes('adminCreateBlankMonth'),
+    'Không được còn nút tạo khung trống');
+});
+
+runTest('Giao diện: danh sách CTV rỗng thì hướng dẫn nhập CSV thay vì vẽ ô', () => {
+  LS.clear();
+  SS.clear();
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 10, year: 2026 }));
+  H.loadData();
+  assert.strictEqual(H.getState().students.length, 0, 'Đã xoá hết CTV');
+
+  H.renderMasterMonthGrid();
+
+  const container = Object.values(els).find(e => typeof e.innerHTML === 'string' && e.innerHTML.includes('Nhập Danh Sách CTV'));
+  assert.ok(container, 'Phải hướng dẫn nhập danh sách CTV');
+  assert.ok(!container.innerHTML.includes('adminOpenReassignModal'),
+    'Không vẽ ô gán ca khi chưa có CTV nào');
+});
+
+runTest('Giao diện: nút "Xếp thủ công" đã bị gỡ khỏi admin.html', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  assert.ok(!/id="btn-admin-manual-schedule"/.test(html), 'Không được còn nút Xếp thủ công');
+  assert.ok(!/adminCreateBlankMonth/.test(html), 'Không được còn tham chiếu hàm đã gỡ');
+  assert.ok(!/XẾP THỦ CÔNG/i.test(html), 'Không được còn nhãn XẾP THỦ CÔNG');
+});
+
+runTest('Khởi tạo kỳ mới: sổ tay gán ca của tháng đó cũng bị xoá', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
+  const block = src.match(/async function handleStartNewMonth\(\)[\s\S]*?\n  \}/);
+  assert.ok(block, 'Thiếu handleStartNewMonth');
+  assert.ok(/delete manualMap\[resetKey\]/.test(block[0]),
+    'Sau khi xoá bảng phân công phải xoá sổ tay gán ca của tháng để auto không áp lại người cũ');
+});
+
+// ============================================================================
+console.log('\n================================================================');
+console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round((passed / (total || 1)) * 100)}%)`);
+console.log('================================================================\n');
+
+if (passed !== total) process.exit(1);

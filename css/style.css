@@ -7171,3 +7171,35 @@ input[type="checkbox"]:checked {
     max-height: 52vh;
   }
 }
+
+/* ==========================================================================
+   Gán ca thủ công trên lưới tháng (bỏ nút "xếp thủ công" riêng)
+   ========================================================================== */
+.admin-blank-month-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.08));
+  border: 1.5px solid var(--primary-light, #a5b4fc);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.admin-blank-month-notice strong {
+  color: var(--primary);
+}
+
+[data-theme="dark"] .admin-blank-month-notice {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: #4338ca;
+}
+
+[data-theme="dark"] .admin-blank-month-notice strong {
+  color: #a5b4fc;
+}

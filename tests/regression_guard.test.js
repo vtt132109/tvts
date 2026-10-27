@@ -1621,11 +1621,9 @@ runTest('6.15: Google login phải tự kéo dữ liệu Cloud trước khi làm
     'Sau authenticateSuccess phải gọi pullFromCloud để máy mới nhận dữ liệu mới nhất');
 });
 
-runTest('3.16: Tạo lịch trống để xếp tay mọi ngày/CTV', () => {
+runTest('3.16: Gán ca thủ công ngay trên lưới, KHÔNG có nút "xếp thủ công" riêng', () => {
   assert.ok(/function ensureBlankMonthSchedule\s*\(/.test(adminJs),
     'Thiếu ensureBlankMonthSchedule để tạo khung 4 tuần × 10 ca');
-  assert.ok(/window\.adminCreateBlankMonth = function/.test(adminJs),
-    'Thiếu nút/hàm adminCreateBlankMonth');
   const fn = adminJs.match(/function ensureBlankMonthSchedule\(\) \{[\s\S]*?\n  \}/);
   assert.ok(fn, 'Không tìm thấy ensureBlankMonthSchedule');
   assert.ok(/\(SHIFTS \|\| \[\]\)\.forEach/.test(fn[0]),
@@ -1634,10 +1632,16 @@ runTest('3.16: Tạo lịch trống để xếp tay mọi ngày/CTV', () => {
     'Khung mới phải có ô Chính thức/Tập sự trống');
   assert.ok(/Chưa có Chính Thức/.test(adminJs) && /Chưa có Tập Sự/.test(adminJs),
     'Ô ca trống phải bấm được để mở modal gán tay');
-  assert.ok(/id="btn-admin-manual-schedule"/.test(adminHtml),
-    'admin.html phải có nút Xếp thủ công');
   assert.ok(/promptImportRosterIfEmpty/.test(adminJs) && /Chưa có CTV nào/.test(adminJs),
     'Khi danh sách CTV rỗng phải hướng dẫn nhập CSV/kéo Cloud thay vì mở modal trống');
+
+  // Nút "xếp thủ công" đã bị bỏ: gán tay làm trực tiếp bằng cách bấm vào ô ca.
+  assert.ok(!/id="btn-admin-manual-schedule"/.test(adminHtml),
+    'admin.html KHÔNG được còn nút "Xếp thủ công" riêng');
+  assert.ok(!/adminCreateBlankMonth/.test(adminJs),
+    'Không được còn hàm adminCreateBlankMonth (đã gỡ cùng nút)');
+  assert.ok(!/adminCreateBlankMonth/.test(adminHtml),
+    'admin.html không được còn tham chiếu adminCreateBlankMonth');
 });
 
 // -----------------------------------------------------------------------------
