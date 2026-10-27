@@ -12,6 +12,21 @@
 
   const { SHIFTS, SHIFT_MAP, runAutoSchedule, runTwoWeekSchedule, runMonthSchedule } = window.SchedulerEngine || {};
 
+  /**
+   * Phiên bản bundle đang chạy, đọc từ chính token ?v= của thẻ <script>.
+   * Hiển thị nhỏ trên thanh công cụ để biết trình duyệt đang chạy bản cũ hay mới
+   * (nguyên nhân phổ biến của "sửa rồi mà vẫn lỗi").
+   */
+  const ADMIN_BUILD = (() => {
+    try {
+      const src = (document.currentScript && document.currentScript.src) || '';
+      const m = src.match(/[?&]v=([^&]+)/);
+      return m ? m[1] : 'dev';
+    } catch (e) {
+      return 'dev';
+    }
+  })();
+
   const STORAGE_KEYS = {
     STUDENTS: 'ts_scheduler_students',
     SCHEDULE: 'ts_scheduler_schedule_result',
@@ -999,6 +1014,19 @@
       const initial = (user.fullName || user.username || 'A').charAt(0).toUpperCase();
       elements.adminUserAvatar.textContent = initial;
     }
+
+    // Nhãn phiên bản nhỏ: giúp phát hiện trình duyệt còn chạy bundle cũ.
+    try {
+      const profile = elements.adminUserName && elements.adminUserName.parentElement;
+      if (profile && !document.getElementById('admin-build-tag')) {
+        const tag = document.createElement('span');
+        tag.id = 'admin-build-tag';
+        tag.title = 'Phiên bản giao diện đang chạy (token ?v= của js/admin.js)';
+        tag.textContent = `build ${ADMIN_BUILD}`;
+        tag.style.cssText = 'font-size:10px;opacity:.55;margin-left:6px;font-weight:600;letter-spacing:.02em;';
+        profile.appendChild(tag);
+      }
+    } catch (e) { /* chỉ là nhãn phụ */ }
   }
 
   function loadAdminUsers() {
@@ -3752,7 +3780,31 @@ function renderStudentTable() {
 
     renderAll();
     closeReassignModal();
-    showToast(`Đã lưu thay đổi nhân sự trực ${weekNumber ? `Tuần ${weekNumber}` : ''}!`, 'success');
+
+    // Nói rõ ĐÃ LƯU VÀO ĐÂU: tháng / tuần / ca / người. Trước đây chỉ báo
+    // "Đã lưu thay đổi nhân sự trực!" nên khi lưu nhầm tháng hoặc lưu vào lịch
+    // tuần rời, người dùng không có cách nào biết chuyện gì vừa xảy ra.
+    const persistedMonth = parseInt((state.monthSchedule && state.monthSchedule.month) || state.currentMonth, 10) || state.currentMonth;
+    const persistedYear = parseInt((state.monthSchedule && state.monthSchedule.year) || state.currentYear, 10) || state.currentYear;
+    const monthLabelSaved = `Tháng ${String(persistedMonth).padStart(2, '0')}/${persistedYear}`;
+    const roleLabelSaved = role === 'old' ? 'Chính Thức' : 'Tập Sự';
+
+    showToast(
+      `✅ Đã lưu ${monthLabelSaved} · Tuần ${realWeekNumber} · ca ${shiftId} (${roleLabelSaved})`
+      + ` → ${newStudent ? `${newStudent.fullName} (${newStudent.studentId})` : 'để trống'}`,
+      'success',
+      6000
+    );
+
+    if (persistedMonth !== state.currentMonth || persistedYear !== state.currentYear) {
+      showToast(
+        `⚠️ Ca này được lưu vào ${monthLabelSaved}, nhưng bạn đang xem `
+        + `Tháng ${String(state.currentMonth).padStart(2, '0')}/${state.currentYear}. `
+        + 'Hãy chuyển đúng tháng rồi gán lại.',
+        'warning',
+        10000
+      );
+    }
     if (warnings.length > 0) {
       // Vẫn gán, nhưng nói rõ vì sao ca này "không chuẩn" để admin biết.
       showToast(
