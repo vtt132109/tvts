@@ -3673,16 +3673,13 @@ function renderStudentTable() {
       }
     }
 
-    if (warnings.length > 0) {
-      const proceed = typeof window.confirm === 'function'
-        ? window.confirm(
-          '⚠️ Phân công thủ công vượt ràng buộc:\n\n- ' + warnings.join('\n- ')
-            + '\n\nVẫn tiếp tục gán?'
-        )
-        : true;
-      if (!proceed) return;
-    }
-
+    // CẢNH BÁO nhưng KHÔNG CHẶN.
+    //
+    // Trước đây chỗ này mở hộp thoại xác nhận của trình duyệt. Sau vài lần,
+    // Chrome hiện thêm ô "Prevent this page from creating additional dialogs";
+    // nếu người dùng tick vào đó thì hộp thoại trả về false NGAY LẬP TỨC -> mọi
+    // lần gán ca sau đó đều bị huỷ âm thầm, không có thông báo nào. Đó chính là
+    // hiện tượng "không gán được thủ công". Giờ: gán luôn, cảnh báo bằng toast.
     if (role === 'old') {
       slot.oldMember = newStudent || null;
     } else {
@@ -3712,6 +3709,14 @@ function renderStudentTable() {
     renderAll();
     closeReassignModal();
     showToast(`Đã lưu thay đổi nhân sự trực ${weekNumber ? `Tuần ${weekNumber}` : ''}!`, 'success');
+    if (warnings.length > 0) {
+      // Vẫn gán, nhưng nói rõ vì sao ca này "không chuẩn" để admin biết.
+      showToast(
+        `⚠️ Đã gán, nhưng cần lưu ý: ${warnings.join(' ')}`,
+        'warning',
+        9000
+      );
+    }
     auditLog('SHIFT_ASSIGN',
       `Gán thủ công ca ${shiftId} tuần ${realWeekNumber} cho ${newStudent ? `"${newStudent.fullName}" (${newStudent.studentId})` : 'vị trí trống'}`);
   }

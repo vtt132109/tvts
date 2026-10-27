@@ -325,6 +325,31 @@ runTest('Sổ tay: CTV đã bị xoá khỏi danh sách thì bỏ qua và báo c
   assert.strictEqual(sched.weeks[0].scheduleTable.T2_S.oldMember, null);
 });
 
+runTest('Gán tay: KHÔNG mở hộp thoại confirm, không thể bị "chặn hộp thoại" làm mất thao tác', () => {
+  seed();
+  H.loadData();
+
+  // Giả lập trình duyệt đã chặn hộp thoại: confirm() luôn trả về false.
+  // Nếu code còn dùng confirm, thao tác gán sẽ bị huỷ âm thầm -> test fail.
+  let confirmCalls = 0;
+  const originalConfirm = global.window.confirm;
+  global.window.confirm = () => { confirmCalls++; return false; };
+  global.confirm = global.window.confirm;
+
+  try {
+    // s_2 chưa đăng ký rảnh tuần 2 và trái vai trò => trước đây sẽ bật confirm
+    assignViaUi('T3_C', 'old', 2, 's_2');
+  } finally {
+    global.window.confirm = originalConfirm;
+    global.confirm = originalConfirm;
+  }
+
+  assert.strictEqual(confirmCalls, 0, 'Không được gọi confirm() khi gán ca');
+  const slot = savedSlot(2, 'T3_C');
+  assert.ok(slot && slot.oldMember, 'Dù có cảnh báo, ca vẫn phải được gán');
+  assert.strictEqual(slot.oldMember.fullName, 'Tran Thi B');
+});
+
 // ============================================================================
 // GROUP 3: GIAO DIỆN — KHÔNG CÒN NÚT "XẾP THỦ CÔNG", LƯỚI LUÔN BẤM ĐƯỢC
 // ============================================================================

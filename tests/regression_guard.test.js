@@ -468,7 +468,7 @@ runTest('3.16: Nhập CSV KHÔNG được nhận nhầm chuỗi chứa "cu" là 
     'Phải so khớp cả giá trị (^...$) thay vì khớp chuỗi con');
 });
 
-runTest('3.14: Xếp thủ công cho phép override nhưng phải cảnh báo rõ', () => {
+runTest('3.14: Xếp thủ công cho phép override, cảnh báo bằng toast (KHÔNG chặn)', () => {
   const fn = adminJs.match(/function saveManualReassignment\(\) \{[\s\S]*?\n  \}/);
   assert.ok(fn, 'Không tìm thấy saveManualReassignment');
   const body = fn[0];
@@ -476,8 +476,12 @@ runTest('3.14: Xếp thủ công cho phép override nhưng phải cảnh báo r�
     'Phải cảnh báo khi gán CTV chưa đăng ký ca');
   assert.ok(/vai trò/.test(body), 'Phải cảnh báo khi trái vai trò');
   assert.ok(/cùng ngày/.test(body), 'Phải cảnh báo khi trùng ca trong cùng ngày');
-  assert.ok(/window\.confirm/.test(body),
-    'Phải cho admin xác nhận và vẫn gán được (override), không chặn cứng');
+  assert.ok(/showToast\(\s*`⚠️ Đã gán/.test(body),
+    'Phải hiện cảnh báo bằng toast sau khi gán');
+  // KHÔNG được dùng window.confirm: khi trình duyệt chặn hộp thoại (sau vài
+  // lần hiện), confirm() trả false ngay và mọi lần gán sau đó bị huỷ âm thầm.
+  assert.ok(!/window\.confirm/.test(body),
+    'Không được dùng window.confirm trong luồng gán ca (bị chặn = mất thao tác âm thầm)');
   assert.ok(!/Vui lòng chọn người khác hoặc cập nhật ca rảnh trước/.test(body),
     'Không được chặn cứng người chưa đăng ký ca rảnh');
   assert.ok(/recomputeWeekStats/.test(body),
