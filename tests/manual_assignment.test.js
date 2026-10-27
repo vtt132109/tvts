@@ -157,10 +157,20 @@ function manualMap() {
   return JSON.parse(LS.getItem('ts_scheduler_manual_slots') || '{}');
 }
 
-/** Gán tay qua đúng luồng giao diện: mở modal -> chọn người -> bấm lưu. */
-function assignViaUi(shiftId, role, weekNum, studentId) {
+/** Gán tay qua đúng luồng giao diện: mở modal -> chọn người -> bấm lưu.
+ * studentRef: id HOẶC mã sinh viên (tự quy ra chỉ số option hiện hành). */
+function assignViaUi(shiftId, role, weekNum, studentRef) {
   global.window.adminOpenReassignModal(shiftId, role, weekNum);
-  els['modal-candidate-select'].value = studentId || '';
+  const sel = els['modal-candidate-select'];
+  const modalData = H.getState().reassignModalData || {};
+  const candidates = modalData.candidates || [];
+
+  let value = '';
+  if (studentRef !== undefined && studentRef !== null && studentRef !== '') {
+    const idx = candidates.findIndex(s => s && (s.id === studentRef || s.studentId === studentRef));
+    value = idx >= 0 ? String(idx) : String(studentRef);
+  }
+  sel.value = value;
   els['btn-save-modal'].click();
 }
 
@@ -413,6 +423,52 @@ runTest('Tạo lịch tháng từ lịch tuần cũ: giữ nguyên ca đã xếp
   const saved = JSON.parse(LS.getItem('ts_scheduler_month_result'));
   assert.strictEqual(saved.weeks[0].scheduleTable['T3_C'].oldMember.fullName, 'Nguyen Van A',
     'Ca T3_C của lịch cũ phải được chuyển sang lịch tháng, không được mất');
+});
+
+// ============================================================================
+// GROUP 2b: DỮ LIỆU CTV THIẾU `id` (nguồn Cloud cũ)
+// ============================================================================
+runTest('CTV thiếu id: loadData tự bổ sung id duy nhất', () => {
+  seed();
+  LS.setItem('ts_scheduler_students', JSON.stringify([
+    { studentId: '22133001', fullName: 'Khong Co Id 1', role: 'old' },
+    { studentId: '22133002', fullName: 'Khong Co Id 2', role: 'new' },
+    { studentId: '22133001', fullName: 'Trung MSSV', role: 'new' }
+  ]));
+  H.loadData();
+
+  const ids = H.getState().students.map(s => s.id);
+  assert.strictEqual(ids.filter(Boolean).length, 3, 'Mọi CTV phải có id');
+  assert.strictEqual(new Set(ids).size, 3, 'Id phải duy nhất');
+});
+
+runTest('CTV thiếu id: chọn người rồi lưu vẫn gán đúng, không bị hiểu là "để trống"', () => {
+  seed();
+  LS.setItem('ts_scheduler_students', JSON.stringify([
+    { studentId: '22133001', fullName: 'Khong Co Id 1', role: 'old', availableShifts: ['T2_S'], monthlyAvailableShifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] } },
+    { studentId: '22133002', fullName: 'Khong Co Id 2', role: 'new', availableShifts: ['T2_S'], monthlyAvailableShifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] } }
+  ]));
+  H.loadData();
+
+  assignViaUi('T2_S', 'old', 1, '22133001');
+
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.fullName, 'Khong Co Id 1',
+    'Phải gán được CTV thiếu id (trước đây value option là "undefined" nên thành để trống)');
+});
+
+runTest('Chọn option không hợp lệ KHÔNG được xoá ca đang có người', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assert.ok(savedSlot(1, 'T2_S').oldMember, 'Bước 1: phải gán được');
+
+  // Mô phỏng value rác (dữ liệu cũ / trình duyệt lạ)
+  global.window.adminOpenReassignModal('T2_S', 'old', 1);
+  els['modal-candidate-select'].value = '9999';
+  els['btn-save-modal'].click();
+
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.fullName, 'Nguyen Van A',
+    'Lựa chọn không xác định được thì phải bỏ qua, không được coi là "để trống"');
 });
 
 // ============================================================================
