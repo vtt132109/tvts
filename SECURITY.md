@@ -11,6 +11,11 @@
 > **Trạng thái 2026-10-24:** sự cố đọc công khai đã được xử lý. `database.rules.json`
 > đã Publish lên project `vtt123-76e07`; các probe bên dưới trả 401 cho dữ liệu riêng tư
 > và `swaps`, 200 cho `tvts_public`. Mục 1 giữ lại làm hồ sơ sự cố.
+>
+> **Cập nhật 2026-10-28 (đợt 3):** (a) gỡ điều khoản "bootstrap" của `/staff_emails`
+> — xem mục 8, **phải Publish lại Rules**; (b) thêm **Firebase App Check** tuỳ chọn
+> (mục 9); (c) rà nhánh công khai `tvts_public` (mục 10) — không lộ SĐT/email/ngân hàng,
+> đã bỏ `deviceId` và bản trùng `allMonths`.
 
 ---
 
@@ -236,3 +241,80 @@ git ls-files | Select-String -Pattern '\.(csv|xlsx|xls)$|admin_accounts'
 # 4. Bộ test hồi quy (mong đợi 400/400)
 node tests/run_all_tests.js
 ```
+
+---
+
+## 8. ✅ 2026-10-28 — Gỡ điều khoản "bootstrap" của `/staff_emails`
+
+### Vấn đề
+
+`/staff_emails/$emailKey` từng có thêm điều khoản ghi:
+
+```text
+!root.child('staff_emails').exists() && $emailKey === auth.token.email...
+```
+
+Nghĩa là: **khi `/staff_emails` chưa tồn tại, BẤT KỲ tài khoản Google nào** cũng ghi
+được email của chính mình vào allow-list → tự cấp quyền cán bộ, đọc/ghi toàn bộ
+`tvts_production_data`. Chỉ cần một người lạ đăng nhập Google trước Trưởng ban.
+
+### Đã sửa
+
+Xoá hẳn điều khoản đó. Quyền cấp phát nay chỉ còn:
+
+- email Trưởng ban hardcode trong Rules (10 chỗ), hoặc
+- UID trong `/staff`, hoặc
+- email đã có sẵn trong `/staff_emails`.
+
+Test canh: `tests/cloud_sync.test.js` mục **12.14b**.
+
+> ⚠️ **CẦN LÀM THỦ CÔNG:** copy `database.rules.json` vào Firebase Console →
+> Realtime Database → Rules → **Publish**. Chưa Publish thì Rules trên Cloud vẫn
+> còn điều khoản cũ.
+
+---
+
+## 9. 🛡️ 2026-10-28 — Firebase App Check (tuỳ chọn, đã có sẵn mã)
+
+Web API Key nằm công khai trong `tvts_public/clientConfig`, nên người ngoài có thể
+gọi REST. **App Check** chặn điều đó bằng reCAPTCHA v3.
+
+Cách bật (làm 1 lần):
+
+1. Firebase Console → **App Check** → Apps → chọn web app → **reCAPTCHA v3**
+   → lấy **site key** (dạng `6Lc...`).
+2. Admin → ☁️ Đồng Bộ Cloud → dán vào ô **App Check site key** → Lưu.
+3. Kiểm tra: DevTools → Network → request `…firebaseio.com/…` có header
+   `X-Firebase-AppCheck`.
+4. Khi chắc chắn mọi máy đã chạy bản mới → App Check → **Enforce**.
+
+Mã: `js/cloud_sync.js` (`getAppCheckToken`, `fbFetch`). Mọi request Firebase đi qua
+`fbFetch` nên chỉ một chỗ gắn header. Chưa cấu hình site key → hành vi y như cũ.
+Test: `tests/app_check.test.js` (6 test).
+
+---
+
+## 10. 🔍 2026-10-28 — Rà nhánh công khai `tvts_public`
+
+Probe không đăng nhập:
+
+```text
+GET https://vtt123-76e07-default-rtdb.firebaseio.com/tvts_public.json
+→ HTTP 200, ~514 KB
+```
+
+Kết quả quét toàn bộ payload:
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `phone`, `email`, `bankAccount`, `cccd`, `address` | **0 lần** — bộ lọc PII hoạt động |
+| `passwordHash`, `pinHash`, salt | 0 lần |
+| Họ tên trong lịch trực | 3.550 lần (dữ liệu nghiệp vụ, cần cho tra cứu ca) |
+| MSSV | 3.548 lần |
+| `deviceId` (định danh thiết bị) | **Có** → đã bỏ khỏi payload công khai |
+| `allMonths` + `allMonthSchedules` | Trùng y hệt nhau (cùng một khoá) → đã bỏ bản trùng, giảm ~50% dung lượng |
+
+Lưu ý còn lại: nhánh này **ai cũng đọc được** (theo thiết kế, để cổng sinh viên
+không cần đăng nhập). Dữ liệu gồm họ tên + MSSV + lịch nhiều tháng. Nếu muốn siết:
+đặt `.read` yêu cầu `auth != null` (cổng sinh viên đã có phiên ẩn danh) — cần kiểm
+thử lại luồng cổng sinh viên trước khi đổi.

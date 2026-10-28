@@ -46,9 +46,20 @@
     // 'admin' | 'student' — trang sinh viên tự khai báo window.TVTS_CLOUD_ROLE.
     role: 'admin',
     autoSync: true,
+    // App Check (reCAPTCHA v3): dán site key lấy từ Firebase Console >
+    // App Check > Apps > (web app) > reCAPTCHA v3. Để trống = tắt App Check.
+    // Khi bật, mọi request REST gửi kèm header X-Firebase-AppCheck.
+    appCheckSiteKey: '',
     lastSyncTime: null,
     deviceId: ''
   };
+
+  /**
+   * Cache token App Check (sống ~1 giờ). Không ghi ra localStorage.
+   * Tách khỏi authTokenCache để không ảnh hưởng luồng đăng nhập.
+   */
+  let appCheckTokenCache = { token: '', expiresAt: 0 };
+  let appCheckInitPromise = null;
 
   /**
    * Cache ID token trong RAM (không ghi ra localStorage).
@@ -298,7 +309,7 @@
       return { success: true, uid: anonymousAuthCache.uid, token: anonymousAuthCache.token };
     }
     try {
-      const res = await fetch(
+      const res = await fbFetch(
         'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(apiKey),
         {
           method: 'POST',
@@ -346,7 +357,7 @@
     }
     if (anonymousAuthCache.refreshToken && apiKey) {
       try {
-        const res = await fetch(
+        const res = await fbFetch(
           'https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(apiKey),
           {
             method: 'POST',
@@ -404,7 +415,7 @@
 
     let res;
     try {
-      res = await fetch(
+      res = await fbFetch(
         'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='
         + encodeURIComponent(apiKey),
         {
@@ -449,7 +460,7 @@
    */
   async function readStaffFlag(url, label) {
     try {
-      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      const response = await fbFetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
       let data = null;
       try { data = await response.json(); } catch (e) { data = null; }
 
@@ -626,7 +637,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(value)
@@ -685,7 +696,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, { method: 'DELETE' });
+      const response = await fbFetch(url, { method: 'DELETE' });
       let data = null;
       try { data = await response.json(); } catch (e) { data = null; }
       if (!response.ok) {
@@ -709,7 +720,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+      const response = await fbFetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -807,9 +818,108 @@
     });
   }
 
+  // ==========================================================================
+  // APP CHECK (tuỳ chọn) — chặn gọi REST trái phép bằng Web API Key công khai
+  // ==========================================================================
+  // Bật bằng cách dán reCAPTCHA v3 site key vào Cài đặt Cloud. Khi chưa cấu
+  // hình, mọi thứ hoạt động y như cũ (không thêm header, không nạp SDK).
+
+  /** Đã cấu hình App Check chưa (cần site key). */
+  function isAppCheckEnabled() {
+    try {
+      const cfg = getConfig();
+      return !!(cfg && cfg.appCheckSiteKey && String(cfg.appCheckSiteKey).trim());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Nạp SDK App Check compat từ CDN (chỉ 1 lần). */
+  function loadAppCheckSdk() {
+    if (window.firebase && typeof window.firebase.appCheck === 'function') {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const s = document.createElement('script');
+        s.src = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app-check-compat.js';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Không nạp được App Check SDK'));
+        document.head.appendChild(s);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /** Khởi tạo App Check (một lần). Trả về appCheck instance hoặc null. */
+  function initAppCheck() {
+    if (appCheckInitPromise) return appCheckInitPromise;
+    appCheckInitPromise = (async () => {
+      const cfg = getConfig();
+      const siteKey = String((cfg && cfg.appCheckSiteKey) || '').trim();
+      if (!siteKey) return null;
+
+      await loadAppCheckSdk();
+      const fb = window.firebase;
+      if (!fb || typeof fb.appCheck !== 'function') return null;
+
+      let app;
+      try {
+        app = fb.app();
+      } catch (e) {
+        app = fb.initializeApp({ apiKey: cfg.apiKey || undefined });
+      }
+      fb.appCheck(app).activate(siteKey, true);
+      return fb.appCheck(app);
+    })().catch((e) => {
+      console.warn('[AppCheck] Không khởi tạo được:', e.message);
+      return null;
+    });
+    return appCheckInitPromise;
+  }
+
+  /** App Check token, hoặc null nếu chưa bật/lỗi. KHÔNG bao giờ ném lỗi. */
+  async function getAppCheckToken() {
+    if (!isAppCheckEnabled()) return null;
+
+    const now = Date.now();
+    if (appCheckTokenCache.token && appCheckTokenCache.expiresAt > now + 60000) {
+      return appCheckTokenCache.token;
+    }
+
+    try {
+      const ac = await initAppCheck();
+      if (!ac) return null;
+      const res = await ac.getToken(false);
+      if (res && res.token) {
+        appCheckTokenCache = {
+          token: res.token,
+          expiresAt: res.expireTimeMillis || (now + 30 * 60000)
+        };
+        return res.token;
+      }
+    } catch (e) {
+      // App Check lỗi (mạng, reCAPTCHA bị chặn) không được chặn nghiệp vụ.
+    }
+    return null;
+  }
+
   /**
-   * Trang nào đang chạy: 'admin' (mặc định, có toàn quyền) hay 'student'
-   * (chỉ đọc dữ liệu công khai và gửi yêu cầu).
+   * fetch cho mọi request Firebase: tự gắn header X-Firebase-AppCheck khi bật.
+   * Chưa cấu hình App Check -> hành vi y hệt fetch thường.
+   */
+  async function fbFetch(url, options) {
+    const opts = Object.assign({}, options);
+    const token = await getAppCheckToken();
+    if (token) {
+      opts.headers = Object.assign({}, opts.headers, { 'X-Firebase-AppCheck': token });
+    }
+    return fetch(url, opts);
+  }
+
+  /**
+   * Trang nào đang chạy: 'admin' (mặc định, có toàn quyền) hay 'student'   * (chỉ đọc dữ liệu công khai và gửi yêu cầu).
    *
    * Trang sinh viên khai báo window.TVTS_CLOUD_ROLE = 'student' TRƯỚC khi nạp
    * js/cloud_sync.js. Trong môi trường test (không khai báo) mặc định là admin
@@ -1343,8 +1453,7 @@
     const payload = {
       meta: {
         updatedAt: Date.now(),
-        version: 'public-1.0',
-        deviceId: getOrCreateDeviceId()
+        version: 'public-1.1'
       },
       // Cấu hình client công khai (Web API Key KHÔNG phải bí mật). Nhờ đó máy
       // sinh viên biết API Key để tạo phiên ẩn danh mà không cần nhập tay.
@@ -1358,14 +1467,15 @@
       monthSchedule: sanitizePublicData(readStorageJson(STORAGE_KEYS.MONTH_SCHEDULE, null)),
       regConfig: sanitizePublicData(readStorageJson(STORAGE_KEYS.REG_CONFIG, null)),
       events: sanitizePublicData(readStorageJson(STORAGE_KEYS.EVENTS, [])),
+      // Nhánh công khai ai cũng đọc được -> KHÔNG được chứa định danh thiết bị.
+      // `allMonths` là bản trùng y hệt của `allMonthSchedules` (cùng đọc một
+      // khoá), nên chỉ công bố một bản để giảm một nửa dung lượng.
       allMonthSchedules: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
-      allMonths: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
       activeMonth: normalizeActiveMonth(readStorageJson(STORAGE_KEYS.ACTIVE_MONTH, null)),
       availabilityMonth: readStorageJson(STORAGE_KEYS.AVAILABILITY_MONTH, null),
       swapStatuses,
       updatedAt: Date.now(),
-      deviceId: getOrCreateDeviceId(),
-      version: 'public-1.0'
+      version: 'public-1.1'
     };
 
     // Cùng nguyên tắc chống xoá nhầm như buildPayload: máy chưa có danh sách
@@ -1570,7 +1680,7 @@
     const payload = buildPublicPayload();
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1620,7 +1730,7 @@
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
@@ -1713,7 +1823,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1779,7 +1889,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(uid)
@@ -1882,7 +1992,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      const response = await fbFetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
@@ -1920,7 +2030,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      const response = await fbFetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Firebase HTTP ${response.status}: ${errorText || response.statusText}`);
@@ -2132,7 +2242,7 @@
     if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
 
     try {
-      const response = await fetch(url, {
+      const response = await fbFetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch || {})
@@ -2209,7 +2319,7 @@
     if (needsPreflight) {
       let preflightError = '';
       try {
-        const preflightResponse = await fetch(authedUrl, {
+        const preflightResponse = await fbFetch(authedUrl, {
           method: 'GET',
           headers: { 'Accept': 'application/json' }
         });
@@ -2362,7 +2472,7 @@
 
     try {
       markLocalDirty(cfg);
-      const response = await fetch(authedUrl, {
+      const response = await fbFetch(authedUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyToSend)
@@ -2443,7 +2553,7 @@
     const authedUrl = formatFirebaseUrl(cfg.databaseUrl, cfg.syncPath, token);
 
     try {
-      const response = await fetch(authedUrl, {
+      const response = await fbFetch(authedUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
@@ -2562,7 +2672,7 @@
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
 
-      const res = await fetch(authedUrl, {
+      const res = await fbFetch(authedUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
         signal: controller ? controller.signal : undefined
@@ -2690,6 +2800,16 @@
     DEFAULT_CONFIG,
     getConfig,
     saveConfig,
+    // App Check (tuỳ chọn)
+    isAppCheckEnabled,
+    getAppCheckToken,
+    // Nội bộ, dùng cho kiểm thử: request có gắn App Check header.
+    __request: fbFetch,
+    // Nội bộ, dùng cho kiểm thử: xoá cache token/khởi tạo App Check.
+    __resetAppCheck: () => {
+      appCheckTokenCache = { token: '', expiresAt: 0 };
+      appCheckInitPromise = null;
+    },
     formatFirebaseUrl,
     buildPayload,
     applyPayload,

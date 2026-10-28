@@ -224,6 +224,53 @@
     }
   }
 
+  /**
+   * Đọc kho lịch các tháng từ IndexedDB (bất đồng bộ) rồi cache trong RAM.
+   * Dùng khi localStorage không còn tháng cần xem (bị xoá / hết dung lượng)
+   * nhưng bản mirror trong IndexedDB vẫn còn.
+   *
+   * @returns {Promise<object>} map { 'YYYY-MM': monthSchedule }
+   */
+  let archiveCache = null;
+  let archiveCacheAt = 0;
+  const ARCHIVE_CACHE_MS = 30000;
+
+  function loadMonthArchive(force) {
+    const now = Date.now();
+    if (!force && archiveCache && (now - archiveCacheAt) < ARCHIVE_CACHE_MS) {
+      return Promise.resolve(archiveCache);
+    }
+    return read('ts_scheduler_all_months_v1').then(raw => {
+      let map = {};
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) map = parsed;
+        } catch (e) { map = {}; }
+      }
+      archiveCache = map;
+      archiveCacheAt = Date.now();
+      return map;
+    }).catch(() => ({}));
+  }
+
+  /**
+   * Lấy lịch của MỘT tháng từ kho lưu trữ IndexedDB.
+   * @param {number} month 1..12
+   * @param {number} year
+   * @returns {Promise<object|null>}
+   */
+  function getMonthSchedule(month, year) {
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    if (!m || !y) return Promise.resolve(null);
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    return loadMonthArchive(false).then(map => {
+      const hit = map && map[key];
+      return (hit && typeof hit === 'object') ? hit : null;
+    });
+  }
+
   window.TvtsStore = {
     DB_NAME,
     STORE_NAME,
@@ -238,6 +285,10 @@
     restoreMissing,
     restoreMissingAll,
     mirrorFromLocalStorage,
+    loadMonthArchive,
+    getMonthSchedule,
+    /** Xoá cache kho lịch trong RAM (sau khi Admin vừa ghi thêm tháng). */
+    invalidateMonthArchive: () => { archiveCache = null; archiveCacheAt = 0; },
     // Dùng cho kiểm thử: xoá kết nối đã cache để nạp lại môi trường khác.
     _resetConnection: () => { dbPromise = null; }
   };

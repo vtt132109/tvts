@@ -800,6 +800,15 @@ console.log('\n▶ [GROUP 9] Dữ Liệu Công Khai Cho Sinh Viên (Không PII):
     '9.5: Giữ ca rảnh để sinh viên xem lại đăng ký');
   assert(payload.clientConfig && payload.clientConfig.apiKey === 'AIza_PUBLIC_TEST',
     '9.6: Công bố Web API Key (công khai) để máy sinh viên tạo phiên ẩn danh');
+
+  // 9.6b: nhánh công khai ai cũng đọc được -> không được chứa định danh thiết bị,
+  // và không được gửi 2 bản trùng nhau của cùng một kho lịch tháng.
+  assert(!('deviceId' in payload) && !(payload.meta && 'deviceId' in payload.meta),
+    '9.6b: Nhánh công khai không được chứa deviceId');
+  assert(!('allMonths' in payload),
+    '9.6c: Không được gửi trùng allMonths (đã có allMonthSchedules)');
+  assert('allMonthSchedules' in payload,
+    '9.6d: Vẫn phải giữ allMonthSchedules để cổng sinh viên có lịch sử ca');
 }
 
 {
@@ -1700,6 +1709,14 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && emailWriteRule.includes("sign_in_provider === 'google.com'")
     && /isBoolean/.test((staffEmails['$emailKey'] || {})['.validate'] || ''),
   '12.14: /staff_emails chỉ cho cán bộ Google đã xác thực cấp/thu quyền, giá trị phải là boolean');
+
+  // 12.14b: KHÔNG được có điều khoản "bootstrap" cho phép người Google bất kỳ
+  // tự ghi email của mình vào allow-list khi /staff_emails chưa tồn tại.
+  // Với điều khoản đó, bất kỳ tài khoản Google nào cũng chiếm được quyền cán bộ
+  // ngay lần ghi đầu tiên.
+  assert(!/!root\.child\('staff_emails'\)\.exists\(\)/.test(
+    JSON.stringify(staffEmails)),
+  '12.14b: /staff_emails KHÔNG được còn điều khoản bootstrap tự cấp quyền');
 
   const productionReadRule = (r.tvts_production_data || {})['.read'] || '';
   assert(productionReadRule.includes('staff_emails')
