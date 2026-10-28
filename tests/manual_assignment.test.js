@@ -456,6 +456,30 @@ runTest('CTV thiếu id: chọn người rồi lưu vẫn gán đúng, không b�
     'Phải gán được CTV thiếu id (trước đây value option là "undefined" nên thành để trống)');
 });
 
+runTest('CTV thiếu id: checkbox data-id trong bảng CTV hợp lệ (không rỗng, không trùng)', () => {
+  seed();
+  LS.setItem('ts_scheduler_students', JSON.stringify([
+    { studentId: '22133001', fullName: 'Khong Co Id 1', role: 'old' },
+    { studentId: '22133002', fullName: 'Khong Co Id 2', role: 'new' }
+  ]));
+  H.loadData();
+  H.renderStudentTable();
+
+  const table = Object.values(els).find(e =>
+    typeof e.innerHTML === 'string' && e.innerHTML.includes('cb-student-row'));
+  assert.ok(table, 'Phải render được bảng CTV');
+
+  const ids = [...table.innerHTML.matchAll(/data-id="([^"]*)"/g)].map(m => m[1]);
+  assert.strictEqual(ids.length, 2, 'Phải có 2 checkbox');
+  assert.ok(ids.every(id => id && id !== 'undefined'),
+    'data-id không được rỗng/undefined: ' + JSON.stringify(ids));
+  assert.strictEqual(new Set(ids).size, 2, 'data-id phải duy nhất');
+
+  // id đã chuẩn hoá phải được ghi lại xuống storage (Cloud/cổng SV cùng thấy)
+  const stored = JSON.parse(LS.getItem('ts_scheduler_students'));
+  assert.ok(stored.every(s => s.id), 'loadData phải lưu lại id đã chuẩn hoá vào localStorage');
+});
+
 runTest('Chọn option không hợp lệ KHÔNG được xoá ca đang có người', () => {
   seed();
   H.loadData();

@@ -1730,22 +1730,28 @@
   /**
    * Bổ sung `id` còn thiếu hoặc bị trùng cho danh sách CTV.
    * Nguồn dữ liệu Cloud/CSV cũ có bản ghi chỉ có studentId + fullName.
+   *
+   * @returns {boolean} true nếu có thay đổi (cần ghi lại xuống localStorage)
    */
   function normalizeStudentIds() {
-    if (!Array.isArray(state.students)) return;
+    if (!Array.isArray(state.students)) return false;
+    let changed = false;
     const used = new Set();
     state.students.forEach((s, i) => {
       if (!s || typeof s !== 'object') return;
-      let id = s.id ? String(s.id).trim() : '';
+      const before = s.id ? String(s.id).trim() : '';
+      let id = before;
       if (!id || used.has(id)) {
         const base = s.studentId ? String(s.studentId).trim() : ('idx' + i);
         id = 's_' + base;
         let n = 1;
         while (used.has(id)) { id = 's_' + base + '_' + (n++); }
+        changed = true;
       }
       s.id = id;
       used.add(id);
     });
+    return changed;
   }
 
   function loadData() {
@@ -1774,9 +1780,16 @@
       // Bảo đảm mọi CTV có `id` ổn định và duy nhất. Dữ liệu Cloud cũ có thể
       // thiếu `id`; khi đó mọi option trong hộp thoại gán ca từng có cùng
       // value "undefined" nên chọn ai cũng bị hiểu là "để trống".
-      normalizeStudentIds();
+      if (normalizeStudentIds()) {
+        // Ghi lại ngay để Cloud push / cổng sinh viên cũng thấy id ổn định.
+        // KHÔNG dùng saveStudents(): chỉ mở trang không được tự đẩy dữ liệu lên Cloud.
+        try {
+          localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+        } catch (e) { /* hết dung lượng: id vẫn được giữ trong RAM */ }
+      }
 
-      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);      const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
+      const rawMonth = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE) || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
+      const rawSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
 
       if (rawMonth) {
         state.monthSchedule = JSON.parse(rawMonth);
@@ -1911,7 +1924,15 @@
         localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
         localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: curM, year: curY }));
         mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
-      } catch (e) {}
+        // Kho lịch vừa đổi -> bỏ cache RAM của lớp IndexedDB để lần đọc sau
+        // (switchAdminMonth) thấy dữ liệu mới nhất.
+        if (window.TvtsStore && typeof window.TvtsStore.invalidateMonthArchive === 'function') {
+          window.TvtsStore.invalidateMonthArchive();
+        }
+      } catch (e) {
+        // Ghi log thay vì nuốt im lặng: hết dung lượng ở đây từng làm mất lịch tháng.
+        console.warn('[Admin] Không ghi được kho lịch tháng:', e && e.message);
+      }
     } else {
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
@@ -2390,12 +2411,37 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
     // 3. Khôi phục lịch tháng mới nếu đã lưu trước đó, hoặc tự động phân bổ lịch cho tháng mới
     const targetKey = `${targetYear}-${pad2(targetMonth)}`;
+
+    // C1 (#16): localStorage không còn tháng này (bị xoá / hết dung lượng)?
+    // Thử bản mirror trong IndexedDB trước khi chấp nhận xếp lại từ đầu.
+    let restoredFromIndexedDb = false;
+    if (!allMonths[targetKey] && window.TvtsStore
+      && typeof window.TvtsStore.getMonthSchedule === 'function') {
+      try {
+        const fromIdb = await window.TvtsStore.getMonthSchedule(targetMonth, targetYear);
+        if (fromIdb && Array.isArray(fromIdb.weeks) && fromIdb.weeks.length > 0) {
+          allMonths[targetKey] = fromIdb;
+          restoredFromIndexedDb = true;
+        }
+      } catch (e) {
+        // Không có mirror cũng không sao, nhưng phải ghi log để không "nuốt" lỗi.
+        console.warn('[Admin] Không đọc được kho lịch từ IndexedDB:', e && e.message);
+      }
+    }
+
     if (allMonths[targetKey]) {
       state.monthSchedule = allMonths[targetKey];
       state.twoWeekSchedule = allMonths[targetKey];
       const weekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
       state.currentSchedule = state.monthSchedule.weeks?.[weekIdx] || state.monthSchedule.week1 || state.monthSchedule;
       saveSchedule(true);
+      if (restoredFromIndexedDb) {
+        showToast(
+          `♻️ Đã khôi phục lịch Tháng ${pad2(targetMonth)}/${targetYear} từ bộ nhớ trình duyệt (IndexedDB).`,
+          'info',
+          6000
+        );
+      }
     } else {
       runFullSchedule();
     }
@@ -4680,8 +4726,8 @@ window.adminDeleteStudent = async function(studentId) {
   /**
    * Phân tích CSV danh sách CTV.
    *
-   * VẪN trả về mảng candidates như hợp đồng cũ: khoi_phuc_58.js trích thân
-   * hàm này và tìm đúng chuỗi `return candidates;`. Báo cáo chi tiết được
+   * VẪN trả về mảng candidates như hợp đồng cũ: scripts/khoi_phuc_58.js trích
+   * thân hàm này và tìm đúng chuỗi `return candidates;`. Báo cáo chi tiết được
    * gắn vào lastCsvReport để analyzeStudentsCsv() đọc lại.
    */
   function parseStudentsCsv(csvText) {
@@ -7274,6 +7320,9 @@ async function handleDeleteEvent(id) {
     // Dùng cho kiểm thử: sổ tay gán ca theo tháng.
     recordManualSlot,
     reapplyManualSlots,
+    // Dùng cho kiểm thử: chuẩn hoá id CTV + vẽ bảng CTV.
+    normalizeStudentIds,
+    renderStudentTable,
     getState: () => ({ ...state })
   };
 
@@ -8599,12 +8648,14 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       const urlInput = document.getElementById('cloud-input-url');
       const pathInput = document.getElementById('cloud-input-path');
       const keyInput = document.getElementById('cloud-input-key');
+      const appCheckInput = document.getElementById('cloud-input-appcheck');
       const autosyncInput = document.getElementById('cloud-input-autosync');
 
       if (enabledInput) enabledInput.checked = Boolean(cfg.enabled);
       if (urlInput) urlInput.value = cfg.databaseUrl || '';
       if (pathInput) pathInput.value = cfg.syncPath || 'tvts_production_data';
       if (keyInput) keyInput.value = cfg.apiKey || '';
+      if (appCheckInput) appCheckInput.value = cfg.appCheckSiteKey || '';
       if (autosyncInput) autosyncInput.checked = cfg.autoSync !== false;
 
       updateCloudUIStatus();
@@ -8636,6 +8687,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       const databaseUrl = document.getElementById('cloud-input-url')?.value.trim();
       const syncPath = document.getElementById('cloud-input-path')?.value.trim() || 'tvts_production_data';
       const apiKey = document.getElementById('cloud-input-key')?.value.trim();
+      const appCheckSiteKey = document.getElementById('cloud-input-appcheck')?.value.trim() || '';
       const autoSync = document.getElementById('cloud-input-autosync')?.checked;
 
       if (enabled && !databaseUrl) {
@@ -8644,8 +8696,13 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       }
 
       if (window.CloudSyncManager) {
-        window.CloudSyncManager.saveConfig({ enabled, databaseUrl, syncPath, apiKey, autoSync });
-        showToast('Đã lưu cấu hình Đồng bộ Đám mây thành công!', 'success');
+        window.CloudSyncManager.saveConfig({ enabled, databaseUrl, syncPath, apiKey, appCheckSiteKey, autoSync });
+        showToast(
+          appCheckSiteKey
+            ? 'Đã lưu cấu hình Cloud + App Check. Nếu đã bật Enforce trong Console, request sẽ gửi kèm X-Firebase-AppCheck.'
+            : 'Đã lưu cấu hình Đồng bộ Đám mây thành công!',
+          'success'
+        );
         updateCloudUIStatus();
         updateGoogleAuthStatus();
       }

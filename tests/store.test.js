@@ -140,6 +140,8 @@ function resetAll() {
   // Mỗi test dùng một IndexedDB giả lập mới tinh (dữ liệu không dính sang test sau).
   global.indexedDB = createFakeIndexedDB();
   Store._resetConnection();
+  // Xoá cả cache kho lịch trong RAM, nếu không test sau sẽ đọc lại bản cũ.
+  if (typeof Store.invalidateMonthArchive === 'function') Store.invalidateMonthArchive();
 }
 
 (async () => {
@@ -338,6 +340,60 @@ function resetAll() {
     assert.ok(src.includes('restoreMissingAll('), 'Phải gọi restoreMissingAll khi khởi động');
     assert.ok(src.includes('ts_store_recovery_done'), 'Phải có cờ chống lặp tải lại trang');
     assert.ok(src.includes('bootstrapIndexedDbRecovery();'), 'Phải gọi bootstrap trong initAdminPortal');
+  });
+
+  // ==========================================================================
+  // GROUP 5: C1 — ĐỌC KHO LỊCH THÁNG TỪ IndexedDB (bất đồng bộ)
+  // ==========================================================================
+  await runTest('C1: getMonthSchedule đọc đúng lịch của một tháng từ kho IndexedDB', async () => {
+    resetAll();
+    const archive = {
+      '2026-10': { month: 10, year: 2026, weeks: [{ weekNumber: 1, scheduleTable: {} }] },
+      '2026-11': { month: 11, year: 2026, weeks: [{ weekNumber: 1, scheduleTable: {} }] }
+    };
+    await Store.write('ts_scheduler_all_months_v1', JSON.stringify(archive));
+
+    const oct = await Store.getMonthSchedule(10, 2026);
+    assert.ok(oct, 'Phải tìm thấy lịch tháng 10');
+    assert.strictEqual(oct.month, 10);
+    assert.strictEqual(oct.weeks.length, 1);
+
+    const nov = await Store.getMonthSchedule(11, 2026);
+    assert.strictEqual(nov.month, 11, 'Tham số tháng phải được dùng đúng');
+  });
+
+  await runTest('C1: tháng không có trong kho -> null (không ném lỗi)', async () => {
+    resetAll();
+    await Store.write('ts_scheduler_all_months_v1', JSON.stringify({ '2026-10': { month: 10 } }));
+    assert.strictEqual(await Store.getMonthSchedule(12, 2026), null);
+    assert.strictEqual(await Store.getMonthSchedule(0, 0), null, 'Tham số sai phải trả null');
+  });
+
+  await runTest('C1: cache RAM được xoá khi Admin ghi thêm tháng mới', async () => {
+    resetAll();
+    await Store.write('ts_scheduler_all_months_v1', JSON.stringify({ '2026-10': { month: 10 } }));
+
+    assert.strictEqual(await Store.getMonthSchedule(11, 2026), null, 'Lần đầu chưa có tháng 11');
+
+    // Admin ghi thêm tháng 11 vào IndexedDB
+    await Store.write('ts_scheduler_all_months_v1', JSON.stringify({
+      '2026-10': { month: 10 },
+      '2026-11': { month: 11, weeks: [] }
+    }));
+
+    // Chưa xoá cache -> có thể vẫn thấy bản cũ (đúng thiết kế cache 30s)
+    Store.invalidateMonthArchive();
+    const nov = await Store.getMonthSchedule(11, 2026);
+    assert.ok(nov, 'Sau khi xoá cache phải thấy tháng vừa ghi');
+    assert.strictEqual(nov.month, 11);
+  });
+
+  await runTest('C1: admin.js thử khôi phục tháng từ IndexedDB trước khi xếp lại từ đầu', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../js/admin.js'), 'utf8');
+    assert.ok(/TvtsStore\.getMonthSchedule\(targetMonth, targetYear\)/.test(src),
+      'switchAdminMonth phải hỏi IndexedDB khi localStorage thiếu tháng');
+    assert.ok(/restoredFromIndexedDb/.test(src),
+      'Phải có cờ báo đã khôi phục từ IndexedDB để hiện thông báo');
   });
 
   // ==========================================================================

@@ -50,7 +50,6 @@
       ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
       ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && (auth.token.email.toLowerCase() === 'vutientai10@gmail.com' || root.child('staff').child(auth.uid).val() === true || root.child('staff_emails').child(auth.token.email.toLowerCase().replace('.', '%2E')).val() === true)",
       "$emailKey": {
-        ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com' && !root.child('staff_emails').exists() && $emailKey === auth.token.email.toLowerCase().replace('.', '%2E')",
         ".validate": "newData.isBoolean()"
       }
     }

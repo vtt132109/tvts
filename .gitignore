@@ -32,3 +32,13 @@ backup-*.json
 # File tài khoản admin dạng JSON: dữ liệu nhạy cảm, KHÔNG BAO GIỜ commit.
 # (đã xoá vì không mã nào đọc và trước đây bị deploy công khai)
 data/admin_accounts.json
+
+# === THƯ MỤC KHÔNG THUỘC DỰ ÁN NÀY ===
+# fb-aio.github.io là MỘT REPO GIT RIÊNG (13,5 MB) nằm lẫn trong thư mục dự án.
+# full-stack-preset là preset của công cụ khác.
+# Chặn ở đây để `git add -A` không nuốt cả hai vào kho công khai.
+fb-aio.github.io/
+full-stack-preset/
+
+# Video quay minh chứng thao tác (không cần đưa lên kho)
+*.webm
