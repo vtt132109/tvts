@@ -488,56 +488,20 @@ runTest('Purge một lần 3 tài khoản cũ thien/phuong/diephoi trên máy', 
   assert.ok(users.some(u => u.username === 'phuong'));
 });
 
-runTest('Thiết lập lần đầu: chặn xác nhận PIN sai và tạo được Trưởng ban khi storage trống', () => {
+runTest('Thiết lập lần đầu: máy mới chỉ hiện Google login, không bắt tạo tài khoản', () => {
   mockLocalStorage.clear();
   mockSessionStorage.clear();
   AdminAuth.logout();
   window.adminReloadAdminUsers();
   assert.strictEqual(AdminAuth.getAdminUsers().length, 0, 'Phải bắt đầu từ danh sách rỗng');
-  assert.strictEqual(elementsMap['admin-first-run'].style.display, 'block',
-    'Phải hiện form thiết lập lần đầu khi chưa có tài khoản');
+  assert.strictEqual(elementsMap['admin-first-run'].style.display, 'none',
+    'Không hiện form thiết lập lần đầu trên máy mới — chỉ để Google login');
   assert.strictEqual(elementsMap['admin-auth-tabs'].style.display, 'none',
-    'Phải ẩn tab đăng nhập khi chưa có tài khoản');
+    'Phải ẩn tab đăng nhập cục bộ khi chưa có tài khoản');
   assert.strictEqual(elementsMap['form-auth-credentials'].style.display, 'none',
     'Phải ẩn form đăng nhập khi chưa có tài khoản');
   assert.strictEqual(elementsMap['auth-error-box'].style.display, 'none',
     'Phải ẩn hộp lỗi đăng nhập khi chưa có tài khoản');
-
-  const form = elementsMap['form-admin-first-run'];
-  assert.ok(form && form.listeners && form.listeners.submit && form.listeners.submit.length > 0,
-    'admin.js phải bind submit cho #form-admin-first-run');
-  const submit = form.listeners.submit[0];
-
-  elementsMap['first-run-fullname'].value = 'Trưởng Ban Khởi Tạo';
-  elementsMap['first-run-username'].value = 'first.run.qa';
-  elementsMap['first-run-password'].value = 'FirstRun#2026';
-  elementsMap['first-run-password-confirm'].value = 'FirstRun#2026';
-  elementsMap['first-run-pin'].value = '112244';
-  elementsMap['first-run-pin-confirm'].value = '112245'; // cố ý lệch
-
-  submit({ preventDefault() {} });
-  assert.strictEqual(AdminAuth.getAdminUsers().length, 0, 'PIN xác nhận lệch không được tạo tài khoản');
-  assert.strictEqual(AdminAuth.isAuthenticated(), false);
-
-  elementsMap['first-run-pin-confirm'].value = '112244';
-  submit({ preventDefault() {} });
-
-  assert.strictEqual(AdminAuth.getAdminUsers().length, 1, 'Phải tạo đúng 1 Trưởng ban');
-  const created = AdminAuth.getAdminUsers()[0];
-  assert.strictEqual(created.username, 'first.run.qa');
-  assert.strictEqual(created.role, 'Trưởng ban điều hành');
-  assert.strictEqual(created.password, undefined, 'Không được lưu mật khẩu thô');
-  assert.ok(created.passwordHash && created.pinHash, 'Mật khẩu/PIN phải được băm');
-  assert.strictEqual(AdminAuth.isAuthenticated(), true, 'Tạo xong phải vào dashboard ngay');
-  assert.strictEqual(elementsMap['admin-first-run'].style.display, 'none',
-    'Sau khi tạo tài khoản, form thiết lập lần đầu phải ẩn đi');
-  assert.notStrictEqual(elementsMap['admin-auth-tabs'].style.display, 'none',
-    'Sau khi tạo tài khoản, tab đăng nhập phải hiện lại cho lần sau');
-
-  const stored = JSON.parse(mockLocalStorage.getItem(QA_ADMIN_USERS_KEY));
-  assert.strictEqual(stored.length, 1);
-  assert.strictEqual(stored[0].username, 'first.run.qa');
-  assert.ok(stored[0].passwordHash && stored[0].pinHash, 'Storage cũng chỉ lưu hash');
 });
 
 // ============================================================================

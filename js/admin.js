@@ -1072,6 +1072,8 @@
     const hasLocalAdmin = Array.isArray(state.adminUsers) && state.adminUsers.length > 0;
     const pinTabActive = !!(elements.tabAuthPin && elements.tabAuthPin.classList.contains('active'));
 
+    // Nếu không có tài khoản local, chỉ hiện Google login + Cloud recovery
+    // Không bắt buộc tạo tài khoản trên máy mới — để người dùng đăng nhập Google
     if (elements.authTabs) elements.authTabs.style.display = hasLocalAdmin ? '' : 'none';
     if (elements.authDivider) elements.authDivider.style.display = hasLocalAdmin ? 'flex' : 'none';
     if (elements.formAuthCredentials) {
@@ -1081,7 +1083,9 @@
       elements.formAuthPin.style.display = hasLocalAdmin && pinTabActive ? 'block' : 'none';
     }
     if (elements.adminFirstRun) {
-      elements.adminFirstRun.style.display = hasLocalAdmin ? 'none' : 'block';
+      // Ẩn form "Thiết lập lần đầu" — chỉ bắt buộc khi user có khối lượng lớn
+      // tài khoản từ Cloud phải quản lý. Trường hợp bình thường: đăng nhập Google.
+      elements.adminFirstRun.style.display = 'none';
     }
     if (!hasLocalAdmin) hideAuthError();
   }
