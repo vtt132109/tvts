@@ -318,3 +318,35 @@ Lưu ý còn lại: nhánh này **ai cũng đọc được** (theo thiết kế,
 không cần đăng nhập). Dữ liệu gồm họ tên + MSSV + lịch nhiều tháng. Nếu muốn siết:
 đặt `.read` yêu cầu `auth != null` (cổng sinh viên đã có phiên ẩn danh) — cần kiểm
 thử lại luồng cổng sinh viên trước khi đổi.
+
+---
+
+## 11. 🔓 2026-10-29 — MSSV bị khoá vào phiên ẩn danh cũ
+
+### Vấn đề
+
+`tvts_requests/mssv_owner/<MSSV>` gắn MSSV với uid của lần đăng ký đầu tiên và
+**không bao giờ cho đổi**. Nhưng uid ẩn danh có thể mất khi sinh viên xoá dữ liệu
+trình duyệt, đổi máy, hoặc khi cán bộ đăng nhập Google trên cùng trình duyệt
+(mỗi origin chỉ có một Firebase `currentUser`). Khi đó mọi lần lưu đều bị từ chối
+với thông báo "MSSV này đã được một phiên khác đăng ký trước", dù không có UI nào
+để cán bộ gỡ ràng buộc.
+
+### Đã sửa
+
+- **Phiên ẩn danh bền hơn:** refresh token được lưu tại `ts_anon_session_v1`
+  (localStorage) và làm mới trước khi tạo uid mới. Không còn tạo uid mới khi
+  Firebase SDK chưa kịp khôi phục phiên.
+- **Cán bộ Google không bị chặn:** nếu `mssv_owner` thuộc phiên ẩn danh cũ,
+  `submitRegistration()` bỏ qua bước giữ chỗ và ghi đăng ký bằng token cán bộ —
+  Rules vốn đã cho staff ghi `registrations`.
+- **Nút "🔓 Giải Phóng MSSV"** trong Admin → ☁️ Trung tâm Đồng bộ: xoá
+  `mssv_owner/<MSSV>` để sinh viên đổi máy giữ chỗ lại. Rules mới cho cán bộ
+  Google ghi/đè/xoá nhánh `mssv_owner`.
+
+> ⚠️ **CẦN LÀM THỦ CÔNG:** Publish lại `database.rules.json` (Realtime Database →
+> Rules → Publish). Chưa Publish thì nút Giải phóng MSSV trả 401/403; lưu đăng ký
+> bằng phiên cán bộ vẫn chạy vì nhánh `registrations` đã cho staff từ trước.
+
+Test canh: `tests/cloud_sync.test.js` mục **12.17b**, **18.1–18.8**.
+

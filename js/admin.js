@@ -9133,6 +9133,39 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
       showToast('Đã đăng xuất Google khỏi trình duyệt này.', 'info');
     });
 
+    // Sinh viên đổi máy/trình duyệt: xoá ràng buộc MSSV ↔ phiên ẩn danh cũ
+    // để lần lưu tiếp theo trên thiết bị mới được giữ chỗ.
+    document.getElementById('btn-cloud-release-mssv')?.addEventListener('click', async () => {
+      const input = document.getElementById('cloud-release-mssv');
+      const mssv = input ? input.value.trim() : '';
+      if (!mssv) {
+        showToast('Nhập MSSV cần giải phóng.', 'warning');
+        if (input) input.focus();
+        return;
+      }
+      if (!window.CloudSyncManager
+        || typeof window.CloudSyncManager.releaseMssvOwner !== 'function') {
+        showToast('Cloud Sync chưa sẵn sàng!', 'warning');
+        return;
+      }
+      if (typeof confirm === 'function'
+        && !confirm(`Giải phóng MSSV ${mssv} khỏi phiên đăng ký cũ?\n\n`
+          + 'Sinh viên cần mở lại cổng và bấm lưu ca rảnh để giữ chỗ cho thiết bị mới.')) {
+        return;
+      }
+      const res = await window.CloudSyncManager.releaseMssvOwner(mssv);
+      if (res && res.success) {
+        if (input) input.value = '';
+        showToast(
+          `Đã giải phóng MSSV ${mssv}. Sinh viên mở lại cổng và lưu ca rảnh để đăng ký lại.`,
+          'success',
+          7000
+        );
+      } else {
+        showToast('Lỗi giải phóng MSSV: ' + ((res && res.error) || 'không rõ nguyên nhân'), 'error', 8000);
+      }
+    });
+
     // Nhận ca rảnh & yêu cầu đổi ca do sinh viên gửi.
     // Ca rảnh được gộp tự động, KHÔNG hỏi duyệt và KHÔNG tự xếp lịch.
     document.getElementById('btn-cloud-pull-requests')?.addEventListener('click', async () => {

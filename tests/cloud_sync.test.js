@@ -30,6 +30,14 @@ function assert(condition, message) {
   }
 }
 
+/** JWT giả (chỉ payload được đọc — chữ ký không kiểm tra). */
+function fakeJwt(payload) {
+  const b64 = Buffer.from(JSON.stringify(payload)).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return 'eyJhbGciOiJub25lIn0.' + b64 + '.sig';
+}
+
+
 // Giả lập môi trường Browser DOM & Storage
 function createMockEnvironment() {
   const store = {};
@@ -1663,6 +1671,11 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   assert(adminHtml.includes('btn-cloud-google-login')
     && adminHtml.includes('btn-cloud-pull-requests'),
   '12.5: Admin phải có nút Đăng nhập Google và nút nhận ca rảnh');
+  const adminJsSource = fs.readFileSync(path.join(__dirname, '../js/admin.js'), 'utf8');
+  assert(adminHtml.includes('btn-cloud-release-mssv')
+    && adminHtml.includes('cloud-release-mssv')
+    && adminJsSource.includes('releaseMssvOwner'),
+  '12.5b: Admin phải có ô + nút Giải phóng MSSV nối tới CloudSyncManager.releaseMssvOwner');
   assert(!adminHtml.includes('cloud-input-auth-email')
     && !adminHtml.includes('cloud-input-auth-password'),
   '12.6: Đã bỏ tài khoản Email/Password dùng chung khỏi UI admin');
@@ -1734,6 +1747,10 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
   assert(/!data\.exists\(\)/.test(ownerRule['.write'] || '')
     && /auth\.uid/.test(ownerRule['.write'] || ''),
   '12.17: mssv_owner chỉ giữ chỗ MỘT lần cho đúng uid');
+  assert(/staff_emails/.test(ownerRule['.write'] || '')
+    && /google\.com/.test(ownerRule['.write'] || '')
+    && /auth\.token\.email_verified === true/.test(ownerRule['.write'] || ''),
+  '12.17b: Cán bộ Google được ghi đè/xoá mssv_owner để giải phóng MSSV cho thiết bị mới');
 
   // Sinh viên không được tự duyệt đề xuất đổi ca
   const swapRule = ((r.tvts_requests || {}).swaps || {})['$swapId'] || {};
@@ -2337,6 +2354,300 @@ console.log('\n▶ [GROUP 17] Chống Ghi Đè Khi Push Thất Bại:');
     '17.3: Người dùng OK thì được phép ghi đè bằng bản Cloud');
   assert(Number(csm.getConfig().localUpdatedAt) === 0,
     '17.3b: Sau khi chấp nhận pull, phải xoá cờ localUpdatedAt');
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 18: MSSV bị giữ bởi phiên cũ — cán bộ lưu được, sinh viên có lối khôi phục
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 18] Mssv_owner Cũ & Phiên Cán Bộ / Khôi Phục Thiết Bị:');
+
+function staffAuthMock(token) {
+  const authObj = {
+    currentUser: {
+      uid: 'STAFF_UID',
+      email: 'boss@gmail.com',
+      emailVerified: true,
+      isAnonymous: false,
+      refreshToken: 'staff-refresh',
+      getIdToken: async () => token
+    },
+    onAuthStateChanged: (cb) => {
+      try { cb(authObj.currentUser); } catch (e) {}
+      return () => {};
+    }
+  };
+  return {
+    apps: [{}],
+    app: () => ({}),
+    initializeApp: () => ({}),
+    auth: () => authObj
+  };
+}
+
+{
+  // 18.1: Cán bộ Google mở cổng sinh viên trên cùng trình duyệt — MSSV đã bị
+  // phiên ẩn danh cũ giữ chỗ vẫn lưu được (Rules cho staff ghi registration).
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  env.sandbox.atob = (v) => Buffer.from(v, 'base64').toString('binary');
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://staff-claim.firebaseio.com',
+    apiKey: 'AIza_STAFF',
+    authEmail: '',
+    authPassword: ''
+  });
+  const staffToken = fakeJwt({
+    user_id: 'STAFF_UID',
+    email: 'boss@gmail.com',
+    email_verified: true,
+    firebase: { sign_in_provider: 'google.com' }
+  });
+  env.window.firebase = staffAuthMock(staffToken);
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('/mssv_owner/SV777.json')) {
+      return { ok: false, status: 403, statusText: 'Forbidden', text: async () => 'Permission denied', json: async () => ({}) };
+    }
+    return { ok: true, status: 200, statusText: 'OK', json: async () => ({ ok: true }), text: async () => '{}' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.submitRegistration('SV777', {
+    fullName: 'Cán Bộ Thử',
+    month: { month: 10, year: 2026 },
+    shifts: { 1: ['T2-S1'] },
+    availableShifts: ['T2-S1']
+  });
+  assert(res.success === true, `18.1: Cán bộ phải lưu được dù mssv_owner thuộc phiên cũ. Lỗi: ${res.error || ''}`);
+  const regPut = calls.find(c => c.method === 'PUT' && c.url.includes('/registrations/SV777.json'));
+  assert(Boolean(regPut), '18.1b: Vẫn phải ghi registration khi phiên là cán bộ');
+  const regBody = regPut ? JSON.parse(regPut.body) : {};
+  assert(regBody.uid === 'STAFF_UID' && /auth=.+/.test(regPut.url),
+    '18.1c: Registration dùng uid/token của phiên cán bộ');
+}
+
+{
+  // 18.3: Sinh viên thật trên phiên mới vẫn bị chặn, nhưng thông báo phải chỉ
+  // đúng đường khôi phục trong trang quản trị.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  env.sandbox.atob = (v) => Buffer.from(v, 'base64').toString('binary');
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://student-claim.firebaseio.com',
+    apiKey: 'AIza_ANON',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          idToken: fakeJwt({ user_id: 'ANON_NEW', firebase: { sign_in_provider: 'anonymous' } }),
+          localId: 'ANON_NEW',
+          expiresIn: '3600',
+          refreshToken: 'REF_NEW'
+        })
+      };
+    }
+    if (url.includes('/mssv_owner/SV888.json')) {
+      return { ok: false, status: 403, statusText: 'Forbidden', text: async () => 'Permission denied', json: async () => ({}) };
+    }
+    return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.submitRegistration('SV888', { shifts: {} });
+  assert(res.success === false, '18.3: Sinh viên không được ghi đè MSSV của phiên khác');
+  assert(/Giải phóng MSSV/.test(res.error || ''),
+    `18.3b: Thông báo phải chỉ nút Giải phóng MSSV. Thực tế: ${res.error}`);
+  assert(!calls.some(c => c.method === 'PUT' && c.url.includes('/registrations/')),
+    '18.3c: Không được ghi registration khi chưa giữ chỗ được MSSV');
+}
+
+{
+  // 18.4: Phiên ẩn danh được lưu bằng refresh token và dùng lại sau khi
+  // signOutFirebase() xoá cache RAM — uid không đổi qua "lần tải trang" mới.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  env.sandbox.atob = (v) => Buffer.from(v, 'base64').toString('binary');
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://persist-claim.firebaseio.com',
+    apiKey: 'AIza_PERSIST',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('identitytoolkit')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          idToken: fakeJwt({ user_id: 'ANON_P', firebase: { sign_in_provider: 'anonymous' } }),
+          localId: 'ANON_P',
+          expiresIn: '3600',
+          refreshToken: 'REF_1'
+        })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '{}' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const first = await csm.submitRegistration('SV101', { shifts: {} });
+  assert(first.success === true, `18.4: Lần lưu đầu phải thành công. Lỗi: ${first.error || ''}`);
+  const storedAfterFirst = JSON.parse(env.localStorage.getItem('ts_anon_session_v1') || 'null');
+  assert(storedAfterFirst && storedAfterFirst.uid === 'ANON_P' && storedAfterFirst.refreshToken === 'REF_1',
+    '18.4b: Phải lưu refresh token của phiên ẩn danh vào localStorage');
+
+  await csm.signOutFirebase();
+  calls.length = 0;
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('securetoken')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id_token: fakeJwt({ user_id: 'ANON_P', firebase: { sign_in_provider: 'anonymous' } }),
+          user_id: 'ANON_P',
+          refresh_token: 'REF_2',
+          expires_in: '3600'
+        })
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '{}' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const second = await csm.submitRegistration('SV102', { shifts: {} });
+  assert(second.success === true, `18.4c: Lần lưu sau phải khôi phục phiên cũ. Lỗi: ${second.error || ''}`);
+  assert(calls.some(c => c.url.includes('securetoken')), '18.4d: Phải làm mới phiên bằng refresh token');
+  assert(!calls.some(c => c.url.includes('identitytoolkit')), '18.4e: Không được tạo uid ẩn danh mới');
+  const claimPut = calls.find(c => c.method === 'PUT' && c.url.includes('/mssv_owner/SV102.json'));
+  assert(claimPut && JSON.parse(claimPut.body) === 'ANON_P',
+    '18.4f: Phải giữ chỗ MSSV bằng đúng uid cũ');
+  const storedAfterSecond = JSON.parse(env.localStorage.getItem('ts_anon_session_v1') || 'null');
+  assert(storedAfterSecond && storedAfterSecond.refreshToken === 'REF_2',
+    '18.4g: Refresh token mới phải được ghi lại');
+}
+
+{
+  // 18.8: Có phiên ẩn danh đã lưu + cán bộ Google trên cùng trình duyệt:
+  // claim bằng uid cũ thất bại thì fallback sang phiên cán bộ khi ghi.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  env.sandbox.atob = (v) => Buffer.from(v, 'base64').toString('binary');
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://mixed-claim.firebaseio.com',
+    apiKey: 'AIza_MIXED',
+    authEmail: '',
+    authPassword: ''
+  });
+  env.localStorage.setItem('ts_anon_session_v1', JSON.stringify({
+    refreshToken: 'REF_OLD', uid: 'ANON_OLD', apiKey: 'AIza_MIXED'
+  }));
+  const staffToken = fakeJwt({
+    user_id: 'STAFF_UID',
+    email: 'boss@gmail.com',
+    email_verified: true,
+    firebase: { sign_in_provider: 'google.com' }
+  });
+  env.window.firebase = staffAuthMock(staffToken);
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', body: options.body });
+    if (url.includes('securetoken')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id_token: fakeJwt({ user_id: 'ANON_OLD', firebase: { sign_in_provider: 'anonymous' } }),
+          user_id: 'ANON_OLD',
+          refresh_token: 'REF_OLD',
+          expires_in: '3600'
+        })
+      };
+    }
+    if (url.includes('/mssv_owner/SV909.json')) {
+      return { ok: false, status: 403, statusText: 'Forbidden', text: async () => 'Permission denied', json: async () => ({}) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '{}' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.submitRegistration('SV909', { shifts: {} });
+  assert(res.success === true, `18.8: Phiên cán bộ phải cứu được lần lưu. Lỗi: ${res.error || ''}`);
+  const regPut = calls.find(c => c.method === 'PUT' && c.url.includes('/registrations/SV909.json'));
+  const regBody = regPut ? JSON.parse(regPut.body) : {};
+  assert(regBody.uid === 'STAFF_UID', '18.8b: Registration phải ghi bằng uid cán bộ');
+}
+
+{
+  // 18.5: Giải phóng MSSV bằng phiên cán bộ (DELETE mssv_owner/<MSSV>).
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://release.firebaseio.com',
+    apiKey: 'AIza_REL',
+    authEmail: 'boss@tvts.local',
+    authPassword: 'pw'
+  });
+  env.window.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'REL_TOKEN', expiresIn: '3600' }) };
+    }
+    return { ok: true, status: 200, json: async () => null, text: async () => '' };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.releaseMssvOwner('2310399');
+  assert(res.success === true, `18.5: Giải phóng MSSV phải thành công. Lỗi: ${res.error || ''}`);
+  const del = calls.find(c => c.method === 'DELETE');
+  assert(del && del.url.includes('/tvts_requests/mssv_owner/2310399.json')
+    && /auth=REL_TOKEN/.test(del.url),
+  '18.5b: Phải DELETE đúng node mssv_owner kèm token cán bộ');
+
+  const bad = await csm.releaseMssvOwner('2310399/abc');
+  assert(bad.success === false && /không hợp lệ/i.test(bad.error || ''),
+    '18.6: Từ chối MSSV sai định dạng');
+}
+
+{
+  // 18.7: Rules chưa Publish — báo rõ cho cán bộ.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://release-denied.firebaseio.com',
+    apiKey: 'AIza_REL2',
+    authEmail: 'boss@tvts.local',
+    authPassword: 'pw'
+  });
+  env.window.fetch = async (url) => {
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'REL_TOKEN_2', expiresIn: '3600' }) };
+    }
+    return { ok: false, status: 403, statusText: 'Forbidden', json: async () => ({}) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.releaseMssvOwner('SV123');
+  assert(res.success === false && /Publish/.test(res.error || ''),
+    `18.7: Phải nhắc Publish Rules khi bị 403. Thực tế: ${res.error}`);
 }
 
 // -----------------------------------------------------------------------------
