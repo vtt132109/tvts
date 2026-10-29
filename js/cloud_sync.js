@@ -2440,10 +2440,23 @@
       const reqStampRaw = Date.parse(req.submittedAt || '') || 0;
       const reqStamp = reqStampRaw ? Math.min(reqStampRaw, Date.now() + 60 * 1000) : 0;
       const currentStamp = Number(current.updatedAt) || 0;
-      if (reqStamp && reqStamp <= currentStamp) return;
 
       const safeShifts = sanitizeWeeklyAvailability(req.shifts);
       const safeAvailable = sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
+
+      const hasWeeklyShifts = Boolean(safeShifts)
+        && WEEK_KEYS.some(week => (safeShifts[week] || []).length > 0);
+      const currentHasWeekly = current.monthlyAvailableShifts
+        && typeof current.monthlyAvailableShifts === 'object'
+        && Object.keys(current.monthlyAvailableShifts).some(
+          week => Array.isArray(current.monthlyAvailableShifts[week])
+            && current.monthlyAvailableShifts[week].length > 0
+        );
+      // Bản ghi có thể đã bị "gộp dở" bởi bản cũ: updatedAt đã tiến nhưng ca
+      // rảnh vẫn rỗng vì shifts dạng mảng bị bỏ. Lần kéo này phải vá lại.
+      const repairStaleMerge = reqStamp && reqStamp <= currentStamp
+        && hasWeeklyShifts && !currentHasWeekly;
+      if (reqStamp && reqStamp <= currentStamp && !repairStaleMerge) return;
 
       // availableShifts là hợp của 4 tuần. Lấy từ chính shifts đã lọc để không
       // tin danh sách phẳng do client gửi kèm.
@@ -2461,7 +2474,8 @@
       students[idx] = Object.assign({}, current, {
         monthlyAvailableShifts: safeShifts || current.monthlyAvailableShifts,
         availableShifts: nextAvailable,
-        updatedAt: reqStamp || Date.now()
+        // Giữ mốc thời gian đơn điệu: bản vá không được kéo lùi updatedAt.
+        updatedAt: Math.max(currentStamp, reqStamp || 0) || Date.now()
       });
       mergedCount++;
     });

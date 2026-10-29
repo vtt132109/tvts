@@ -2696,6 +2696,18 @@ console.log('\n▶ [GROUP 19] Gộp Ca Rảnh Từ Cloud & Auto-Pull Im Lặng:'
   assert(merged.availableShifts.length === 5,
     '19.1c: availableShifts phải là hợp của 4 tuần');
 
+  // Bản cũ có thể đã đẩy updatedAt lên dù ca rảnh vẫn rỗng (do shifts mảng bị
+  // bỏ) — lần kéo sau vẫn phải vá lại, không được coi là "đã xử lý".
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{
+    id: 'sv_1', studentId: '25161393', fullName: 'Vũ Tiến Tài', role: 'old',
+    availableShifts: [], monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: [] },
+    updatedAt: Date.now() + 5000
+  }]));
+  const repair = csm.applyRequestsPayload(remote, { monthKey: '2026-11' });
+  const repaired = JSON.parse(env.localStorage.getItem(K.STUDENTS))[0];
+  assert(repair.mergedRegistrations === 1 && repaired.monthlyAvailableShifts[1].length === 5,
+    '19.1d: Phải vá bản ghi đã có updatedAt mới nhưng ca rảnh vẫn rỗng');
+
   env.localStorage.setItem(K.STUDENTS, JSON.stringify(baseStudents));
   const wrongMonth = csm.applyRequestsPayload(remote, { monthKey: '2026-10' });
   assert(wrongMonth.mergedRegistrations === 0,
