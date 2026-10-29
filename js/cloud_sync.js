@@ -244,12 +244,133 @@
     }
     authTokenCache = { token: '', expiresAt: 0, email: '' };
     anonymousAuthCache = { token: '', uid: '', expiresAt: 0, refreshToken: '', apiKey: '' };
+    // Giữ ANON_SESSION_KEY: đó là danh tính thiết bị của cổng sinh viên, không
+    // phải phiên cán bộ. Đăng xuất Google không được làm mất quyền ghi đăng ký.
     return { success: true };
   }
 
   /** Cache token cho phiên ẩn danh tạo bằng REST (khi trang không nạp SDK). */
   let anonymousAuthCache = { token: '', uid: '', expiresAt: 0, refreshToken: '', apiKey: '' };
   let lastAnonymousAuthError = '';
+
+  /**
+   * Phiên ẩn danh của sinh viên được lưu bền theo tên miền bằng refresh token.
+   *
+   * `mssv_owner/<MSSV>` gắn MSSV với uid của lần đăng ký đầu tiên, nên uid phải
+   * ổn định qua các lần tải trang. Cache RAM là không đủ: mỗi origin chỉ có một
+   * Firebase currentUser, nên khi cán bộ đăng nhập Google trên cùng trình duyệt
+   * (hoặc IndexedDB bị chặn) phiên ẩn danh cũ biến mất và uid đổi → mọi lần lưu
+   * sau bị từ chối như "phiên khác đăng ký trước".
+   */
+  const ANON_SESSION_KEY = 'ts_anon_session_v1';
+  const AUTH_READY_TIMEOUT_MS = 1200;
+
+  function readAnonSession() {
+    try {
+      const raw = localStorage.getItem(ANON_SESSION_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== 'object' || !obj.refreshToken || !obj.uid) return null;
+      return obj;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeAnonSession(refreshToken, uid, apiKey) {
+    if (!refreshToken || !uid) return;
+    try {
+      localStorage.setItem(ANON_SESSION_KEY, JSON.stringify({
+        refreshToken: String(refreshToken),
+        uid: String(uid),
+        apiKey: String(apiKey || '')
+      }));
+    } catch (e) {}
+  }
+
+  function clearAnonSession() {
+    try { localStorage.removeItem(ANON_SESSION_KEY); } catch (e) {}
+  }
+
+  /**
+   * Chờ Firebase SDK khôi phục phiên đã lưu trước khi tạo phiên ẩn danh mới.
+   * Không chờ thì lần lưu đầu tiên sau khi tải trang có thể tạo uid mới dù
+   * trình duyệt vẫn còn phiên cũ trong IndexedDB.
+   */
+  function waitForAuthState(auth, timeoutMs) {
+    return new Promise(resolve => {
+      let done = false;
+      let unsubscribe = null;
+      let timer = null;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (timer) clearTimeout(timer);
+        try { if (typeof unsubscribe === 'function') unsubscribe(); } catch (e) {}
+        resolve();
+      };
+      try {
+        if (!auth || auth.currentUser) { finish(); return; }
+        timer = setTimeout(finish, timeoutMs || 1000);
+        unsubscribe = auth.onAuthStateChanged(finish, finish);
+      } catch (e) {
+        finish();
+      }
+    });
+  }
+
+  /**
+   * Làm mới phiên ẩn danh đã lưu. Trả về `{ token }`, `{ error }` (giữ phiên,
+   * không được tạo uid mới) hoặc null (không có phiên / phiên đã hỏng hẳn).
+   */
+  async function restoreAnonSession(cfg) {
+    const stored = readAnonSession();
+    if (!stored) return null;
+    const apiKey = ((cfg && cfg.apiKey) || '').trim();
+    if (!apiKey) return null;
+    if (stored.apiKey && stored.apiKey !== apiKey) {
+      clearAnonSession();
+      return null;
+    }
+    if (anonymousAuthCache.token
+      && anonymousAuthCache.uid === stored.uid
+      && anonymousAuthCache.apiKey === apiKey
+      && Date.now() < anonymousAuthCache.expiresAt - 60 * 1000) {
+      return { token: anonymousAuthCache.token };
+    }
+    try {
+      const res = await fbFetch(
+        'https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(apiKey),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(stored.refreshToken)
+        }
+      );
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (res.ok && data && data.id_token) {
+        const expiresIn = parseInt(data.expires_in, 10) || 3600;
+        anonymousAuthCache = {
+          token: data.id_token,
+          uid: data.user_id || stored.uid,
+          expiresAt: Date.now() + expiresIn * 1000,
+          refreshToken: data.refresh_token || stored.refreshToken,
+          apiKey: apiKey
+        };
+        writeAnonSession(anonymousAuthCache.refreshToken, anonymousAuthCache.uid, apiKey);
+        return { token: data.id_token };
+      }
+      if (res.status === 400) {
+        // Refresh token không còn hợp lệ (bị thu hồi / tài khoản bị xoá).
+        clearAnonSession();
+        return null;
+      }
+      return { error: `Không làm mới được phiên ẩn danh đã lưu (HTTP ${res.status}).` };
+    } catch (e) {
+      return { error: 'Không kết nối được Firebase Authentication: ' + e.message };
+    }
+  }
 
   /** Giải mã payload JWT (không kiểm chữ ký — chỉ để lấy uid). */
   function decodeJwtPayload(token) {
@@ -287,10 +408,14 @@
       }
       try {
         const cred = await auth.signInAnonymously();
+        const anonUser = cred && cred.user ? cred.user : null;
+        if (anonUser && anonUser.refreshToken) {
+          writeAnonSession(anonUser.refreshToken, anonUser.uid, ((cfg.apiKey) || '').trim());
+        }
         return {
           success: true,
-          user: cred && cred.user
-            ? { uid: cred.user.uid, isAnonymous: true }
+          user: anonUser
+            ? { uid: anonUser.uid, isAnonymous: true }
             : getCurrentAuthUser()
         };
       } catch (err) {
@@ -331,25 +456,49 @@
         refreshToken: data.refreshToken || '',
         apiKey: apiKey
       };
+      writeAnonSession(anonymousAuthCache.refreshToken, anonymousAuthCache.uid, apiKey);
       return { success: true, uid: anonymousAuthCache.uid, token: data.idToken };
     } catch (e) {
       return { success: false, error: 'Không kết nối được Firebase Authentication: ' + e.message };
     }
   }
 
-  /** Lấy ID token ẩn danh, tự tạo mới/refresh khi cần. */
+  /** Lấy ID token ẩn danh, tự khôi phục/tạo mới khi cần. */
   async function getAnonymousIdToken(customCfg) {
     const cfg = customCfg || getConfig();
     lastAnonymousAuthError = '';
     ensureFirebaseApp(cfg);
     const auth = getFirebaseAuthSdk();
-    if (auth && auth.currentUser && typeof auth.currentUser.getIdToken === 'function') {
-      try {
-        const token = await auth.currentUser.getIdToken();
-        if (token) return token;
-      } catch (e) {}
-    }
     const apiKey = ((cfg.apiKey) || '').trim();
+
+    // 1. Phiên ẩn danh đã lưu trên máy này — giữ nguyên uid đã giữ chỗ MSSV.
+    const restored = await restoreAnonSession(cfg);
+    if (restored && restored.token) return restored.token;
+    const restoreError = restored && restored.error;
+
+    // 2. Phiên Firebase SDK hiện tại (ẩn danh, hoặc Google của cán bộ).
+    if (auth) {
+      await waitForAuthState(auth, AUTH_READY_TIMEOUT_MS);
+      if (auth.currentUser && typeof auth.currentUser.getIdToken === 'function') {
+        try {
+          const token = await auth.currentUser.getIdToken();
+          if (token) {
+            if (auth.currentUser.isAnonymous && auth.currentUser.refreshToken) {
+              writeAnonSession(auth.currentUser.refreshToken, auth.currentUser.uid, apiKey);
+            }
+            return token;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (restoreError) {
+      // Có phiên cũ nhưng không làm mới được: KHÔNG tạo uid mới, vì như vậy
+      // sẽ vĩnh viễn mất quyền ghi đăng ký đã giữ chỗ cho MSSV.
+      lastAnonymousAuthError = restoreError;
+      return '';
+    }
+
     if (anonymousAuthCache.token
       && anonymousAuthCache.apiKey === apiKey
       && Date.now() < anonymousAuthCache.expiresAt - 60 * 1000) {
@@ -1783,14 +1932,24 @@
       + Math.random().toString(36).slice(2, 8);
   }
 
-  /** Ghi một node yêu cầu bằng ID token (ẩn danh cho sinh viên). */
-  async function putRequestNode(relPath, body, customCfg) {
-    const cfg = customCfg || getConfig();
-    if (!cfg.databaseUrl) {
-      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
-    }
+  /** Thông tin định danh đọc từ ID token. */
+  function readTokenIdentity(token) {
+    const claims = decodeJwtPayload(token) || {};
+    const firebaseClaim = (claims && claims.firebase) || {};
+    return {
+      token: token,
+      uid: claims.user_id || claims.sub || '',
+      email: claims.email || '',
+      provider: firebaseClaim.sign_in_provider || '',
+      isStaff: firebaseClaim.sign_in_provider === 'google.com' && Boolean(claims.email)
+    };
+  }
 
-    // Sinh viên dùng phiên ẩn danh; cán bộ đã đăng nhập Google thì dùng phiên đó.
+  /**
+   * Phiên dùng để ghi yêu cầu sinh viên: ưu tiên phiên ẩn danh đã lưu trên
+   * máy, sau đó phiên SDK hiện tại, cuối cùng là tài khoản đồng bộ cũ.
+   */
+  async function resolveStudentIdentity(cfg) {
     let token = await getAnonymousIdToken(cfg);
     if (!token) {
       try { token = await getAuthToken(cfg); } catch (e) { token = ''; }
@@ -1802,13 +1961,53 @@
           || 'Không tạo được phiên gửi yêu cầu. Hãy kiểm tra Firebase Authentication > Anonymous và Web API Key.'
       };
     }
+    const identity = readTokenIdentity(token);
+    if (!identity.uid) {
+      const sdkUser = getCurrentAuthUser();
+      identity.uid = (sdkUser && sdkUser.uid) || anonymousAuthCache.uid || '';
+    }
+    if (!identity.uid) {
+      return { success: false, error: 'Không xác định được phiên người dùng.' };
+    }
+    identity.success = true;
+    return identity;
+  }
 
-    const claims = decodeJwtPayload(token) || {};
-    const sdkUser = getCurrentAuthUser();
-    const uid = claims.user_id || claims.sub
-      || (sdkUser && sdkUser.uid)
-      || anonymousAuthCache.uid
-      || '';
+  /** Phiên Google cán bộ đang đăng nhập trên trình duyệt này (nếu có). */
+  async function getStaffGoogleIdentity(cfg) {
+    ensureFirebaseApp(cfg);
+    const auth = getFirebaseAuthSdk();
+    const user = auth && auth.currentUser;
+    if (!user || user.isAnonymous || !user.email || user.emailVerified === false) {
+      return null;
+    }
+    try {
+      const token = await user.getIdToken();
+      if (!token) return null;
+      const identity = readTokenIdentity(token);
+      identity.uid = identity.uid || user.uid;
+      return identity.isStaff ? identity : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Ghi một node yêu cầu bằng ID token (ẩn danh cho sinh viên). */
+  async function putRequestNode(relPath, body, customCfg, identityOverride) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+
+    // Sinh viên dùng phiên ẩn danh; cán bộ đã đăng nhập Google thì dùng phiên đó.
+    let identity = identityOverride;
+    if (!identity || !identity.token) {
+      identity = await resolveStudentIdentity(cfg);
+      if (!identity.success) return { success: false, error: identity.error };
+    }
+    const token = identity.token;
+    const uid = identity.uid || '';
+
     const payload = Object.assign({}, body || {});
     if (uid) payload.uid = uid;
 
@@ -1851,7 +2050,7 @@
    * Nhờ vậy sinh viên A không thể PUT đè đăng ký của MSSV thuộc về B: lần ghi
    * đầu tiên giữ chỗ, các lần sau chỉ đúng uid đó mới ghi tiếp được.
    */
-  async function claimMssv(mssv, customCfg) {
+  async function claimMssv(mssv, customCfg, identityOverride) {
     const id = String(mssv || '').trim();
     if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
       return { success: false, error: 'MSSV không hợp lệ để gửi lên Đám mây.' };
@@ -1861,24 +2060,13 @@
       return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
     }
 
-    let token = await getAnonymousIdToken(cfg);
-    if (!token) {
-      try { token = await getAuthToken(cfg); } catch (e) { token = ''; }
+    let identity = identityOverride;
+    if (!identity || !identity.token) {
+      identity = await resolveStudentIdentity(cfg);
+      if (!identity.success) return { success: false, error: identity.error };
     }
-    if (!token) {
-      return {
-        success: false,
-        error: lastAnonymousAuthError
-          || 'Không tạo được phiên gửi yêu cầu. Hãy kiểm tra Firebase Authentication > Anonymous và Web API Key.'
-      };
-    }
-
-    const claims = decodeJwtPayload(token) || {};
-    const sdkUser = getCurrentAuthUser();
-    const uid = claims.user_id || claims.sub
-      || (sdkUser && sdkUser.uid)
-      || anonymousAuthCache.uid
-      || '';
+    const token = identity.token;
+    const uid = identity.uid;
     if (!uid) return { success: false, error: 'Không xác định được phiên người dùng.' };
 
     const url = formatFirebaseUrl(
@@ -1901,8 +2089,9 @@
         if (response.status === 401 || response.status === 403) {
           return {
             success: false,
-            error: 'MSSV này đã được một phiên khác đăng ký trước. '
-              + 'Vui lòng liên hệ Ban Tuyển Sinh nếu cần cập nhật.'
+            forbidden: true,
+            error: 'MSSV này đang gắn với một phiên/thiết bị đăng ký trước. '
+              + 'Nhờ Ban Tuyển Sinh mở ☁️ Trung tâm Đồng bộ → "Giải phóng MSSV" rồi lưu lại.'
           };
         }
         return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
@@ -1911,6 +2100,55 @@
         return { success: false, error: 'Firebase từ chối giữ chỗ MSSV.' };
       }
       return { success: true, uid };
+    } catch (err) {
+      return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
+    }
+  }
+
+  /**
+   * Cán bộ xoá ràng buộc `mssv_owner/<MSSV>` để sinh viên đổi máy/trình duyệt
+   * có thể giữ chỗ lại. Cần đăng nhập Google cán bộ và Rules cho phép staff
+   * ghi nhánh mssv_owner.
+   */
+  async function releaseMssvOwner(mssv, customCfg) {
+    const id = String(mssv || '').trim();
+    if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
+      return { success: false, error: 'MSSV không hợp lệ.' };
+    }
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+    let token = '';
+    try {
+      token = await getAuthToken(cfg);
+    } catch (e) {
+      return { success: false, error: e.message || 'Không lấy được phiên cán bộ.' };
+    }
+    if (!token) {
+      return { success: false, error: 'Cần đăng nhập Google (cán bộ) để giải phóng MSSV.' };
+    }
+
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.requestsPath || 'tvts_requests') + '/mssv_owner/' + encodeURIComponent(id),
+      token
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    try {
+      const response = await fbFetch(url, { method: 'DELETE' });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return {
+            success: false,
+            error: 'Firebase từ chối giải phóng. Cần đăng nhập Google cán bộ và Publish '
+              + 'database.rules.json mới (cho phép cán bộ ghi nhánh mssv_owner).'
+          };
+        }
+        return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
+      }
+      return { success: true, mssv: id };
     } catch (err) {
       return { success: false, error: err.message || 'Lỗi kết nối Firebase Cloud' };
     }
@@ -1928,17 +2166,30 @@
     if (!/^[A-Za-z0-9_-]{2,32}$/.test(id)) {
       return { success: false, error: 'MSSV không hợp lệ để gửi lên Đám mây.' };
     }
+    const cfg = customCfg || getConfig();
+
+    const identity = await resolveStudentIdentity(cfg);
+    if (!identity.success) return { success: false, error: identity.error };
 
     // Bước 1: giữ chỗ MSSV cho phiên này (chống ghi đè của MSSV khác).
-    const claim = await claimMssv(id, customCfg);
-    if (!claim.success) return claim;
+    const claim = await claimMssv(id, cfg, identity);
+    let writer = identity;
+    if (!claim.success) {
+      // Cán bộ Google được Rules cho ghi đăng ký trực tiếp, không phụ thuộc
+      // mssv_owner của phiên ẩn danh cũ (thường là phiên thử nghiệm trước đó).
+      const staff = claim.forbidden
+        ? (identity.isStaff ? identity : await getStaffGoogleIdentity(cfg))
+        : null;
+      if (!staff) return claim;
+      writer = staff;
+    }
 
     const body = Object.assign({}, sanitizePublicData(payload) || {});
     body.mssv = id;
     body.status = body.status || 'registered';
     body.submittedAt = body.submittedAt || new Date().toISOString();
 
-    const res = await putRequestNode('registrations/' + encodeURIComponent(id), body, customCfg);
+    const res = await putRequestNode('registrations/' + encodeURIComponent(id), body, cfg, writer);
     if (res.success) {
       try {
         window.dispatchEvent(new CustomEvent('ts:request-submitted', {
@@ -2841,6 +3092,8 @@
     updateSwapRequest,
     mergeRegistrationRequests,
     mergeSwapRequests,
+    // Cán bộ: xoá ràng buộc phiên cũ của MSSV để sinh viên đổi máy đăng ký lại
+    releaseMssvOwner,
 
     // ---- Xác thực: Google cho cán bộ, ẩn danh cho sinh viên ----
     signInWithGoogle,
