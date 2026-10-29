@@ -23,6 +23,7 @@ const suites = [
   { name: 'Lớp Lưu Trữ IndexedDB & Khôi Phục Dữ Liệu (IndexedDB Store)', script: 'store.test.js' },
   { name: 'Tiện Ích Dùng Chung & Chống Lệch Module (Common Utils)', script: 'common.test.js' },
   { name: 'Firebase App Check (Tuỳ Chọn) & Header Bảo Vệ REST', script: 'app_check.test.js' },
+  { name: 'Bỏ Login Cục Bộ & Mã Khôi Phục Thiết Bị', script: 'local_lockout.test.js' },
   { name: 'Gán Ca Thủ Công & Xếp Tự Động Phải Né (Manual Assignment)', script: 'manual_assignment.test.js' },
   { name: 'Quản Lý Sao Lưu Web 6 Tháng (Web Backup Manager)', script: 'backup.test.js' },
   { name: 'Quản Lý Sự Kiện & Bảng Chấm Công Tháng (Payroll & Events)', script: 'payroll_events.test.js' },

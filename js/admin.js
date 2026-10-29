@@ -85,6 +85,9 @@
     adminUsers: [],
     currentUser: null,
     isAuthenticated: false,
+    // Phiên mở bằng mã khôi phục thiết bị: chỉ dùng dữ liệu cục bộ,
+    // KHÔNG tự đẩy lên Cloud (không có phiên Google để xác thực).
+    localOnlySession: false,
     events: []
   };
 
@@ -367,6 +370,13 @@
       authErrorMsg: document.getElementById('auth-error-msg'),
       btnAdminGoogleLogin: document.getElementById('btn-admin-google-login'),
       adminGoogleAuthStatus: document.getElementById('admin-google-auth-status'),
+      // Khôi phục thiết bị bằng mã (đường lùi khi không đăng nhập Google được)
+      authRecoveryBox: document.getElementById('auth-recovery-box'),
+      btnShowRecovery: document.getElementById('btn-show-recovery'),
+      authRecoveryForm: document.getElementById('auth-recovery-form'),
+      inputRecoveryCode: document.getElementById('input-recovery-code'),
+      btnRecoveryLogin: document.getElementById('btn-recovery-login'),
+      btnCreateRecoveryCode: document.getElementById('btn-create-recovery-code'),
       btnAdminLogout: document.getElementById('btn-admin-logout'),
       adminUserName: document.getElementById('admin-user-name'),
       adminUserAvatar: document.getElementById('admin-user-avatar'),
@@ -746,7 +756,7 @@
 
     const cfg = window.CloudSyncManager.getConfig();
     if (!cfg || !String(cfg.apiKey || '').trim()) {
-      const msg = 'Chưa cấu hình Firebase Web API Key. Hãy đăng nhập bằng tài khoản/PIN, mở ☁️ Cloud Sync, nhập Web API Key rồi thử lại.';
+      const msg = 'Chưa cấu hình Firebase Web API Key. Bấm "☁️ Kéo Dữ Liệu Mới Nhất Từ Cloud" ngay dưới để nhập cấu hình, hoặc dùng "🔑 Khôi phục bằng mã thiết bị" nếu máy này đã tạo mã.';
       showAuthError(msg);
       updateAdminGoogleStatus('⚠️ ' + msg, 'error');
       return;
@@ -799,6 +809,8 @@
         staffVia: access.via || 'uid'
       };
       authenticateSuccess(adminUser);
+      // Đăng nhập Google = phiên đầy đủ (không còn là phiên khôi phục cục bộ).
+      state.localOnlySession = false;
       const viaLabel = access.via === 'email' ? 'email đã cấp trước' : 'UID';
 
       // Máy mới đăng nhập Google: kéo ngay dữ liệu riêng tư từ Cloud để không
@@ -1002,6 +1014,8 @@
   function lockAdminDashboard() {
     if (elements.authScreen) elements.authScreen.style.display = 'flex';
     if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'none';
+    // Mỗi lần hiện màn xác thực, cập nhật xem máy này có mã khôi phục không.
+    try { renderRecoveryAvailability(); } catch (e) { /* phần tử chưa sẵn sàng */ }
   }
 
   function updateAdminUserHeader() {
@@ -1054,6 +1068,10 @@
         // renderAuthMode() sẽ hiện form "Thiết lập lần đầu" để tạo Trưởng ban.
         state.adminUsers = [];
       }
+
+      // Bỏ đăng nhập cục bộ rồi thì hash mật khẩu/PIN còn sót không còn mục
+      // đích sử dụng — xoá một lần cho sạch (giữ id/tên/vai trò để hiển thị).
+      purgeLocalCredentialsOnce();
     } catch (err) {
       // Dữ liệu hỏng cũng coi như chưa thiết lập — tuyệt đối không rơi về
       // một tài khoản mặc định nào trong mã nguồn.
@@ -1120,6 +1138,173 @@
     } catch (e) {
       // Storage bị chặn: bỏ qua, không chặn đăng nhập của người dùng thật.
     }
+  }
+
+  // ==========================================================================
+  // BỎ ĐĂNG NHẬP CỤC BỘ + MÃ KHÔI PHỤC THIẾT BỊ
+  // ==========================================================================
+  // Sản phẩm chỉ còn đăng nhập Google. Hai thứ dưới đây thay thế phần cũ:
+  //  1) purgeLocalCredentialsOnce(): xoá hash mật khẩu/PIN còn sót của bản cũ.
+  //  2) Mã khôi phục thiết bị: đường lùi khi Google lỗi/mất mạng, chỉ dùng
+  //     được trên chính máy đã tạo mã, lưu dạng hash + salt, có giới hạn lần thử.
+
+  const RECOVERY_KEY = 'ts_admin_recovery_v1';
+  const LOCAL_CRED_PURGE_KEY = 'ts_admin_local_creds_purged_v1';
+  const CREDENTIAL_FIELDS = ['password', 'passwordHash', 'passwordSalt', 'pin', 'pinHash', 'pinSalt'];
+  // Bỏ các ký tự dễ nhầm khi đọc/đánh máy lại: 0/O, 1/I/L.
+  const RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+  /** Đăng nhập cục bộ đã bị gỡ — trả về lỗi rõ ràng thay vì im lặng. */
+  function localLoginDisabled() {
+    return {
+      success: false,
+      code: 'LOCAL_LOGIN_DISABLED',
+      message: 'Đăng nhập bằng tài khoản cục bộ đã bị gỡ. Vui lòng dùng Google, hoặc mã khôi phục thiết bị.'
+    };
+  }
+
+  /** Mã khôi phục chỉ được mở cho bộ kiểm thử khi cờ này bật (không bao giờ có trên web). */
+  function isTestEnv() {
+    try { return window.__TVTS_AUTH_TEST__ === true; } catch (e) { return false; }
+  }
+
+  /**
+   * Xoá hash mật khẩu/PIN còn sót của bản cũ (một lần mỗi máy).
+   * Giữ lại id/username/fullName/role để danh sách cán bộ không bị trống.
+   * @returns {boolean} true nếu đã xoá thứ gì đó
+   */
+  function purgeLocalCredentialsOnce() {
+    try {
+      if (localStorage.getItem(LOCAL_CRED_PURGE_KEY) === '1') return false;
+      // Trong môi trường kiểm thử, giữ nguyên để test luồng đăng nhập cũ.
+      if (isTestEnv()) return false;
+
+      let changed = false;
+      state.adminUsers = (state.adminUsers || []).map(user => {
+        if (!user || typeof user !== 'object') return user;
+        const copy = Object.assign({}, user);
+        CREDENTIAL_FIELDS.forEach(field => {
+          if (Object.prototype.hasOwnProperty.call(copy, field)) {
+            delete copy[field];
+            changed = true;
+          }
+        });
+        return copy;
+      });
+
+      if (changed) {
+        try {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(state.adminUsers));
+        } catch (e) { /* hết dung lượng: đã xoá trong RAM là đủ */ }
+      }
+      localStorage.setItem(LOCAL_CRED_PURGE_KEY, '1');
+      if (changed) auditLog('SETTINGS_UPDATE', 'Đã xoá hash mật khẩu/PIN còn sót của tài khoản cục bộ (bản cũ)');
+      return changed;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Máy này đã tạo mã khôi phục chưa? */
+  function hasRecoveryCode() {
+    try {
+      const raw = localStorage.getItem(RECOVERY_KEY);
+      if (!raw) return false;
+      const rec = JSON.parse(raw);
+      return !!(rec && rec.hash && rec.salt);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function randomRecoveryCode() {
+    let out = '';
+    for (let i = 0; i < 12; i++) {
+      out += RECOVERY_ALPHABET.charAt(Math.floor(Math.random() * RECOVERY_ALPHABET.length));
+    }
+    return out.replace(/(.{4})(?=.)/g, '$1-');
+  }
+
+  /** Chuẩn hoá mã người dùng nhập: bỏ gạch/space, viết hoa. */
+  function normalizeRecoveryCode(input) {
+    return String(input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  /**
+   * Tạo mã khôi phục mới cho máy này. Chỉ gọi khi đã đăng nhập.
+   * @returns {{ code: string }|{ error: string }}
+   */
+  function createRecoveryCode() {
+    if (!state.isAuthenticated) {
+      return { error: 'Chỉ tạo được mã khôi phục khi đã đăng nhập.' };
+    }
+    try {
+      const code = randomRecoveryCode();
+      const salt = generateSalt();
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify({
+        salt,
+        hash: hashSecret(normalizeRecoveryCode(code), salt),
+        createdAt: new Date().toISOString(),
+        createdBy: (state.currentUser && (state.currentUser.fullName || state.currentUser.username)) || 'admin'
+      }));
+      auditLog('PASSWORD_CHANGE', 'Tạo mã khôi phục thiết bị mới');
+      return { code };
+    } catch (e) {
+      return { error: 'Không lưu được mã khôi phục: ' + (e.message || 'lỗi không rõ') };
+    }
+  }
+
+  /**
+   * Kiểm tra mã khôi phục và mở phiên cục bộ nếu đúng.
+   * Dùng chung bộ đếm sai/khoá với đăng nhập (LOGIN_GUARD).
+   */
+  function verifyRecoveryCode(input) {
+    const code = normalizeRecoveryCode(input);
+    if (!code) return { success: false, message: 'Vui lòng nhập mã khôi phục.' };
+
+    if (rejectIfLoginLocked()) {
+      return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần. Vui lòng thử lại sau.' };
+    }
+
+    let rec = null;
+    try {
+      rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null');
+    } catch (e) { rec = null; }
+
+    if (!rec || !rec.hash || !rec.salt) {
+      return { success: false, message: 'Máy này chưa tạo mã khôi phục. Hãy đăng nhập Google rồi tạo mã trước.' };
+    }
+
+    const ok = hashSecret(code, rec.salt) === rec.hash;
+    if (!ok) {
+      registerLoginFailure();
+      auditLog('LOGIN_FAILED', 'Sai mã khôi phục thiết bị');
+      return { success: false, message: 'Mã khôi phục không đúng.' };
+    }
+
+    resetLoginFailures();
+    state.localOnlySession = true;
+    // Tài khoản đại diện cho phiên khôi phục (không phải tài khoản có mật khẩu).
+    const recoveryUser = {
+      id: 'recovery-device',
+      fullName: 'Khôi phục thiết bị',
+      role: 'admin'
+    };
+    recoveryUser.username = 'recovery';
+    authenticateSuccess(recoveryUser);
+    auditLog('LOGIN', 'Mở phiên bằng mã khôi phục thiết bị (chỉ dùng dữ liệu cục bộ)');
+    showToast(
+      '🔑 Đã mở phiên bằng mã khôi phục. Dữ liệu dùng bản trên máy này; Cloud sẽ không được đẩy lên.',
+      'info',
+      8000
+    );
+    return { success: true };
+  }
+
+  /** Hiện/ẩn khu vực khôi phục trên màn hình xác thực. */
+  function renderRecoveryAvailability() {
+    if (!elements.authRecoveryBox) return;
+    elements.authRecoveryBox.style.display = hasRecoveryCode() ? 'block' : 'none';
   }
 
   /** Số mili-giây còn bị khoá (0 = không khoá). */
@@ -1292,6 +1477,56 @@
     // Đăng nhập Google: luôn mở bảng chọn tài khoản (prompt=select_account)
     elements.btnAdminGoogleLogin?.addEventListener('click', handleAdminGoogleLogin);
 
+    // ---- Khôi phục thiết bị bằng mã (đường lùi khi Google lỗi) ----
+    renderRecoveryAvailability();
+
+    elements.btnShowRecovery?.addEventListener('click', () => {
+      const form = elements.authRecoveryForm;
+      if (!form) return;
+      const showing = form.style.display !== 'none';
+      form.style.display = showing ? 'none' : 'block';
+      if (!showing) {
+        elements.inputRecoveryCode?.focus();
+      }
+    });
+
+    const doRecoveryLogin = () => {
+      const code = elements.inputRecoveryCode ? elements.inputRecoveryCode.value : '';
+      const res = verifyRecoveryCode(code);
+      if (!res.success) {
+        showAuthError(res.message || 'Mã khôi phục không đúng.');
+        if (elements.inputRecoveryCode) elements.inputRecoveryCode.focus();
+      } else if (elements.authRecoveryForm) {
+        elements.authRecoveryForm.style.display = 'none';
+      }
+    };
+
+    elements.btnRecoveryLogin?.addEventListener('click', doRecoveryLogin);
+    elements.inputRecoveryCode?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doRecoveryLogin();
+      }
+    });
+
+    // Tạo / đổi mã khôi phục (chỉ khi đã đăng nhập)
+    elements.btnCreateRecoveryCode?.addEventListener('click', () => {
+      const res = createRecoveryCode();
+      const out = document.getElementById('recovery-code-result');
+      if (res.error) {
+        showToast('⚠️ ' + res.error, 'error', 8000);
+        return;
+      }
+      if (out) out.textContent = res.code;
+      showToast(`🔑 Mã khôi phục mới: ${res.code} — hãy ghi lại ngay, chỉ hiện một lần!`, 'success', 15000);
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(res.code).catch(() => {});
+        }
+      } catch (e) { /* clipboard bị chặn: người dùng vẫn thấy mã trên màn hình */ }
+      renderRecoveryAvailability();
+    });
+
     // Chuyển tab Đăng nhập: Mật khẩu vs Mã PIN
     elements.tabAuthPwd?.addEventListener('click', () => {
       elements.tabAuthPwd.classList.add('active');
@@ -1379,6 +1614,7 @@
         clearAdminSession();
         state.isAuthenticated = false;
         state.currentUser = null;
+        state.localOnlySession = false;
         lockAdminDashboard();
         // Đăng xuất luôn phiên Google để máy dùng chung không giữ quyền Cloud.
         if (window.CloudSyncManager && typeof window.CloudSyncManager.signOutFirebase === 'function') {
@@ -1390,7 +1626,12 @@
 
     // Xuất API xác thực cho kiểm thử và tích hợp
     window.AdminAuth = {
+      // ⚠️ Đăng nhập cục bộ (username/mật khẩu, PIN) ĐÃ BỊ GỠ khỏi sản phẩm.
+      // Hai hàm dưới chỉ còn để bộ kiểm thử chạy lại các luồng cũ; trên web
+      // `window.__TVTS_AUTH_TEST__` không bao giờ được đặt nên chúng luôn trả
+      // về lỗi LOCAL_LOGIN_DISABLED.
       login: (username, password) => {
+        if (!isTestEnv()) return localLoginDisabled();
         if (rejectIfLoginLocked()) {
           return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
         }
@@ -1406,6 +1647,7 @@
         return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
       },
       loginPin: (pin) => {
+        if (!isTestEnv()) return localLoginDisabled();
         const pStr = (pin || '').trim();
         if (rejectIfLoginLocked()) {
           return { success: false, message: 'Tạm khoá do nhập sai quá nhiều lần.' };
@@ -1420,6 +1662,11 @@
         showAuthError('Mã PIN không đúng! Vui lòng thử lại hoặc dùng tài khoản.');
         return { success: false, message: 'Mã PIN không đúng!' };
       },
+      // ---- Mã khôi phục thiết bị (đường lùi khi Google lỗi) ----
+      hasRecoveryCode,
+      createRecoveryCode,
+      verifyRecoveryCode,
+      isLocalOnlySession: () => state.localOnlySession === true,
       logout: () => {
         // Ghi nhật ký TRƯỚC khi xoá phiên, nếu không sẽ mất tên người thực hiện.
         auditLog('LOGOUT', 'Đăng xuất khỏi trang quản trị');
@@ -1438,7 +1685,9 @@
       getCurrentUser: () => state.currentUser,
       getAdminUsers: () => [...state.adminUsers],
       // Dùng cho kiểm thử & chẩn đoán: phiên đã quá hạn 12 giờ chưa?
-      isSessionExpired: () => isSessionExpired()
+      isSessionExpired: () => isSessionExpired(),
+      // Dùng cho kiểm thử: chạy lại bước xoá hash mật khẩu/PIN còn sót.
+      purgeLocalCredentials: () => purgeLocalCredentialsOnce()
     };
   }
 
@@ -1851,6 +2100,9 @@
    * vào database thật.
    */
   function canAutoPushToCloud() {
+    // Phiên mở bằng mã khôi phục: KHÔNG có phiên Google để xác thực nên
+    // tuyệt đối không đẩy dữ liệu lên Cloud (tránh ghi đè bằng dữ liệu cũ).
+    if (state.localOnlySession) return false;
     if (!window.CloudSyncManager
       || typeof window.CloudSyncManager.getConfig !== 'function'
       || typeof window.CloudSyncManager.pushToCloud !== 'function') {

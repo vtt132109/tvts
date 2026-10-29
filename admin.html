@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261029_1340">
+  <link rel="stylesheet" href="css/style.css?v=20261029_1349">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -175,6 +175,32 @@
         </button>
         <div id="admin-google-auth-status" role="status" aria-live="polite" style="font-size: 0.76rem; color: var(--text-muted, #64748b); text-align: center; margin-top: 0.45rem; min-height: 1.1em;">
           Chọn tài khoản Google của cán bộ để tiếp tục.
+        </div>
+
+        <!-- ============================================================
+             KHÔI PHỤC THIẾT BỊ BẰNG MÃ (đường lùi khi Google lỗi/mất mạng)
+             Chỉ hiện khi chính máy này đã tạo mã khôi phục trước đó.
+             Mã được lưu dạng hash + salt, không lưu plaintext.
+             ============================================================ -->
+        <div id="auth-recovery-box" style="display: none; margin-top: 0.8rem;">
+          <button type="button" id="btn-show-recovery" class="btn btn-secondary btn-block" style="font-size: 0.86rem; font-weight: 700;">
+            🔑 Khôi phục bằng mã thiết bị
+          </button>
+          <div id="auth-recovery-form" style="display: none; margin-top: 0.6rem;">
+            <label for="input-recovery-code" style="font-size: 0.76rem; font-weight: 600; color: var(--text-muted, #64748b);">
+              Nhập mã khôi phục của máy này (dạng XXXX-XXXX-XXXX)
+            </label>
+            <input id="input-recovery-code" class="form-input" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="ABCD-EFGH-JKLM"
+                   style="margin-top: 0.3rem; font-family: ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.1em; text-align: center;">
+            <button type="button" id="btn-recovery-login" class="btn btn-primary btn-block" style="margin-top: 0.5rem; font-weight: 700;">
+              Xác nhận mã khôi phục
+            </button>
+            <p style="font-size: 0.7rem; color: var(--text-muted, #64748b); margin-top: 0.35rem; line-height: 1.45;">
+              Mã chỉ dùng được trên <strong>chính máy này</strong>. Nhập sai 5 lần sẽ tạm khoá 60 giây.
+              Phiên khôi phục là phiên cục bộ — dữ liệu Cloud sẽ không được đẩy lên.
+            </p>
+          </div>
         </div>
 
         <div id="admin-auth-divider" style="display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 0.25rem; color: var(--text-muted, #64748b); font-size: 0.76rem; font-weight: 600;">
@@ -1168,6 +1194,19 @@
 
         <!-- Tab 1: Danh Sách Cán Bộ Được Cấp Quyền -->
         <div id="panel-user-list">
+
+          <!-- Mã khôi phục thiết bị: đường lùi khi không đăng nhập Google được -->
+          <div id="panel-recovery" style="margin-bottom: 0.85rem; padding: 0.8rem 0.9rem; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-subtle);">
+            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">🔑 Mã khôi phục thiết bị</div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.25rem 0 0.55rem; line-height: 1.5;">
+              Dùng khi không đăng nhập được Google (mất mạng, tài khoản bị khoá).
+              Mã chỉ dùng được trên <strong>chính máy này</strong>; phiên khôi phục sẽ không đẩy dữ liệu lên Cloud.
+            </p>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-create-recovery-code" style="font-weight: 700;">
+              Tạo / Đổi mã khôi phục
+            </button>
+            <span id="recovery-code-result" style="font-family: ui-monospace, monospace; font-weight: 800; letter-spacing: 0.08em; margin-left: 0.6rem; color: var(--primary);"></span>
+          </div>
           <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.65rem;">
             Chỉ những tài khoản có tên trong danh sách dưới đây mới có quyền đăng nhập vào Bảng Điều Hành Quản Trị:
           </div>
@@ -2114,17 +2153,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261029_1340"></script>
+  <script src="js/a11y_modal.js?v=20261029_1349"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261029_1340"></script>
-  <script src="js/month_calendar.js?v=20261029_1340"></script>
-  <script src="js/scheduler.js?v=20261029_1340"></script>
-  <script src="js/roster.js?v=20261029_1340"></script>
-  <script src="js/common.js?v=20261029_1340"></script>
-  <script src="js/audit.js?v=20261029_1340"></script>
-  <script src="js/store.js?v=20261029_1340"></script>
-  <script src="js/admin.js?v=20261029_1340"></script>
+  <script src="js/cloud_sync.js?v=20261029_1349"></script>
+  <script src="js/month_calendar.js?v=20261029_1349"></script>
+  <script src="js/scheduler.js?v=20261029_1349"></script>
+  <script src="js/roster.js?v=20261029_1349"></script>
+  <script src="js/common.js?v=20261029_1349"></script>
+  <script src="js/audit.js?v=20261029_1349"></script>
+  <script src="js/store.js?v=20261029_1349"></script>
+  <script src="js/admin.js?v=20261029_1349"></script>
 </body>
 </html>

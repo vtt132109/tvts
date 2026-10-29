@@ -137,6 +137,11 @@ mockLocalStorage.setItem(QA_ADMIN_USERS_KEY, JSON.stringify([QA_ADMIN_A, QA_ADMI
 // Tiện ích dùng chung phải nạp trước (giống thứ tự <script> trong admin.html).
 eval(fs.readFileSync(path.resolve(__dirname, '../js/common.js'), 'utf8'));
 
+// Sản phẩm đã bỏ đăng nhập cục bộ; bộ kiểm thử vẫn cần chạy lại các luồng cũ
+// nên bật cờ này. Trên web cờ không bao giờ được đặt -> AdminAuth.login luôn
+// trả về LOCAL_LOGIN_DISABLED (xem tests/local_lockout.test.js).
+global.window.__TVTS_AUTH_TEST__ = true;
+
 // Chạy mã admin.js trong ngữ cảnh global đã mock
 eval(adminJsContent);
 

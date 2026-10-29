@@ -188,6 +188,9 @@ const QA_MONTH_ADMIN = {
 };
 mockLocalStorage.setItem('ts_scheduler_admin_users', JSON.stringify([QA_MONTH_ADMIN]));
 
+// Đăng nhập cục bộ đã bị gỡ khỏi sản phẩm; bật cờ test để dùng lại luồng cũ.
+global.window.__TVTS_AUTH_TEST__ = true;
+
 const adminCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'admin.js'), 'utf-8');
 eval(adminCode);
 
