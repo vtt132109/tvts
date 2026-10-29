@@ -494,14 +494,17 @@ runTest('Thiết lập lần đầu: máy mới chỉ hiện Google login, khôn
   AdminAuth.logout();
   window.adminReloadAdminUsers();
   assert.strictEqual(AdminAuth.getAdminUsers().length, 0, 'Phải bắt đầu từ danh sách rỗng');
+  // Bỏ local account hoàn toàn - chỉ hiện Google login
   assert.strictEqual(elementsMap['admin-first-run'].style.display, 'none',
     'Không hiện form thiết lập lần đầu trên máy mới — chỉ để Google login');
   assert.strictEqual(elementsMap['admin-auth-tabs'].style.display, 'none',
     'Phải ẩn tab đăng nhập cục bộ khi chưa có tài khoản');
   assert.strictEqual(elementsMap['form-auth-credentials'].style.display, 'none',
-    'Phải ẩn form đăng nhập khi chưa có tài khoản');
+    'Phải ẩn form username/password khi chưa có tài khoản');
   assert.strictEqual(elementsMap['auth-error-box'].style.display, 'none',
     'Phải ẩn hộp lỗi đăng nhập khi chưa có tài khoản');
+  // Google login button vẫn hiện để dùng email Trưởng ban (vutientai10@gmail.com)
+  assert.ok(elementsMap['btn-admin-google-login'], 'Nút Google Login phải có');
 });
 
 // ============================================================================

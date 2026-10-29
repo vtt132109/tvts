@@ -1063,32 +1063,23 @@
   }
 
   /**
-   * Chuyển màn xác thực giữa hai chế độ:
-   *  - Có tài khoản cục bộ: hiện tab + form đăng nhập như bình thường.
-   *  - Chưa có tài khoản nào: chỉ hiện Google login + Cloud recovery.
-   * Google login và nút kéo Cloud luôn hiển thị để còn đường khôi phục.
+   * Màn xác thực: CHỈ dùng Google Login.
+   *
+   * Tài khoản cục bộ (username/mật khẩu/PIN) đã bỏ hoàn toàn — mọi ẩn/hiện
+   * phức tạp trước đây không còn cần thiết. Email Trưởng ban nằm trong Rules
+   * (`/staff_emails` hoặc UID trong `/staff`) là đường cấp quyền duy nhất.
    */
   function renderAuthMode() {
-    const hasLocalAdmin = Array.isArray(state.adminUsers) && state.adminUsers.length > 0;
-    const pinTabActive = !!(elements.tabAuthPin && elements.tabAuthPin.classList.contains('active'));
-
-    // Nếu không có tài khoản local, chỉ hiện Google login + Cloud recovery
-    if (elements.authTabs) elements.authTabs.style.display = hasLocalAdmin ? '' : 'none';
-    if (elements.authDivider) elements.authDivider.style.display = hasLocalAdmin ? 'flex' : 'none';
-    if (elements.formAuthCredentials) {
-      elements.formAuthCredentials.style.display = hasLocalAdmin && !pinTabActive ? 'block' : 'none';
-    }
-    if (elements.formAuthPin) {
-      elements.formAuthPin.style.display = hasLocalAdmin && pinTabActive ? 'block' : 'none';
-    }
-    // Ẩn nút "Tạo Tài Khoản" và form thiết lập hoàn toàn
-    if (elements.btnCreateLocalAccount) {
-      elements.btnCreateLocalAccount.style.display = 'none';
-    }
-    if (elements.adminFirstRun) {
-      elements.adminFirstRun.style.display = 'none';
-    }
-    if (!hasLocalAdmin) hideAuthError();
+    // Bỏ toàn bộ local account - chỉ hiện Google Login
+    // Email vutientai10@gmail.com là account chính duy nhất
+    if (elements.authTabs) elements.authTabs.style.display = 'none';
+    if (elements.authDivider) elements.authDivider.style.display = 'none';
+    if (elements.formAuthCredentials) elements.formAuthCredentials.style.display = 'none';
+    if (elements.formAuthPin) elements.formAuthPin.style.display = 'none';
+    // Ẩn luôn nút "Tạo Tài Khoản" và form thiết lập lần đầu
+    if (elements.btnCreateLocalAccount) elements.btnCreateLocalAccount.style.display = 'none';
+    if (elements.adminFirstRun) elements.adminFirstRun.style.display = 'none';
+    hideAuthError();
   }
 
   function saveAdminUsers() {
