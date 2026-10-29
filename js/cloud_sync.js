@@ -161,6 +161,18 @@
     };
   }
 
+  /**
+   * Chờ Firebase khôi phục phiên (Google/ẩn danh) rồi trả về user hiện tại.
+   * Dùng trước khi auto-pull để F5 trang không bị "chưa đăng nhập" tạm thời.
+   */
+  async function whenAuthReady(timeoutMs) {
+    ensureFirebaseApp(getConfig());
+    const auth = getFirebaseAuthSdk();
+    if (!auth) return getCurrentAuthUser();
+    await waitForAuthState(auth, timeoutMs || 1500);
+    return getCurrentAuthUser();
+  }
+
   /** Lỗi đăng nhập Google dễ hiểu. */
   function mapGoogleAuthError(err) {
     const code = String((err && err.code) || (err && err.message) || '');
@@ -2367,27 +2379,43 @@
     return out;
   }
 
-  /** Lọc ca rảnh theo tuần: chỉ nhận khoá 1..4, mỗi tuần là mảng mã ca hợp lệ. */
+  /**
+   * Lọc ca rảnh theo tuần: chỉ nhận khoá 1..4, mỗi tuần là mảng mã ca hợp lệ.
+   * Firebase RTDB lưu object có khoá số 1..4 thành MẢNG ([null, [...], ...]),
+   * nên phải chấp nhận cả hai dạng — trước đây chặn Array làm admin không
+   * nhận được ca rảnh sinh viên gửi lên.
+   */
   function sanitizeWeeklyAvailability(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    if (!value || typeof value !== 'object') return null;
     const validIds = getCanonicalShiftIds();
     const out = {};
-    let hasAny = false;
+    let hasStructure = false;
     WEEK_KEYS.forEach(week => {
+      const hasKey = Object.prototype.hasOwnProperty.call(value, week)
+        || Object.prototype.hasOwnProperty.call(value, Number(week));
+      if (!hasKey) return;
+      hasStructure = true;
       const source = value[week] !== undefined ? value[week] : value[Number(week)];
       const cleaned = sanitizeShiftIdList(source, validIds);
-      if (cleaned) {
-        out[week] = cleaned;
-        hasAny = true;
-      }
+      out[week] = cleaned || [];
     });
-    return hasAny ? out : null;
+    return hasStructure ? out : null;
   }
 
-  function mergeRegistrationRequests(localList, remoteMap) {
+  /** Khoá tháng 'YYYY-MM' từ object { month, year } client gửi lên. */
+  function monthKeyOf(value) {
+    if (!value || typeof value !== 'object') return '';
+    const month = parseInt(value.month, 10);
+    const year = parseInt(value.year, 10);
+    if (!month || !year) return '';
+    return `${year}-${String(month).padStart(2, '0')}`;
+  }
+
+  function mergeRegistrationRequests(localList, remoteMap, options) {
     const students = Array.isArray(localList)
       ? localList.map(s => Object.assign({}, s))
       : [];
+    const targetMonthKey = options && options.monthKey ? String(options.monthKey) : '';
     const indexByMssv = new Map();
     students.forEach((s, idx) => {
       if (s && s.studentId) indexByMssv.set(String(s.studentId).toLowerCase(), idx);
@@ -2401,6 +2429,11 @@
       const idx = indexByMssv.get(mssv.toLowerCase());
       if (idx === undefined) return;
 
+      // Ca rảnh được đăng ký LẠI TỪ ĐẦU mỗi tháng. Đăng ký của tháng khác
+      // không được ghi đè ca rảnh của tháng đang quản lý.
+      const reqMonthKey = monthKeyOf(req.month);
+      if (targetMonthKey && reqMonthKey && reqMonthKey !== targetMonthKey) return;
+
       const current = students[idx];
       // Mốc thời gian do client gửi -> chặn tương lai để không "khoá" bản ghi
       // vĩnh viễn (gửi năm 2030 thì mọi cập nhật sau đều bị coi là cũ).
@@ -2412,9 +2445,22 @@
       const safeShifts = sanitizeWeeklyAvailability(req.shifts);
       const safeAvailable = sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
 
+      // availableShifts là hợp của 4 tuần. Lấy từ chính shifts đã lọc để không
+      // tin danh sách phẳng do client gửi kèm.
+      let nextAvailable = safeAvailable || current.availableShifts;
+      if (safeShifts) {
+        const union = [];
+        WEEK_KEYS.forEach(week => {
+          (safeShifts[week] || []).forEach(shiftId => {
+            if (!union.includes(shiftId)) union.push(shiftId);
+          });
+        });
+        nextAvailable = union;
+      }
+
       students[idx] = Object.assign({}, current, {
         monthlyAvailableShifts: safeShifts || current.monthlyAvailableShifts,
-        availableShifts: safeAvailable || current.availableShifts,
+        availableShifts: nextAvailable,
         updatedAt: reqStamp || Date.now()
       });
       mergedCount++;
@@ -2428,7 +2474,7 @@
    * Ca rảnh được gộp NGAY, không cần duyệt từng yêu cầu; lịch trực vẫn chỉ
    * được xếp khi cán bộ chủ động bấm nút xếp ca.
    */
-  function applyRequestsPayload(data) {
+  function applyRequestsPayload(data, options) {
     const touchedKeys = [];
     let mergedRegistrations = 0;
     let mergedSwaps = 0;
@@ -2436,7 +2482,7 @@
     try {
       if (data && data.registrations && typeof data.registrations === 'object') {
         const localStudents = readStorageJson(STORAGE_KEYS.STUDENTS, []);
-        const merged = mergeRegistrationRequests(localStudents, data.registrations);
+        const merged = mergeRegistrationRequests(localStudents, data.registrations, options);
         if (merged.mergedCount > 0) {
           localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(merged.students));
           touchedKeys.push(STORAGE_KEYS.STUDENTS);
@@ -2783,7 +2829,8 @@
   }
 
   // Kéo dữ liệu từ Firebase Cloud về LocalStorage (Pull)
-  async function pullFromCloud(customCfg) {
+  async function pullFromCloud(customCfg, options) {
+    const auto = Boolean(options && options.auto);
     const cfg = customCfg || getConfig();
     if (!cfg.databaseUrl) {
       return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
@@ -2853,6 +2900,17 @@
           && cloudUpdatedAt > lastCloudUpdatedAt;
         const localMayBeNewer = !lastCloudUpdatedAt || localTouchedAt > cloudUpdatedAt;
         if (cloudChangedSinceLastSync || localMayBeNewer) {
+          // Kéo tự động (mở trang / đăng nhập) không được hỏi: giữ nguyên bản
+          // trên máy, để ca gán tay và thay đổi chưa đẩy không bị ghi đè.
+          // Người dùng vẫn có thể kéo tay trong Trung tâm Đồng bộ (có xác nhận).
+          if (auto) {
+            return {
+              success: true,
+              skipped: true,
+              conflict: true,
+              message: 'Giữ thay đổi cục bộ chưa đẩy — không tự ghi đè bằng bản Cloud.'
+            };
+          }
           const ok = typeof window.confirm === 'function'
             ? window.confirm(
               '⚠️ Máy này có thay đổi CHƯA đẩy lên Đám mây.\n\n'
@@ -2992,14 +3050,16 @@
         } else {
           // Chưa đăng nhập Google và chưa cấu hình tài khoản đồng bộ thì
           // không gọi GET nhánh riêng tư (Rules trả 401, chỉ làm nhiễu console).
-          // Người dùng đăng nhập rồi mới tự động kéo.
-          const authUser = typeof getCurrentAuthUser === 'function' ? getCurrentAuthUser() : null;
+          // Chờ Firebase khôi phục phiên trước khi kết luận "chưa đăng nhập".
+          const authUser = await whenAuthReady(1500);
           const hasSyncCreds = Boolean(authUser || (cfg.authEmail && cfg.authPassword));
           if (!hasSyncCreds) {
             console.info('[CloudSync] Chưa đăng nhập Google — bỏ qua tự động kéo dữ liệu riêng tư.');
             return;
           }
-          await pullFromCloud(cfg);
+          // Kéo tự động: không hỏi; nếu máy có thay đổi chưa đẩy thì giữ bản
+          // trên máy (xem pullFromCloud options.auto).
+          await pullFromCloud(cfg, { auto: true });
         }
       } catch (e) {
         console.warn('[CloudSync] Tự động kéo dữ liệu ban đầu không thành công:', e.message);
@@ -3099,6 +3159,7 @@
     signInWithGoogle,
     signOutFirebase,
     getCurrentAuthUser,
+    whenAuthReady,
     encodeStaffEmailKey,
     checkStaffAccess,
     grantStaffEmail,

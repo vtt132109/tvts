@@ -2651,6 +2651,126 @@ function staffAuthMock(token) {
 }
 
 // -----------------------------------------------------------------------------
+// GROUP 19: Gộp ca rảnh dạng MẢNG của RTDB + auto-pull không hỏi
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 19] Gộp Ca Rảnh Từ Cloud & Auto-Pull Im Lặng:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  const baseStudents = [{
+    id: 'sv_1', studentId: '25161393', fullName: 'Vũ Tiến Tài', role: 'old',
+    availableShifts: [], monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: [] },
+    updatedAt: 0
+  }];
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify(baseStudents));
+
+  const remote = {
+    registrations: {
+      '25161393': {
+        mssv: '25161393',
+        fullName: 'Vũ Tiến Tài',
+        month: { month: 11, year: 2026 },
+        // Firebase RTDB trả object khoá 1..4 thành mảng — đây là dạng thật
+        // đang làm admin không nhận được ca rảnh.
+        shifts: [null,
+          ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+          ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+          ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+          ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S']],
+        availableShifts: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+        status: 'registered',
+        submittedAt: new Date(Date.now() - 60000).toISOString()
+      }
+    }
+  };
+
+  const applied = csm.applyRequestsPayload(remote, { monthKey: '2026-11' });
+  assert(applied.success && applied.mergedRegistrations === 1,
+    '19.1: Phải gộp đăng ký ca rảnh của tháng 11');
+  const merged = JSON.parse(env.localStorage.getItem(K.STUDENTS))[0];
+  assert(Array.isArray(merged.monthlyAvailableShifts[1])
+    && merged.monthlyAvailableShifts[1].length === 5,
+    '19.1b: shifts dạng MẢNG của RTDB phải được gộp đủ 5 ca/tuần');
+  assert(merged.availableShifts.length === 5,
+    '19.1c: availableShifts phải là hợp của 4 tuần');
+
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify(baseStudents));
+  const wrongMonth = csm.applyRequestsPayload(remote, { monthKey: '2026-10' });
+  assert(wrongMonth.mergedRegistrations === 0,
+    '19.2: Đăng ký tháng khác KHÔNG được ghi đè ca rảnh tháng đang quản lý');
+  const untouched = JSON.parse(env.localStorage.getItem(K.STUDENTS))[0];
+  assert(untouched.monthlyAvailableShifts[1].length === 0,
+    '19.2b: Ca rảnh tháng đang quản lý phải giữ nguyên');
+
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{
+    id: 'sv_1', studentId: '25161393', fullName: 'Vũ Tiến Tài', role: 'old',
+    availableShifts: ['T2_S'], monthlyAvailableShifts: { 1: ['T2_S'], 2: ['T2_S'], 3: [], 4: [] },
+    updatedAt: 0
+  }]));
+  const zero = csm.applyRequestsPayload({
+    registrations: {
+      '25161393': {
+        mssv: '25161393',
+        fullName: 'Vũ Tiến Tài',
+        month: { month: 11, year: 2026 },
+        shifts: [null, [], [], [], []],
+        availableShifts: [],
+        status: 'registered',
+        submittedAt: new Date(Date.now() + 1000).toISOString()
+      }
+    }
+  }, { monthKey: '2026-11' });
+  assert(zero.mergedRegistrations === 1, '19.3: Đăng ký 0 ca vẫn phải được gộp');
+  const cleared = JSON.parse(env.localStorage.getItem(K.STUDENTS))[0];
+  assert(cleared.availableShifts.length === 0 && cleared.monthlyAvailableShifts[1].length === 0,
+    '19.3b: Đăng ký 0 ca phải xoá ca rảnh cũ');
+}
+
+{
+  // Auto-pull (mở trang / đăng nhập) không được hỏi, và phải giữ bản local
+  // nếu máy có thay đổi chưa đẩy.
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://auto-pull.firebaseio.com',
+    syncPath: 'tvts_production_data',
+    apiKey: 'AIza_AUTO',
+    authEmail: 'boss@tvts.local',
+    authPassword: 'pw',
+    localUpdatedAt: Date.now() - 1000,
+    lastCloudUpdatedAt: 0
+  });
+  env.localStorage.setItem(K.STUDENTS, JSON.stringify([{
+    id: 's_local', studentId: 'L1', fullName: 'Local One', role: 'old',
+    availableShifts: ['T2_S'], monthlyAvailableShifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] },
+    updatedAt: 1
+  }]));
+
+  env.window.fetch = async (url) => {
+    if (url.includes('identitytoolkit')) {
+      return { ok: true, status: 200, json: async () => ({ idToken: 'TOKEN_AUTO', expiresIn: '3600' }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ updatedAt: Date.now(), students: [] }) };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  let confirms = 0;
+  env.window.confirm = () => { confirms++; return false; };
+
+  const res = await csm.pullFromCloud(undefined, { auto: true });
+  assert(res.success === true && res.skipped === true,
+    '19.4: Auto-pull gặp thay đổi cục bộ phải giữ bản máy (không báo lỗi)');
+  assert(confirms === 0, '19.4b: Auto-pull KHÔNG được mở hộp thoại xác nhận');
+  const after = JSON.parse(env.localStorage.getItem(K.STUDENTS));
+  assert(after.length === 1 && after[0].studentId === 'L1',
+    '19.4c: Không được ghi đè danh sách cục bộ');
+}
+
+// -----------------------------------------------------------------------------
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');
