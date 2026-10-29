@@ -1065,7 +1065,7 @@
   /**
    * Chuyển màn xác thực giữa hai chế độ:
    *  - Có tài khoản cục bộ: hiện tab + form đăng nhập như bình thường.
-   *  - Chưa có tài khoản nào: ẩn tab/form đăng nhập, hiện form thiết lập lần đầu.
+   *  - Chưa có tài khoản nào: chỉ hiện Google login + Cloud recovery.
    * Google login và nút kéo Cloud luôn hiển thị để còn đường khôi phục.
    */
   function renderAuthMode() {
@@ -1073,7 +1073,6 @@
     const pinTabActive = !!(elements.tabAuthPin && elements.tabAuthPin.classList.contains('active'));
 
     // Nếu không có tài khoản local, chỉ hiện Google login + Cloud recovery
-    // Không bắt buộc tạo tài khoản trên máy mới — để người dùng đăng nhập Google
     if (elements.authTabs) elements.authTabs.style.display = hasLocalAdmin ? '' : 'none';
     if (elements.authDivider) elements.authDivider.style.display = hasLocalAdmin ? 'flex' : 'none';
     if (elements.formAuthCredentials) {
@@ -1082,9 +1081,11 @@
     if (elements.formAuthPin) {
       elements.formAuthPin.style.display = hasLocalAdmin && pinTabActive ? 'block' : 'none';
     }
+    // Ẩn nút "Tạo Tài Khoản" và form thiết lập hoàn toàn
+    if (elements.btnCreateLocalAccount) {
+      elements.btnCreateLocalAccount.style.display = 'none';
+    }
     if (elements.adminFirstRun) {
-      // Ẩn form "Thiết lập lần đầu" — chỉ bắt buộc khi user có khối lượng lớn
-      // tài khoản từ Cloud phải quản lý. Trường hợp bình thường: đăng nhập Google.
       elements.adminFirstRun.style.display = 'none';
     }
     if (!hasLocalAdmin) hideAuthError();
