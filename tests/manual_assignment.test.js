@@ -291,6 +291,37 @@ runTest('Xếp tự động: ca gán tay của THÁNG KHÁC không bị áp sang
   assert.strictEqual(octSchedule.weeks[0].scheduleTable.T2_S.oldMember.fullName, 'Nguyen Van A');
 });
 
+runTest('Xếp tự động: ca manuallyEdited kéo từ Cloud vẫn giữ dù sổ tay máy này trống', () => {
+  seed();
+  H.loadData();
+  H.runFullSchedule();
+
+  const students = H.getState().students;
+  const s1 = students.find(s => s.id === 's_1');
+  const sched = H.getState().monthSchedule;
+  assert.ok(sched && sched.weeks && sched.weeks[0], 'Phải có lịch tháng để mô phỏng');
+
+  const slot = sched.weeks[0].scheduleTable['T2_S'];
+  slot.oldMember = s1;
+  slot.newMember = null;
+  slot.status = 'partial';
+  slot.manuallyEdited = true;
+
+  // Mô phỏng lịch vừa kéo từ Cloud: có cờ manuallyEdited nhưng máy này chưa
+  // có sổ tay gán ca (localStorage trống).
+  LS.setItem('ts_scheduler_month_result', JSON.stringify(sched));
+  LS.setItem('ts_scheduler_manual_slots', JSON.stringify({}));
+  H.loadData();
+  H.runFullSchedule();
+
+  const after = H.getState().monthSchedule.weeks[0].scheduleTable['T2_S'];
+  assert.strictEqual(after.oldMember && after.oldMember.id, 's_1',
+    'Ca gán tay trong lịch Cloud phải được giữ khi xếp tự động');
+  const map = manualMap();
+  assert.ok(map['2026-10'] && map['2026-10']['1'] && map['2026-10']['1']['T2_S'],
+    'Sổ tay phải được dựng lại từ cờ manuallyEdited của lịch Cloud');
+});
+
 runTest('Sổ tay: dữ liệu cũ (khoá phẳng theo tuần) vẫn được áp dụng', () => {
   seed();
   H.loadData();

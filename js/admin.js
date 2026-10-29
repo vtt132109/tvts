@@ -814,11 +814,12 @@
       const viaLabel = access.via === 'email' ? 'email đã cấp trước' : 'UID';
 
       // Máy mới đăng nhập Google: kéo ngay dữ liệu riêng tư từ Cloud để không
-      // làm việc trên danh sách/lịch cũ. pullFromCloud có guard xung đột riêng.
+      // làm việc trên danh sách/lịch cũ. Chế độ auto: không hỏi; nếu máy có
+      // thay đổi chưa đẩy (ca gán tay…) thì giữ bản trên máy.
       let pulledPrivate = false;
       try {
-        const pullPrivate = await window.CloudSyncManager.pullFromCloud();
-        if (pullPrivate && pullPrivate.success) {
+        const pullPrivate = await window.CloudSyncManager.pullFromCloud(undefined, { auto: true });
+        if (pullPrivate && pullPrivate.success && !pullPrivate.skipped) {
           pulledPrivate = true;
           loadAdminUsers();
           loadData();
@@ -847,6 +848,16 @@
         btn.disabled = false;
         btn.innerHTML = originalText || '<span>Đăng nhập bằng Google</span>';
       }
+    }
+  }
+
+  /** Khoá tháng 'YYYY-MM' mà ca rảnh trên máy đang thuộc về. */
+  function readAvailabilityMonthKey() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
+      return raw ? String(raw) : '';
+    } catch (e) {
+      return '';
     }
   }
 
@@ -883,7 +894,11 @@
       return res || { success: false, error: 'Lỗi tải yêu cầu.' };
     }
 
-    const applied = window.CloudSyncManager.applyRequestsPayload(res.data);
+    const applied = window.CloudSyncManager.applyRequestsPayload(res.data, {
+      // Ca rảnh được đăng ký lại từ đầu mỗi tháng: chỉ gộp đăng ký của đúng
+      // tháng mà danh sách ca rảnh trên máy đang quản lý.
+      monthKey: readAvailabilityMonthKey()
+    });
     if (!applied || !applied.success) {
       if (!silent) {
         showToast('Lỗi gộp yêu cầu: ' + ((applied && applied.error) || 'không rõ nguyên nhân'), 'error', 7000);
@@ -916,10 +931,13 @@
 
   /** Tự kéo ca rảnh khi mở dashboard nếu trình duyệt đã có phiên Google cán bộ. */
   function scheduleAutoPullStudentRequests() {
-    if (!getCurrentGoogleStaffUser()) return;
-    if (Date.now() - lastStudentRequestPullAt < 15000) return;
-    setTimeout(() => {
-      if (!getCurrentGoogleStaffUser()) return;
+    setTimeout(async () => {
+      let user = getCurrentGoogleStaffUser();
+      if (!user && window.CloudSyncManager
+        && typeof window.CloudSyncManager.whenAuthReady === 'function') {
+        try { user = await window.CloudSyncManager.whenAuthReady(2500); } catch (e) { user = null; }
+      }
+      if (!user) return;
       if (Date.now() - lastStudentRequestPullAt < 15000) return;
       pullStudentRequests({ silent: true, reason: 'auto' });
     }, 900);
@@ -2332,6 +2350,61 @@ function reapplyManualSlots(monthSchedule) {
   return result;
 }
 
+/**
+ * Thu các ô đã gán tay từ lịch đang có vào sổ tay của máy này.
+ *
+ * Sổ tay gán ca chỉ nằm trong localStorage từng máy. Khi lịch được kéo từ
+ * Cloud (máy khác đã gán tay) mà sổ tay máy này trống, lần xếp tự động kế tiếp
+ * sẽ xoá mất các ô đó. Hàm này đọc cờ `manuallyEdited` có sẵn trong lịch để
+ * dựng lại sổ tay trước khi xếp lại.
+ *
+ * @returns {number} số ô đã bổ sung vào sổ tay
+ */
+function harvestManualSlotsFromSchedule(schedule, month, year) {
+  if (!schedule || !Array.isArray(schedule.weeks)) return 0;
+  const targetMonth = parseInt(month, 10) || state.currentMonth || 10;
+  const targetYear = parseInt(year, 10) || state.currentYear || 2026;
+  const schedMonth = parseInt(schedule.month, 10) || targetMonth;
+  const schedYear = parseInt(schedule.year, 10) || targetYear;
+  if (schedMonth !== targetMonth || schedYear !== targetYear) return 0;
+
+  const map = readManualSlotMap();
+  const key = manualSlotMonthKey(schedMonth, schedYear);
+  const bucket = (map[key] && typeof map[key] === 'object') ? map[key] : {};
+  let added = 0;
+
+  schedule.weeks.forEach((week, idx) => {
+    const table = week && week.scheduleTable;
+    if (!table) return;
+    Object.keys(table).forEach(shiftId => {
+      const slot = table[shiftId];
+      if (!slot || slot.manuallyEdited !== true) return;
+      const wk = String(idx + 1);
+      if (!bucket[wk]) bucket[wk] = {};
+      // Đã có bản ghi của máy này thì giữ nguyên — recordManualSlot luôn là
+      // bản mới nhất khi người dùng thao tác.
+      if (bucket[wk][shiftId]) return;
+      bucket[wk][shiftId] = {
+        oldId: slot.oldMember && slot.oldMember.id ? slot.oldMember.id : null,
+        newId: slot.newMember && slot.newMember.id ? slot.newMember.id : null,
+        at: Date.now(),
+        fromSchedule: true
+      };
+      added++;
+    });
+  });
+
+  if (added > 0) {
+    map[key] = bucket;
+    try {
+      localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(map));
+    } catch (e) {
+      console.warn('[Admin] Không lưu được sổ tay gán ca từ lịch Cloud:', e);
+    }
+  }
+  return added;
+}
+
 function runFullSchedule() {
     if (state.students.length === 0) {
       state.currentSchedule = null;
@@ -2344,6 +2417,15 @@ function runFullSchedule() {
     // Xếp ca trọn vẹn 1 tháng (4 tuần) theo đúng Năm và Tháng đang chọn
     const curY = state.currentYear || 2026;
     const curM = state.currentMonth || 10;
+
+    // Lịch đang có (kể cả vừa kéo từ Cloud) phải được ghi vào sổ tay trước khi
+    // dựng lịch mới, nếu không ca gán tay từ máy khác sẽ bị xoá.
+    try {
+      harvestManualSlotsFromSchedule(state.monthSchedule, curM, curY);
+    } catch (e) {
+      console.warn('[Admin] Không thu được ca gán tay từ lịch hiện tại:', e);
+    }
+
     const monthEngine = window.SchedulerEngine?.runMonthSchedule || window.SchedulerEngine?.runTwoWeekSchedule;
     const monthResult = monthEngine ? monthEngine(state.students, curY, curM) : null;
 
@@ -7568,6 +7650,7 @@ async function handleDeleteEvent(id) {
     // Dùng cho kiểm thử: sổ tay gán ca theo tháng.
     recordManualSlot,
     reapplyManualSlots,
+    harvestManualSlotsFromSchedule,
     // Dùng cho kiểm thử: chuẩn hoá id CTV + vẽ bảng CTV.
     normalizeStudentIds,
     renderStudentTable,
@@ -8882,6 +8965,10 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         renderAll();
         renderUserMgmtTable();
         updateBackupStats();
+        // Bản Cloud riêng tư có thể chưa có ca rảnh vừa đăng ký (nguồn sự thật
+        // là tvts_requests). Nhận lại yêu cầu ngay sau khi kéo để không bị
+        // bản students cũ ghi đè mất ca rảnh.
+        setTimeout(() => pullStudentRequests({ silent: true, reason: 'cloud-synced' }), 250);
       }
     });
 
