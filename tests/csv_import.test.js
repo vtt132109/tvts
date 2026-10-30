@@ -366,7 +366,11 @@ runTest('Google Form: chọn tháng không có ngày nào => báo lỗi rõ, kh�
 
 runTest('Giao diện: có nút Nhập Google Form và gợi ý đúng chế độ', () => {
   const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
-  assert.ok(html.includes('id="btn-open-form-import"'), 'Phải có nút Nhập Google Form');
+  const js = fs.readFileSync(path.join(ROOT, 'js/admin.js'), 'utf8');
+  assert.ok(html.includes('id="btn-open-form-import"'), 'Phải có nút Nhập Google Form trong tab Quản Lý Sinh Viên');
+  assert.ok(html.includes('id="btn-sticky-import-form"'), 'Phải có nút Nhập Google Form trên thanh sticky');
+  assert.ok(html.includes('id="btn-hero-import-form"'), 'Phải có nút Nhập Google Form ở tab Lịch Trực');
+  assert.ok(js.includes('window.adminOpenFormImport'), 'Phải có hàm mở nhập form từ mọi tab');
   assert.ok(html.includes('id="import-mode-hint"'), 'Modal nhập phải có gợi ý chế độ');
   assert.ok(typeof isGoogleFormResponseCsv === 'function'
     && typeof analyzeGoogleFormCsv === 'function',

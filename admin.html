@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261030_1630">
+  <link rel="stylesheet" href="css/style.css?v=20261030_1700">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -422,6 +422,9 @@
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-backup-center" onclick="window.adminOpenBackupModal && window.adminOpenBackupModal()" style="font-weight: 700;" title="Trung tâm sao lưu dữ liệu">
         <span>💾 Sao Lưu</span>
       </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-import-form" onclick="window.adminOpenFormImport && window.adminOpenFormImport()" style="font-weight: 700; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" title="Nhập file CSV phản hồi Google Form cho tháng đang mở">
+        <span>📥 Nhập Google Form</span>
+      </button>
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-quick-copy" style="font-weight: 700;" title="Sao chép nhanh sang Google Sheets">
         <span>📋 Copy Google Sheets</span>
       </button>
@@ -513,6 +516,9 @@
               </button>
               <button class="btn btn-success" id="btn-hero-sync-cloud" onclick="window.adminForceSyncCloud && window.adminForceSyncCloud()" style="font-weight: 700; background: #059669; color: #fff; border-color: #059669;" title="Lưu và đồng bộ toàn bộ dữ liệu lên Cloud Firebase ngay lập tức">
                 <span>☁️ LƯU LÊN CLOUD</span>
+              </button>
+              <button class="btn btn-secondary" id="btn-hero-import-form" onclick="window.adminOpenFormImport && window.adminOpenFormImport()" style="font-weight: 700; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" title="Nhập file CSV phản hồi Google Form cho tháng đang mở">
+                <span>📥 NHẬP GOOGLE FORM</span>
               </button>
             </div>
             <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự ghép 1 Chính Thức + 1 Tập Sự mỗi ca. Gán tay: bấm trực tiếp vào ô ca trống bên dưới, chọn bất kỳ CTV nào (kể cả người chưa đăng ký) — lựa chọn của bạn sẽ được giữ nguyên qua các lần xếp tự động.</p>
@@ -2181,17 +2187,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261030_1630"></script>
+  <script src="js/a11y_modal.js?v=20261030_1700"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261030_1630"></script>
-  <script src="js/month_calendar.js?v=20261030_1630"></script>
-  <script src="js/scheduler.js?v=20261030_1630"></script>
-  <script src="js/roster.js?v=20261030_1630"></script>
-  <script src="js/common.js?v=20261030_1630"></script>
-  <script src="js/audit.js?v=20261030_1630"></script>
-  <script src="js/store.js?v=20261030_1630"></script>
-  <script src="js/admin.js?v=20261030_1630"></script>
+  <script src="js/cloud_sync.js?v=20261030_1700"></script>
+  <script src="js/month_calendar.js?v=20261030_1700"></script>
+  <script src="js/scheduler.js?v=20261030_1700"></script>
+  <script src="js/roster.js?v=20261030_1700"></script>
+  <script src="js/common.js?v=20261030_1700"></script>
+  <script src="js/audit.js?v=20261030_1700"></script>
+  <script src="js/store.js?v=20261030_1700"></script>
+  <script src="js/admin.js?v=20261030_1700"></script>
 </body>
 </html>
