@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261030_1345">
+  <link rel="stylesheet" href="css/style.css?v=20261030_1600">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -916,6 +916,9 @@
             <button class="btn btn-secondary btn-sm" id="btn-open-import-modal" style="font-weight: 700; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;" title="Nhập hàng loạt sinh viên từ file Excel / CSV khảo sát">
               <span>📥 Nhập Từ Excel / CSV</span>
             </button>
+            <button class="btn btn-secondary btn-sm" id="btn-open-form-import" style="font-weight: 700; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" title="Nhập file CSV phản hồi Google Form (4 cột ngày) cho tháng đang mở">
+              <span>📥 Nhập Google Form</span>
+            </button>
             <button class="btn btn-primary btn-sm" id="btn-open-add-student">
               <span>+ Thêm Sinh Viên Mới</span>
             </button>
@@ -1401,6 +1404,7 @@
         <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
           Tải lên file danh sách sinh viên đăng ký từ Google Form hoặc Excel khảo sát (hỗ trợ định dạng <code>.csv</code> UTF-8). Hệ thống sẽ tự động nhận diện Họ tên, MSSV, SĐT, Phân loại và các ca rảnh.
         </p>
+        <div id="import-mode-hint" style="font-size: 0.8rem; color: var(--text-muted); background: var(--bg-subtle); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; margin-bottom: 1rem;"></div>
 
         <!-- Nút tải file mẫu -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-page); padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
@@ -2174,17 +2178,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261030_1345"></script>
+  <script src="js/a11y_modal.js?v=20261030_1600"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261030_1345"></script>
-  <script src="js/month_calendar.js?v=20261030_1345"></script>
-  <script src="js/scheduler.js?v=20261030_1345"></script>
-  <script src="js/roster.js?v=20261030_1345"></script>
-  <script src="js/common.js?v=20261030_1345"></script>
-  <script src="js/audit.js?v=20261030_1345"></script>
-  <script src="js/store.js?v=20261030_1345"></script>
-  <script src="js/admin.js?v=20261030_1345"></script>
+  <script src="js/cloud_sync.js?v=20261030_1600"></script>
+  <script src="js/month_calendar.js?v=20261030_1600"></script>
+  <script src="js/scheduler.js?v=20261030_1600"></script>
+  <script src="js/roster.js?v=20261030_1600"></script>
+  <script src="js/common.js?v=20261030_1600"></script>
+  <script src="js/audit.js?v=20261030_1600"></script>
+  <script src="js/store.js?v=20261030_1600"></script>
+  <script src="js/admin.js?v=20261030_1600"></script>
 </body>
 </html>

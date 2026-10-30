@@ -526,6 +526,7 @@
       // Import Excel / CSV Modal Elements (Task 18)
       importModal: document.getElementById('import-excel-modal'),
       btnOpenImportModal: document.getElementById('btn-open-import-modal'),
+      btnOpenFormImport: document.getElementById('btn-open-form-import'),
       btnCloseImportModal: document.getElementById('btn-close-import-modal'),
       btnCancelImport: document.getElementById('btn-cancel-import'),
       btnConfirmImport: document.getElementById('btn-confirm-import'),
@@ -4961,7 +4962,8 @@ window.adminDeleteStudent = async function(studentId) {
    * ==========================================================================
    */
   function bindImportEvents() {
-    elements.btnOpenImportModal?.addEventListener('click', openImportModal);
+    elements.btnOpenImportModal?.addEventListener('click', () => openImportModal('roster'));
+    elements.btnOpenFormImport?.addEventListener('click', () => openImportModal('google_form'));
     elements.btnCloseImportModal?.addEventListener('click', closeImportModal);
     elements.btnCancelImport?.addEventListener('click', closeImportModal);
     elements.btnDownloadImportTemplate?.addEventListener('click', downloadImportTemplateCsv);
@@ -5005,7 +5007,8 @@ window.adminDeleteStudent = async function(studentId) {
     elements.btnConfirmImport?.addEventListener('click', confirmImportStudents);
   }
 
-  function openImportModal() {
+  function openImportModal(mode) {
+    state.importMode = mode === 'google_form' ? 'google_form' : 'roster';
     state.importedCandidates = [];
     if (elements.importPreviewSection) elements.importPreviewSection.style.display = 'none';
     if (elements.importPreviewTbody) elements.importPreviewTbody.innerHTML = '';
@@ -5018,6 +5021,19 @@ window.adminDeleteStudent = async function(studentId) {
       elements.btnConfirmImport.style.opacity = '0.6';
     }
     if (elements.inputImportFile) elements.inputImportFile.value = '';
+
+    const hint = document.getElementById('import-mode-hint');
+    if (hint) {
+      const monthLabel = `Tháng ${String(state.currentMonth || 10).padStart(2, '0')}/${state.currentYear || 2026}`;
+      hint.innerHTML = state.importMode === 'google_form'
+        ? `<strong>Google Form → ${escapeHtml(monthLabel)}:</strong> chọn file CSV phản hồi (cột Họ và tên, MSSV và các cột “Ngày … — Chọn các buổi có thể làm”). Hệ thống tự ánh xạ ngày vào 4 tuần và bỏ qua ngày của tháng khác.`
+        : 'File danh sách CTV: Họ và tên, MSSV, SĐT, Vai trò, Các ca rảnh. Nếu chọn file phản hồi Google Form, hệ thống vẫn tự nhận dạng.';
+    }
+    const replaceRadio = document.getElementById('import-mode-replace');
+    if (replaceRadio) replaceRadio.disabled = state.importMode === 'google_form';
+    const mergeRadio = document.getElementById('import-mode-merge');
+    if (mergeRadio) mergeRadio.checked = true;
+
     elements.importModal?.classList.add('active');
   }
 
@@ -5092,9 +5108,15 @@ window.adminDeleteStudent = async function(studentId) {
     reader.onload = (e) => {
       const text = e.target?.result;
       if (typeof text === 'string') {
-        // Phân tích đầy đủ TRƯỚC khi bật nút xác nhận: lỗi (trùng MSSV,
-        // thiếu cột Họ tên/MSSV…) phải chặn nhập, cảnh báo thì vẫn cho nhập.
-        const report = analyzeStudentsCsv(text);
+        // Tự nhận dạng file phản hồi Google Form (4 cột ngày) hoặc file
+        // danh sách CTV thông thường. Nút "Nhập Google Form" chỉ gợi ý
+        // trước; nội dung file vẫn là yếu tố quyết định.
+        const useForm = state.importMode === 'google_form' || isGoogleFormResponseCsv(text);
+        const report = useForm
+          ? analyzeGoogleFormCsv(text, { month: state.currentMonth, year: state.currentYear })
+          : analyzeStudentsCsv(text);
+        report.mode = useForm ? 'google_form' : 'roster';
+        state.importMode = report.mode;
         renderImportValidation(report);
 
         if (report.errors.length > 0) {
@@ -5408,15 +5430,302 @@ window.adminDeleteStudent = async function(studentId) {
     };
   }
 
+  /**
+   * Đọc một dòng CSV (hỗ trợ ô trong ngoặc kép). Tách riêng khỏi
+   * parseStudentsCsv vì scripts/khoi_phuc_58.js trích nguyên thân hàm đó.
+   */
+  function parseCsvRowSimple(lineStr) {
+    const row = [];
+    let inQuotes = false;
+    let currentVal = '';
+    for (let c = 0; c < lineStr.length; c++) {
+      const ch = lineStr[c];
+      if (ch === '"') {
+        if (inQuotes && lineStr[c + 1] === '"') {
+          currentVal += '"';
+          c++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        row.push(currentVal.trim());
+        currentVal = '';
+      } else {
+        currentVal += ch;
+      }
+    }
+    row.push(currentVal.trim());
+    return row.map(v => v.replace(/^"|"$/g, '').trim());
+  }
+
+  function normalizeCsvText(value) {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  /** Đọc mốc thời gian Google Form: "2026/10/16 9:50:18 CH GMT+7". */
+  function parseGoogleFormTimestamp(raw) {
+    const s = String(raw || '').trim();
+    const m = s.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*(SA|CH|AM|PM)?/i);
+    if (!m) return 0;
+    let hour = parseInt(m[4], 10);
+    const marker = (m[7] || '').toUpperCase();
+    if (marker === 'CH' || marker === 'PM') {
+      if (hour < 12) hour += 12;
+    } else if (marker === 'SA' || marker === 'AM') {
+      if (hour === 12) hour = 0;
+    }
+    const date = new Date(
+      parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+      hour, parseInt(m[5], 10), parseInt(m[6] || 0, 10)
+    );
+    return date.getTime() || 0;
+  }
+
+  /** File CSV phản hồi Google Form có 4 cột "Ngày … — Chọn các buổi". */
+  function isGoogleFormResponseCsv(csvText) {
+    if (!csvText || typeof csvText !== 'string') return false;
+    const lines = csvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      .split('\n').filter(l => l.trim()).slice(0, 12);
+    return lines.some(line => {
+      const headers = parseCsvRowSimple(line).map(normalizeCsvText);
+      const hasName = headers.some(h => h.includes('ho va ten') || h.includes('ho ten') || h === 'ten' || h.includes('fullname'));
+      const hasId = headers.some(h => h.includes('ma so sinh vien') || h.includes('mssv') || h.includes('ma sv'));
+      const hasWeek = headers.some(h => h.includes('chon cac buoi') || (h.startsWith('ngay ') && h.includes('/')));
+      return hasName && hasId && hasWeek;
+    });
+  }
+
+  /**
+   * Nhập phản hồi Google Form cho ĐÚNG tháng đang mở.
+   * Mỗi lựa chọn "dd/mm (Thứ X) — Sáng/Chiều" được ánh xạ vào tuần chứa ngày
+   * đó (MonthCalendarHelper) và mã ca T2_S..T6_C; ngày của tháng khác bị bỏ qua.
+   */
+  function analyzeGoogleFormCsv(csvText, options) {
+    const targetMonth = parseInt(options && options.month, 10) || state.currentMonth || 10;
+    const targetYear = parseInt(options && options.year, 10) || state.currentYear || 2026;
+    const report = {
+      candidates: [],
+      errors: [],
+      warnings: [],
+      mode: 'google_form',
+      stats: {
+        totalRows: 0,
+        validRows: 0,
+        duplicateRows: 0,
+        ignoredRows: 0,
+        unmatchedRows: 0,
+        outOfMonthSelections: 0,
+        invalidSelections: 0,
+        skippedNewerRows: 0,
+        noShiftsRows: 0,
+        roleColumnFound: true
+      }
+    };
+
+    if (!csvText || typeof csvText !== 'string') {
+      report.errors.push('Nội dung CSV rỗng hoặc không phải văn bản.');
+      lastCsvReport = report;
+      return report;
+    }
+
+    const lines = csvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    let header = null;
+    for (let r = 0; r < lines.length && r < 15; r++) {
+      if (!lines[r].trim()) continue;
+      const cols = parseCsvRowSimple(lines[r]);
+      const norms = cols.map(normalizeCsvText);
+      const nameIdx = norms.findIndex(h =>
+        h.includes('ho va ten') || h.includes('ho ten') || h === 'ten' || h.includes('fullname'));
+      const idIdx = norms.findIndex(h =>
+        h.includes('ma so sinh vien') || h.includes('mssv') || h.includes('ma sv'));
+      const weekIdxs = norms
+        .map((h, i) => (h.includes('chon cac buoi') || (h.startsWith('ngay ') && h.includes('/')) ? i : -1))
+        .filter(i => i >= 0);
+      const tsIdx = norms.findIndex(h => h.includes('dau thoi gian') || h.includes('timestamp'));
+      if (nameIdx >= 0 && idIdx >= 0 && weekIdxs.length > 0) {
+        header = { row: r, nameIdx, idIdx, weekIdxs, tsIdx };
+        break;
+      }
+    }
+    if (!header) {
+      report.errors.push('Không nhận diện được file phản hồi Google Form (cần cột Họ và tên, Mã số sinh viên và các cột "Ngày … — Chọn các buổi").');
+      lastCsvReport = report;
+      return report;
+    }
+
+    const helper = window.MonthCalendarHelper
+      || (window.SchedulerEngine && window.SchedulerEngine.MonthCalendarHelper);
+    const dateMap = {};
+    if (helper && typeof helper.getMonthWeeks === 'function') {
+      helper.getMonthWeeks(targetMonth, targetYear).forEach(week => {
+        Object.values(week.days || {}).forEach(day => {
+          if (day && day.fullDate) {
+            dateMap[day.fullDate] = { week: week.weekNumber, dayKey: day.dayKey };
+          }
+        });
+      });
+    }
+    if (Object.keys(dateMap).length === 0) {
+      report.errors.push(`Không dựng được lịch tháng ${targetMonth}/${targetYear} để ánh xạ ngày.`);
+      lastCsvReport = report;
+      return report;
+    }
+
+    const pad2 = n => String(n).padStart(2, '0');
+    const byMssv = new Map();
+
+    for (let r = header.row + 1; r < lines.length; r++) {
+      if (!lines[r].trim()) continue;
+      const cols = parseCsvRowSimple(lines[r]);
+      if (cols.every(c => !c)) continue;
+      report.stats.totalRows++;
+
+      const fullName = (cols[header.nameIdx] || '').trim();
+      const studentId = (cols[header.idIdx] || '').trim();
+      if (!fullName || !studentId) {
+        report.stats.ignoredRows++;
+        continue;
+      }
+
+      const tsRaw = header.tsIdx >= 0 ? (cols[header.tsIdx] || '').trim() : '';
+      const weekly = { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() };
+
+      header.weekIdxs.forEach(ci => {
+        const cell = cols[ci] || '';
+        cell.split(';').forEach(part => {
+          const token = part.trim();
+          if (!token) return;
+          const normToken = normalizeCsvText(token);
+          const match = normToken.match(
+            /(\d{1,2})\s*\/\s*(\d{1,2})[^0-9]*?(?:—|-|–)\s*(sang|chieu)/i
+          );
+          if (!match) {
+            report.stats.invalidSelections++;
+            return;
+          }
+          const day = parseInt(match[1], 10);
+          const month = parseInt(match[2], 10);
+          if (month !== targetMonth) {
+            report.stats.outOfMonthSelections++;
+            return;
+          }
+          const dateKey = `${targetYear}-${pad2(month)}-${pad2(day)}`;
+          const info = dateMap[dateKey];
+          if (!info) {
+            report.stats.invalidSelections++;
+            return;
+          }
+          const period = match[3].toLowerCase() === 'sang' ? 'S' : 'C';
+          weekly[info.week].add(`${info.dayKey}_${period}`);
+        });
+      });
+
+      const stamp = parseGoogleFormTimestamp(tsRaw);
+      const existed = byMssv.get(studentId);
+      if (existed) {
+        report.stats.duplicateRows++;
+        if (stamp >= existed.stamp) {
+          byMssv.set(studentId, { fullName, studentId, stamp, tsRaw, weekly });
+        }
+        continue;
+      }
+      byMssv.set(studentId, { fullName, studentId, stamp, tsRaw, weekly });
+    }
+
+    const unmatched = [];
+    const noShifts = [];
+    const skippedNewer = [];
+
+    byMssv.forEach(entry => {
+      const student = (state.students || []).find(
+        s => s.studentId && s.studentId.toLowerCase() === entry.studentId.toLowerCase()
+      );
+      if (!student) {
+        report.stats.unmatchedRows++;
+        unmatched.push(entry.studentId);
+        return;
+      }
+
+      const monthly = { 1: [], 2: [], 3: [], 4: [] };
+      const union = [];
+      [1, 2, 3, 4].forEach(week => {
+        monthly[week] = Array.from(entry.weekly[week]);
+        monthly[week].forEach(shiftId => {
+          if (!union.includes(shiftId)) union.push(shiftId);
+        });
+      });
+      if (union.length === 0) {
+        report.stats.noShiftsRows++;
+        noShifts.push(entry.studentId);
+        return;
+      }
+
+      const currentHasWeekly = student.monthlyAvailableShifts
+        && typeof student.monthlyAvailableShifts === 'object'
+        && Object.values(student.monthlyAvailableShifts).some(
+          list => Array.isArray(list) && list.length > 0
+        );
+      if (entry.stamp && currentHasWeekly && entry.stamp <= (Number(student.updatedAt) || 0)) {
+        report.stats.skippedNewerRows++;
+        skippedNewer.push(entry.studentId);
+        return;
+      }
+
+      report.candidates.push({
+        fullName: entry.fullName,
+        studentId: entry.studentId,
+        phone: student.phone || '',
+        role: student.role || '',
+        monthlyAvailableShifts: monthly,
+        availableShifts: union,
+        isExisting: true,
+        formSubmittedAt: entry.tsRaw
+      });
+    });
+
+    report.stats.validRows = report.candidates.length;
+    if (report.stats.outOfMonthSelections > 0) {
+      report.warnings.push(`Đã bỏ qua ${report.stats.outOfMonthSelections} lựa chọn không thuộc tháng ${targetMonth}/${targetYear}.`);
+    }
+    if (report.stats.invalidSelections > 0) {
+      report.warnings.push(`Có ${report.stats.invalidSelections} lựa chọn không đọc được ngày/ca và đã bị bỏ qua.`);
+    }
+    if (report.stats.duplicateRows > 0) {
+      report.warnings.push(`Có ${report.stats.duplicateRows} phản hồi trùng MSSV; đã dùng phản hồi mới nhất.`);
+    }
+    if (unmatched.length > 0) {
+      report.warnings.push(`Bỏ qua ${unmatched.length} MSSV không có trong danh sách CTV: ${unmatched.slice(0, 5).join(', ')}${unmatched.length > 5 ? '…' : ''}.`);
+    }
+    if (noShifts.length > 0) {
+      report.warnings.push(`Bỏ qua ${noShifts.length} người không chọn ca nào trong tháng ${targetMonth}/${targetYear}.`);
+    }
+    if (skippedNewer.length > 0) {
+      report.warnings.push(`Bỏ qua ${skippedNewer.length} người đã có ca rảnh cập nhật sau thời điểm form: ${skippedNewer.slice(0, 5).join(', ')}${skippedNewer.length > 5 ? '…' : ''}.`);
+    }
+    if (report.candidates.length === 0) {
+      report.errors.push(`Không có CTV nào có ca rảnh trong tháng ${targetMonth}/${targetYear} để nhập.`);
+    }
+
+    lastCsvReport = report;
+    return report;
+  }
+
   function renderImportPreview(candidates, filename) {
     if (!elements.importPreviewSection || !elements.importPreviewTbody) return;
 
+    const isForm = state.importMode === 'google_form';
     elements.importPreviewSection.style.display = 'block';
     if (elements.importFileNameLabel) {
       elements.importFileNameLabel.textContent = `File: ${filename}`;
     }
     if (elements.importPreviewCountLabel) {
-      elements.importPreviewCountLabel.textContent = `📋 Nhận diện được: ${candidates.length} sinh viên hợp lệ`;
+      elements.importPreviewCountLabel.textContent = isForm
+        ? `📋 Google Form → Tháng ${String(state.currentMonth || 10).padStart(2, '0')}/${state.currentYear || 2026}: ${candidates.length} sinh viên`
+        : `📋 Nhận diện được: ${candidates.length} sinh viên hợp lệ`;
     }
 
     elements.importPreviewTbody.innerHTML = candidates.map((c, idx) => {
@@ -5427,6 +5736,16 @@ window.adminDeleteStudent = async function(studentId) {
         ? `<span class="badge badge-role-old" style="font-size:0.7rem;">🎓 Chính Thức</span>`
         : `<span class="badge badge-role-new" style="font-size:0.7rem;">🌱 Tập Sự</span>`;
 
+      let shiftCell = `<strong style="color:var(--primary);">${c.availableShifts.length}</strong> ca`;
+      if (isForm && c.monthlyAvailableShifts) {
+        const w1 = (c.monthlyAvailableShifts[1] || []).length;
+        const w2 = (c.monthlyAvailableShifts[2] || []).length;
+        const w3 = (c.monthlyAvailableShifts[3] || []).length;
+        const w4 = (c.monthlyAvailableShifts[4] || []).length;
+        shiftCell = `<strong style="color:var(--primary);">${c.availableShifts.length}</strong> ca
+          <span style="font-size:0.75rem; color:var(--text-muted); display:block;">T1: ${w1} · T2: ${w2} · T3: ${w3} · T4: ${w4}</span>`;
+      }
+
       return `
         <tr>
           <td>${idx + 1}</td>
@@ -5434,7 +5753,7 @@ window.adminDeleteStudent = async function(studentId) {
           <td><code>${escapeHtml(c.studentId)}</code></td>
           <td>${escapeHtml(c.phone || '-')}</td>
           <td>${roleBadge}</td>
-          <td><strong style="color:var(--primary);">${c.availableShifts.length}</strong> ca</td>
+          <td>${shiftCell}</td>
           <td>${statusBadge}</td>
         </tr>
       `;
@@ -5443,7 +5762,9 @@ window.adminDeleteStudent = async function(studentId) {
     if (elements.btnConfirmImport) {
       elements.btnConfirmImport.disabled = false;
       elements.btnConfirmImport.style.opacity = '1';
-      elements.btnConfirmImport.innerHTML = `<span>☁️ Xác Nhận Nạp & Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`;
+      elements.btnConfirmImport.innerHTML = isForm
+        ? `<span>☁️ Nhập Google Form &amp; Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`
+        : `<span>☁️ Xác Nhận Nạp &amp; Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`;
     }
   }
 
@@ -5451,8 +5772,9 @@ window.adminDeleteStudent = async function(studentId) {
     const candidates = state.importedCandidates || [];
     if (candidates.length === 0) return;
 
+    const isFormImport = state.importMode === 'google_form';
     const modeRadio = document.querySelector('input[name="importMode"]:checked');
-    const isReplace = modeRadio && modeRadio.value === 'replace';
+    const isReplace = !isFormImport && modeRadio && modeRadio.value === 'replace';
 
     if (isReplace) {
       const ok = await confirmDangerAction({
@@ -5506,16 +5828,29 @@ window.adminDeleteStudent = async function(studentId) {
     });
 
     saveStudents(true);
-    runFullSchedule();
+    if (isFormImport) {
+      // Ca rảnh của form thuộc đúng tháng đang mở; đánh dấu tháng để lần
+      // chuyển kỳ sau không hiểu nhầm dữ liệu của tháng cũ.
+      try {
+        localStorage.setItem(
+          STORAGE_KEYS.AVAILABILITY_MONTH,
+          `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`
+        );
+      } catch (e) {}
+    } else {
+      // File danh sách CTV có thể đổi vai trò/ca rảnh -> cần xếp lại.
+      runFullSchedule();
+    }
     renderAll();
     closeImportModal();
 
+    const monthLabel = `Tháng ${String(state.currentMonth || 10).padStart(2, '0')}/${state.currentYear || 2026}`;
     if (canAutoPushToCloud()) {
       showToast('⏳ Đang lưu dữ liệu và đồng bộ lên Firebase Đám Mây…', 'info', 2500);
       try {
         const syncRes = await window.CloudSyncManager.pushToCloud();
         if (syncRes && syncRes.success) {
-          showToast(`☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Đã nạp ${candidates.length} CTV (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount}). Tải lại web dữ liệu vẫn nguyên vẹn 100%!`, 'success', 6000);
+          showToast(`☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Đã nhập ${candidates.length} CTV${isFormImport ? ' từ Google Form cho ' + monthLabel : ''} (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount}).`, 'success', 6000);
         } else {
           showToast(`Đã lưu cục bộ! Đẩy lên Cloud gặp cảnh báo: ${syncRes?.error || 'Chưa hoàn tất'}`, 'warning', 4000);
         }
@@ -5523,7 +5858,7 @@ window.adminDeleteStudent = async function(studentId) {
         showToast(`Đã lưu cục bộ! Lỗi kết nối Cloud: ${cloudErr.message}`, 'warning', 4000);
       }
     } else {
-      showToast(`Đã nạp thành công ${candidates.length} sinh viên (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success', 4000);
+      showToast(`Đã nhập ${candidates.length} CTV${isFormImport ? ' từ Google Form cho ' + monthLabel : ''} (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success', 4000);
     }
   }
 
@@ -7733,7 +8068,9 @@ async function handleDeleteEvent(id) {
   // (trả về mảng) và bổ sung analyzer có báo cáo lỗi/cảnh báo/thống kê.
   window.csvImportTestHelper = {
     parseStudentsCsv,
-    analyzeStudentsCsv
+    analyzeStudentsCsv,
+    isGoogleFormResponseCsv,
+    analyzeGoogleFormCsv
   };
 
   window.EventManager = EventManager;
