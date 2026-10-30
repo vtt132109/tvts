@@ -5043,6 +5043,23 @@ window.adminDeleteStudent = async function(studentId) {
     state.importedCandidates = [];
   }
 
+  /**
+   * Mở nhập Google Form từ bất kỳ tab nào (nút sticky / hero).
+   * Chuyển sang tab Quản Lý Sinh Viên nếu cần rồi mở đúng chế độ form.
+   */
+  window.adminOpenFormImport = function() {
+    try {
+      if (typeof window.adminCloseCloudSyncModal === 'function') {
+        window.adminCloseCloudSyncModal();
+      }
+    } catch (e) {}
+    const tab = document.getElementById('btn-tab-students');
+    if (tab && !tab.classList.contains('active')) {
+      tab.click();
+    }
+    setTimeout(() => openImportModal('google_form'), 100);
+  };
+
   function downloadImportTemplateCsv() {
     const csvContent = '\uFEFF' + [
       'Họ và Tên,Mã Số Sinh Viên,Số Điện Thoại,Phân Loại (Người cũ/Người mới),Các Ca Rảnh (cách nhau bởi dấu phẩy)',
