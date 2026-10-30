@@ -1676,6 +1676,10 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && adminHtml.includes('cloud-release-mssv')
     && adminJsSource.includes('releaseMssvOwner'),
   '12.5b: Admin phải có ô + nút Giải phóng MSSV nối tới CloudSyncManager.releaseMssvOwner');
+  assert(adminJsSource.includes('pullPublicClientConfig')
+    && adminJsSource.includes('schedulePublicConfigBootstrap')
+    && adminJsSource.includes('whenAuthReady'),
+  '12.5c: Màn đăng nhập admin tự lấy Web API Key công khai trước khi đăng nhập Google');
   assert(!adminHtml.includes('cloud-input-auth-email')
     && !adminHtml.includes('cloud-input-auth-password'),
   '12.6: Đã bỏ tài khoản Email/Password dùng chung khỏi UI admin');
@@ -2780,6 +2784,54 @@ console.log('\n▶ [GROUP 19] Gộp Ca Rảnh Từ Cloud & Auto-Pull Im Lặng:'
   const after = JSON.parse(env.localStorage.getItem(K.STUDENTS));
   assert(after.length === 1 && after[0].studentId === 'L1',
     '19.4c: Không được ghi đè danh sách cục bộ');
+}
+
+{
+  // Lấy Web API Key công khai — không cần đăng nhập (máy mới/mất localStorage).
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const calls = [];
+  csm.saveConfig({
+    enabled: true,
+    databaseUrl: 'https://public-cfg.firebaseio.com',
+    apiKey: ''
+  });
+  env.window.fetch = async (url) => {
+    calls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        apiKey: 'AIza_PUBLIC_KEY',
+        authDomain: 'public.firebaseapp.com',
+        projectId: 'public-project'
+      })
+    };
+  };
+  env.sandbox.fetch = env.window.fetch;
+
+  const res = await csm.pullPublicClientConfig();
+  assert(res.success === true && res.apiKey === 'AIza_PUBLIC_KEY',
+    `19.5: Phải lấy được Web API Key công khai. Lỗi: ${res.error || ''}`);
+  const cfg = csm.getConfig();
+  assert(cfg.apiKey === 'AIza_PUBLIC_KEY'
+    && cfg.authDomain === 'public.firebaseapp.com'
+    && cfg.projectId === 'public-project',
+  '19.5b: clientConfig công khai phải được lưu vào cấu hình máy');
+  assert(calls.length === 1
+    && /\/tvts_public\/clientConfig\.json$/.test(calls[0])
+    && !/auth=/.test(calls[0]),
+  `19.5c: Chỉ GET clientConfig công khai, không kèm token. URL: ${calls[0] || ''}`);
+
+  env.window.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({})
+  });
+  env.sandbox.fetch = env.window.fetch;
+  const bad = await csm.pullPublicClientConfig();
+  assert(bad.success === false && /clientConfig/.test(bad.error || ''),
+    '19.5d: Báo lỗi rõ khi Cloud chưa công bố Web API Key');
 }
 
 // -----------------------------------------------------------------------------
