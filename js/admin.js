@@ -46,6 +46,9 @@
     // (đổi vai trò hàng loạt, nhập danh sách, thêm/xoá SV) nên mọi chỉnh
     // sửa tay biến mất không một dòng cảnh báo.
     MANUAL_SLOTS: 'ts_scheduler_manual_slots',
+    // Cấu hình số người mỗi ca theo tháng:
+    // { 'YYYY-MM': { peoplePerShift: 1|2, thirdShifts: ['T2_S', ...] } }
+    SHIFT_CAPACITY: 'ts_scheduler_shift_capacity_v1',
     // Tháng mà `monthlyAvailableShifts` đang thuộc về, định dạng 'YYYY-MM'.
     // Quy tắc nghiệp vụ: mỗi tháng sinh viên đăng ký ca rảnh LẠI TỪ ĐẦU.
     // Khoá này cho biết ca rảnh hiện có là của tháng nào. Khi tháng đang mở
@@ -1088,6 +1091,7 @@
       bindBackupCenterEvents();
       bindCloudSyncEvents();
       bindAuditLogEvents();
+      bindShiftCapacityEvents();
 
       // Cập nhật trạng thái đếm ngược trực tiếp mỗi 30 giây (1 timer duy nhất)
       regLiveStatusTimer = setInterval(updateRegLiveStatus, 30000);
@@ -2293,6 +2297,78 @@
     return `${y}-${String(m).padStart(2, '0')}`;
   }
 
+  /** Đọc cấu hình số người/ca của tất cả các tháng. */
+  function readShiftCapacityMap() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIFT_CAPACITY) || '{}') || {};
+      return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
+   * Cấu hình số người/ca của một tháng.
+   * - peoplePerShift: 1 hoặc 2 (mặc định 2).
+   * - thirdShifts: các ca đặc biệt có 3 người; auto xếp 2, người thứ 3 thủ công.
+   * Nếu chưa có cấu hình nhưng lịch đã có slot.capacity thì suy ra từ lịch
+   * (máy khác vừa kéo về) để không tự hạ/vượt cấu hình.
+   */
+  function getMonthCapacity(month, year, schedule) {
+    const m = parseInt(month, 10) || state.currentMonth || 10;
+    const y = parseInt(year, 10) || state.currentYear || 2026;
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    const map = readShiftCapacityMap();
+    const stored = map[key];
+    const validIds = new Set((SHIFTS || []).map(s => s.id));
+    if (stored && typeof stored === 'object') {
+      const thirdShifts = Array.isArray(stored.thirdShifts)
+        ? stored.thirdShifts.filter(id => typeof id === 'string' && (!validIds.size || validIds.has(id)))
+        : [];
+      return {
+        peoplePerShift: stored.peoplePerShift === 1 ? 1 : 2,
+        thirdShifts: [...new Set(thirdShifts)]
+      };
+    }
+
+    const sched = schedule
+      || (state.monthSchedule
+        && (!state.monthSchedule.month || state.monthSchedule.month === m)
+        ? state.monthSchedule
+        : null);
+    if (sched && Array.isArray(sched.weeks)) {
+      const slots = sched.weeks.flatMap(w => Object.values((w && w.scheduleTable) || {}));
+      if (slots.length > 0) {
+        const hasSingle = slots.some(s => s && s.capacity === 1);
+        const thirdShifts = [...new Set(slots
+          .filter(s => s && s.capacity === 3)
+          .map(s => s.shiftId || (s.shiftInfo && s.shiftInfo.id))
+          .filter(Boolean))];
+        return { peoplePerShift: hasSingle ? 1 : 2, thirdShifts };
+      }
+    }
+    return { peoplePerShift: 2, thirdShifts: [] };
+  }
+
+  /** Lưu cấu hình số người/ca của tháng và phát auto-push (nếu Cloud bật). */
+  function saveMonthCapacity(month, year, config) {
+    const m = parseInt(month, 10) || state.currentMonth || 10;
+    const y = parseInt(year, 10) || state.currentYear || 2026;
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    const map = readShiftCapacityMap();
+    map[key] = {
+      peoplePerShift: config && config.peoplePerShift === 1 ? 1 : 2,
+      thirdShifts: [...new Set((config && Array.isArray(config.thirdShifts) ? config.thirdShifts : [])
+        .filter(id => typeof id === 'string'))]
+    };
+    try {
+      localStorage.setItem(STORAGE_KEYS.SHIFT_CAPACITY, JSON.stringify(map));
+    } catch (e) {}
+    if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
+      window.CloudSyncManager.triggerAutoPush();
+    }
+  }
+
   /** Đọc thô sổ tay gán ca: { 'YYYY-MM': { '1': { T2_S: {...} } } }. */
   function readManualSlotMap() {
     try {
@@ -2346,6 +2422,7 @@ function recordManualSlot(weekNumber, shiftId, slot, month, year) {
     map[key][wk][shiftId] = {
       oldId: slot.oldMember ? slot.oldMember.id : null,
       newId: slot.newMember ? slot.newMember.id : null,
+      thirdId: slot.thirdMember ? slot.thirdMember.id : null,
       at: Date.now()
     };
 
@@ -2407,13 +2484,25 @@ function reapplyManualSlots(monthSchedule) {
 
       const oldM = resolve(override.oldId);
       const newM = resolve(override.newId);
-      if (oldM === undefined || newM === undefined) return;
+      const thirdM = resolve(override.thirdId);
+      if (oldM === undefined || newM === undefined || thirdM === undefined) return;
 
-      // Giữ đúng lựa chọn thủ công, kể cả trường hợp cùng một người ở cả 2 vị
-      // trí hoặc trái vai trò. UI sẽ hiển thị cảnh báo tương ứng.
-      slot.oldMember = oldM;
-      slot.newMember = newM;
-      slot.status = (oldM && newM) ? 'full' : ((oldM || newM) ? 'partial' : 'empty');
+      const capacity = slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2;
+      if (capacity === 1) {
+        slot.oldMember = oldM;
+        slot.newMember = null;
+        slot.thirdMember = null;
+      } else if (capacity === 3) {
+        slot.oldMember = oldM;
+        slot.newMember = newM;
+        slot.thirdMember = thirdM;
+      } else {
+        slot.oldMember = oldM;
+        slot.newMember = newM;
+        slot.thirdMember = null;
+      }
+      const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
+      slot.status = memberCount === 0 ? 'empty' : (memberCount >= capacity ? 'full' : 'partial');
       slot.manuallyEdited = true;
       result.applied++;
     });
@@ -2461,6 +2550,7 @@ function harvestManualSlotsFromSchedule(schedule, month, year) {
       bucket[wk][shiftId] = {
         oldId: slot.oldMember && slot.oldMember.id ? slot.oldMember.id : null,
         newId: slot.newMember && slot.newMember.id ? slot.newMember.id : null,
+        thirdId: slot.thirdMember && slot.thirdMember.id ? slot.thirdMember.id : null,
         at: Date.now(),
         fromSchedule: true
       };
@@ -2501,7 +2591,11 @@ function runFullSchedule() {
     }
 
     const monthEngine = window.SchedulerEngine?.runMonthSchedule || window.SchedulerEngine?.runTwoWeekSchedule;
-    const monthResult = monthEngine ? monthEngine(state.students, curY, curM) : null;
+    // 1/2 người mỗi ca + danh sách ca đặc biệt 3 người của tháng đang mở.
+    const capacityConfig = getMonthCapacity(curM, curY, state.monthSchedule);
+    const monthResult = monthEngine
+      ? monthEngine(state.students, curY, curM, capacityConfig)
+      : null;
 
     // Áp lại các ô quản trị viên đã chỉnh tay. Trước đây mọi thao tác gọi
     // runFullSchedule() (đổi vai trò hàng loạt, nhập CSV, thêm/xoá SV) đều
@@ -3834,81 +3928,137 @@ function renderStudentTable() {
   }
 
   function renderShiftSlotHtml(shiftId, slot) {
-    if (!slot) {
-      const info = getShiftInfo(shiftId) || {};
+    return buildShiftSlotCardHtml(shiftId, slot, null);
+  }
+
+  function getSlotCapacity(shiftId, slot) {
+    if (slot && (slot.capacity === 1 || slot.capacity === 2 || slot.capacity === 3)) {
+      return slot.capacity;
+    }
+    const cfg = getMonthCapacity(state.currentMonth || 10, state.currentYear || 2026);
+    return cfg.thirdShifts.includes(shiftId) ? 3 : cfg.peoplePerShift;
+  }
+
+  /**
+   * Vẽ một ô ca dùng chung cho cả lưới tuần và lưới tháng.
+   * capacity 1 -> một người bất kỳ; 2 -> Cũ + Mới; 3 -> Cũ + Mới + người thứ 3
+   * (người thứ 3 chỉ xếp thủ công, auto không bao giờ điền).
+   */
+  function buildShiftSlotCardHtml(shiftId, slot, weekNum) {
+    const info = (slot && slot.shiftInfo) || getShiftInfo(shiftId) || {};
+    const capacity = getSlotCapacity(shiftId, slot);
+    const weekArg = weekNum ? `, ${weekNum}` : '';
+    const open = (role) => `window.adminOpenReassignModal('${shiftId}', '${role}'${weekArg})`;
+    const oldMem = slot && slot.oldMember ? slot.oldMember : null;
+    const newMem = slot && slot.newMember ? slot.newMember : null;
+    const thirdMem = slot && slot.thirdMember ? slot.thirdMember : null;
+    const singleMem = capacity === 1 ? (oldMem || newMem) : null;
+
+    const roleName = (member) => (member && member.role === 'old' ? 'Chính Thức' : 'Tập Sự');
+    const roleIcon = (member) => (member && member.role === 'old' ? '🎓' : '🌱');
+
+    const memberCard = (member, openRole, opts) => {
+      const o = opts || {};
+      if (!member) {
+        return `<div class="duty-member-card empty-member" onclick="${open(openRole)}" style="cursor:pointer;" title="${escapeHtml(o.emptyTitle || '')}"><span>${escapeHtml(o.emptyLabel || '+ Chưa có')}</span></div>`;
+      }
+      const mismatch = o.expectedRole && member.role && member.role !== o.expectedRole;
       return `
-        <div class="grid-cell shift-duty-slot">
-          <div class="shift-slot-header">
-            <span>${escapeHtml(info.dayName || '')}</span>
-            <span class="shift-status-pill empty">Trống</span>
+        <div class="duty-member-card ${o.className || 'role-old'}" title="${escapeHtml(o.title || roleName(member))}">
+          <div class="member-info">
+            <span class="member-role-tag">${escapeHtml(o.tag || `${roleIcon(member)} ${roleName(member)}`)}${mismatch ? ' · ⚠️ trái vai trò' : ''}</span>
+            <span class="member-name">${escapeHtml(member.fullName)}</span>
+            <span class="member-mssv">MSSV: ${escapeHtml(member.studentId)}</span>
           </div>
-          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán Chính Thức (kể cả chưa đăng ký)">
-            <span>+ Chưa có Chính Thức</span>
-          </div>
-          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán Tập Sự (kể cả chưa đăng ký)">
-            <span>+ Chưa có Tập Sự</span>
-          </div>
-        </div>
-      `;
-    }
+          <button class="duty-change-btn" onclick="${open(openRole)}" title="Đổi bạn khác">🔄</button>
+        </div>`;
+    };
 
-    const oldMem = slot.oldMember;
-    const newMem = slot.newMember;
-    const oldRoleMismatch = !!(oldMem && oldMem.role && oldMem.role !== 'old');
-    const newRoleMismatch = !!(newMem && newMem.role && newMem.role !== 'new');
+    let statusClass = 'empty';
+    let statusLabel = 'Trống';
+    let body = '';
+    let mismatch = false;
 
-    let statusPill = '';
-    if (slot.status === 'full') {
-      statusPill = `<span class="shift-status-pill full">✓ Đủ 2 bạn</span>`;
-    } else if (slot.status === 'partial') {
-      statusPill = `<span class="shift-status-pill warning">Thiếu 1 bạn</span>`;
+    if (capacity === 1) {
+      if (singleMem) {
+        statusClass = 'full';
+        statusLabel = '✓ Đủ 1 bạn';
+      }
+      body = memberCard(singleMem, 'single', {
+        className: singleMem && singleMem.role === 'new' ? 'role-new' : 'role-old',
+        tag: `👤 Người trực duy nhất · ${roleName(singleMem)}`,
+        title: 'Ca 1 người — người trực duy nhất',
+        emptyLabel: '+ Chọn người trực (1 người/ca)',
+        emptyTitle: 'Nhấn để chọn người trực duy nhất'
+      });
+    } else if (capacity === 3) {
+      const count = [oldMem, newMem, thirdMem].filter(Boolean).length;
+      if (count >= 3) {
+        statusClass = 'full';
+        statusLabel = '✓ Đủ 3 bạn';
+      } else if (count === 2) {
+        statusClass = 'warning';
+        statusLabel = '2/3 · Thiếu người thứ 3';
+      } else if (count === 1) {
+        statusClass = 'warning';
+        statusLabel = '1/3 · Thiếu 2 người';
+      }
+      const oldCard = memberCard(oldMem, 'old', {
+        expectedRole: 'old', className: 'role-old', tag: '🎓 Chính Thức',
+        title: 'Chính Thức - Có kinh nghiệm', emptyLabel: '+ Chưa có Chính Thức',
+        emptyTitle: 'Nhấn để gán Chính Thức'
+      });
+      const newCard = memberCard(newMem, 'new', {
+        expectedRole: 'new', className: 'role-new', tag: '🌱 Tập Sự',
+        title: 'Tập Sự', emptyLabel: '+ Chưa có Tập Sự',
+        emptyTitle: 'Nhấn để gán Tập Sự'
+      });
+      const thirdCard = memberCard(thirdMem, 'third', {
+        className: 'role-third',
+        tag: `👥 Người thứ 3 (thủ công) · ${roleName(thirdMem)}`,
+        title: 'Người thứ 3 gán tay',
+        emptyLabel: '+ Thêm người thứ 3 (thủ công)',
+        emptyTitle: 'Nhấn để thêm người thứ 3 (thủ công)'
+      });
+      body = oldCard + newCard + thirdCard;
+      mismatch = (oldMem && oldMem.role && oldMem.role !== 'old')
+        || (newMem && newMem.role && newMem.role !== 'new');
     } else {
-      statusPill = `<span class="shift-status-pill empty">Trống</span>`;
+      if (oldMem && newMem) {
+        statusClass = 'full';
+        statusLabel = '✓ Đủ 2 bạn';
+      } else if (oldMem || newMem) {
+        statusClass = 'warning';
+        statusLabel = 'Thiếu 1 bạn';
+      }
+      const oldCard = memberCard(oldMem, 'old', {
+        expectedRole: 'old', className: 'role-old', tag: '🎓 Chính Thức',
+        title: 'Chính Thức - Có kinh nghiệm', emptyLabel: '+ Chưa có Chính Thức',
+        emptyTitle: 'Nhấn để gán Chính Thức'
+      });
+      const newCard = memberCard(newMem, 'new', {
+        expectedRole: 'new', className: 'role-new', tag: '🌱 Tập Sự',
+        title: 'Tập Sự', emptyLabel: '+ Chưa có Tập Sự',
+        emptyTitle: 'Nhấn để gán Tập Sự'
+      });
+      body = oldCard + newCard;
+      mismatch = (oldMem && oldMem.role && oldMem.role !== 'old')
+        || (newMem && newMem.role && newMem.role !== 'new');
     }
-    if (oldRoleMismatch || newRoleMismatch) {
+
+    let statusPill = `<span class="shift-status-pill ${statusClass}">${statusLabel}</span>`;
+    if (capacity !== 1 && mismatch) {
       statusPill += ` <span class="shift-status-pill warning" title="Ca này đang có người trái vai trò do xếp thủ công">⚠️ Trái vai trò</span>`;
     }
-
-    const oldCard = oldMem ? `
-      <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
-        <div class="member-info">
-          <span class="member-role-tag">🎓 Chính Thức${oldRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
-          <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
-          <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
-        </div>
-        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" title="Đổi bạn khác">🔄</button>
-      </div>
-    ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old')" style="cursor: pointer;" title="Nhấn để gán Chính Thức">
-        <span>+ Chưa có Chính Thức</span>
-      </div>
-    `;
-
-    const newCard = newMem ? `
-      <div class="duty-member-card role-new" title="Tập Sự">
-        <div class="member-info">
-          <span class="member-role-tag">🌱 Tập Sự${newRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
-          <span class="member-name">${escapeHtml(newMem.fullName)}</span>
-          <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
-        </div>
-        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" title="Đổi bạn khác">🔄</button>
-      </div>
-    ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new')" style="cursor: pointer;" title="Nhấn để gán Tập Sự">
-        <span>+ Chưa có Tập Sự</span>
-      </div>
-    `;
 
     return `
       <div class="grid-cell shift-duty-slot">
         <div class="shift-slot-header">
-          <span>${slot.shiftInfo?.dayName || ''}</span>
+          <span>${escapeHtml(info.dayName || '')}</span>
           ${statusPill}
         </div>
-        ${oldCard}
-        ${newCard}
-      </div>
-    `;
+        ${body}
+      </div>`;
   }
 
   function renderFairness() {
@@ -3962,6 +4112,8 @@ function renderStudentTable() {
     }
     state.monthSchedule.month = state.monthSchedule.month || month;
     state.monthSchedule.year = state.monthSchedule.year || year;
+    const capacityCfg = getMonthCapacity(month, year, state.monthSchedule);
+    const thirdSet = new Set(capacityCfg.thirdShifts);
 
     for (let w = 1; w <= 4; w++) {
       let week = state.monthSchedule.weeks[w - 1];
@@ -3979,13 +4131,20 @@ function renderStudentTable() {
           week.scheduleTable[shift.id] = {
             shiftId: shift.id,
             shiftInfo: shift,
+            capacity: thirdSet.has(shift.id) ? 3 : capacityCfg.peoplePerShift,
             oldMember: null,
             newMember: null,
+            thirdMember: null,
             status: 'empty',
             manuallyEdited: false
           };
-        } else if (!week.scheduleTable[shift.id].shiftInfo) {
-          week.scheduleTable[shift.id].shiftInfo = shift;
+        } else {
+          const slot = week.scheduleTable[shift.id];
+          if (!slot.shiftInfo) slot.shiftInfo = shift;
+          if (slot.capacity !== 1 && slot.capacity !== 2 && slot.capacity !== 3) {
+            slot.capacity = thirdSet.has(shift.id) ? 3 : capacityCfg.peoplePerShift;
+          }
+          if (slot.thirdMember === undefined) slot.thirdMember = null;
         }
       });
       try { recomputeWeekStats(week); } catch (e) {}
@@ -4051,7 +4210,14 @@ function renderStudentTable() {
 
     state.reassignModalData = { shiftId, role, weekNumber: effectiveWeek, candidates: [] };
     const shiftInfo = getShiftInfo(shiftId) || { dayName: shiftId, period: '', time: '' };
-    const roleTitle = role === 'old' ? 'Chính Thức' : 'Tập Sự';
+    const roleTitle = role === 'old'
+      ? 'Chính Thức'
+      : role === 'new'
+        ? 'Tập Sự'
+        : role === 'third'
+          ? 'Người thứ 3 (thủ công)'
+          : 'Người trực (1 người/ca)';
+    const isRoleFixed = role === 'old' || role === 'new';
 
     if (elements.modalSlotTitle) {
       elements.modalSlotTitle.textContent = `[Tuần ${effectiveWeek}] ${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
@@ -4059,20 +4225,29 @@ function renderStudentTable() {
 
     if (elements.modalRoleBadge) {
       elements.modalRoleBadge.textContent = roleTitle;
-      elements.modalRoleBadge.className = `badge ${role === 'old' ? 'badge-role-old' : 'badge-role-new'}`;
+      elements.modalRoleBadge.className = role === 'old'
+        ? 'badge badge-role-old'
+        : role === 'new'
+          ? 'badge badge-role-new'
+          : 'badge';
     }
 
     const eligibleStudents = state.students.filter(Boolean);
-    const currentAssigned = targetSchedule?.scheduleTable?.[shiftId]?.[role === 'old' ? 'oldMember' : 'newMember'];
+    const targetSlot = targetSchedule?.scheduleTable?.[shiftId];
+    const currentAssigned = role === 'third'
+      ? targetSlot?.thirdMember
+      : role === 'single'
+        ? (targetSlot?.oldMember || targetSlot?.newMember)
+        : targetSlot?.[role === 'old' ? 'oldMember' : 'newMember'];
 
     let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
 
     // Xếp thủ công: liệt kê TOÀN BỘ CTV, kể cả người chưa đăng ký ca nào.
-    // Ưu tiên: đang được gán > đúng vai trò > có đăng ký rảnh ca này.
+    // Ưu tiên: đang được gán > đúng vai trò (chỉ vị trí Cũ/Mới) > có rảnh ca này.
     const rankStudent = (s) => {
       const isAvailable = (s.availableShifts || []).includes(shiftId) ? 1 : 0;
       return (currentAssigned?.id === s.id ? 4 : 0)
-        + (s.role === role ? 2 : 0)
+        + (isRoleFixed && s.role === role ? 2 : 0)
         + isAvailable;
     };
     eligibleStudents.sort((a, b) => {
@@ -4086,7 +4261,9 @@ function renderStudentTable() {
       const isSelected = currentAssigned?.id && currentAssigned.id === s.id;
       const roleLabel = s.role === 'old' ? 'Chính Thức' : 'Tập Sự';
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
-      const mismatchLabel = s.role !== role ? ` · ⚠️ Trái vai trò (${roleLabel})` : '';
+      const mismatchLabel = isRoleFixed && s.role !== role
+        ? ` · ⚠️ Trái vai trò (${roleLabel})`
+        : '';
       const selectedLabel = isSelected ? ' · Đang gán' : '';
 
       // value = CHỈ SỐ trong danh sách ứng viên, không phải student.id.
@@ -4132,7 +4309,8 @@ function renderStudentTable() {
     const hit = Object.entries(scheduleTable).find(([sid, slot]) => {
       if (sid === targetShiftId || !slot) return false;
       const assigned = (slot.oldMember && slot.oldMember.id === studentId)
-        || (slot.newMember && slot.newMember.id === studentId);
+        || (slot.newMember && slot.newMember.id === studentId)
+        || (slot.thirdMember && slot.thirdMember.id === studentId);
       if (!assigned) return false;
       const day = (map[sid] && map[sid].dayKey) || String(sid).split('_')[0];
       return day === targetDay;
@@ -4185,13 +4363,17 @@ function renderStudentTable() {
       slot = {
         shiftId,
         shiftInfo: info,
+        capacity: getSlotCapacity(shiftId, null),
         oldMember: null,
         newMember: null,
+        thirdMember: null,
         status: 'empty',
         manuallyEdited: false
       };
       targetSchedule.scheduleTable[shiftId] = slot;
     }
+    const capacity = getSlotCapacity(shiftId, slot);
+    slot.capacity = capacity;
 
     const realWeekNumber = weekNumber
       || ((state.monthSchedule?.weeks || []).findIndex(w => w === targetSchedule) + 1)
@@ -4202,10 +4384,17 @@ function renderStudentTable() {
     // rảnh, trái vai trò hoặc đã có ca cùng ngày. Chỉ cảnh báo + xác nhận,
     // không chặn cứng — yêu cầu vận hành thực tế của Ban Điều Hành.
     const warnings = [];
+    const isRoleFixed = role === 'old' || role === 'new';
+    const slotLabel = role === 'old'
+      ? 'Chính Thức'
+      : role === 'new'
+        ? 'Tập Sự'
+        : role === 'third'
+          ? 'Người thứ 3 (thủ công)'
+          : 'Người trực duy nhất';
     if (newStudent) {
       const roleLabel = newStudent.role === 'old' ? 'Chính Thức' : 'Tập Sự';
-      const slotLabel = role === 'old' ? 'Chính Thức' : 'Tập Sự';
-      if (newStudent.role !== role) {
+      if (isRoleFixed && newStudent.role !== role) {
         warnings.push(`${newStudent.fullName} là ${roleLabel}, nhưng vị trí đang chọn là ${slotLabel}.`);
       }
 
@@ -4226,9 +4415,17 @@ function renderStudentTable() {
         warnings.push(`${newStudent.fullName} đã được xếp ca ${clashLabel} cùng ngày trong tuần này.`);
       }
 
-      const otherMember = role === 'old' ? slot.newMember : slot.oldMember;
-      if (otherMember && otherMember.id === newStudent.id) {
-        warnings.push(`${newStudent.fullName} đang ở vị trí còn lại của chính ca này.`);
+      const otherMembers = [slot.oldMember, slot.newMember, slot.thirdMember]
+        .filter((member, idx) => {
+          if (!member) return false;
+          if (role === 'old' && idx === 0) return false;
+          if (role === 'new' && idx === 1) return false;
+          if (role === 'third' && idx === 2) return false;
+          if (role === 'single' && idx === 0) return false;
+          return true;
+        });
+      if (otherMembers.some(member => member.id === newStudent.id)) {
+        warnings.push(`${newStudent.fullName} đang ở vị trí khác của chính ca này.`);
       }
     }
 
@@ -4239,13 +4436,20 @@ function renderStudentTable() {
     // nếu người dùng tick vào đó thì hộp thoại trả về false NGAY LẬP TỨC -> mọi
     // lần gán ca sau đó đều bị huỷ âm thầm, không có thông báo nào. Đó chính là
     // hiện tượng "không gán được thủ công". Giờ: gán luôn, cảnh báo bằng toast.
-    if (role === 'old') {
+    if (role === 'third') {
+      slot.thirdMember = newStudent || null;
+    } else if (role === 'single') {
+      slot.oldMember = newStudent || null;
+      slot.newMember = null;
+      slot.thirdMember = null;
+    } else if (role === 'old') {
       slot.oldMember = newStudent || null;
     } else {
       slot.newMember = newStudent || null;
     }
 
-    slot.status = (slot.oldMember && slot.newMember) ? 'full' : ((slot.oldMember || slot.newMember) ? 'partial' : 'empty');
+    const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
+    slot.status = memberCount === 0 ? 'empty' : (memberCount >= capacity ? 'full' : 'partial');
 
     // Tính lại TOÀN BỘ thống kê của tuần. Trước đây chỉ cập nhật studentStats,
     // còn summary.fullShifts/partialShifts và combinedStats bị đóng băng ->
@@ -4291,7 +4495,13 @@ function renderStudentTable() {
     const persistedMonth = parseInt((state.monthSchedule && state.monthSchedule.month) || state.currentMonth, 10) || state.currentMonth;
     const persistedYear = parseInt((state.monthSchedule && state.monthSchedule.year) || state.currentYear, 10) || state.currentYear;
     const monthLabelSaved = `Tháng ${String(persistedMonth).padStart(2, '0')}/${persistedYear}`;
-    const roleLabelSaved = role === 'old' ? 'Chính Thức' : 'Tập Sự';
+    const roleLabelSaved = role === 'old'
+      ? 'Chính Thức'
+      : role === 'new'
+        ? 'Tập Sự'
+        : role === 'third'
+          ? 'Người thứ 3 (thủ công)'
+          : 'Người trực duy nhất';
 
     showToast(
       `✅ Đã lưu ${monthLabelSaved} · Tuần ${realWeekNumber} · ca ${shiftId} (${roleLabelSaved})`
@@ -4731,6 +4941,8 @@ window.adminDeleteStudent = async function(studentId) {
     // Nhờ vậy tháng chưa xếp lịch vẫn có đủ 40 ô bấm được để gán tay,
     // không cần nút "tạo lịch trống" riêng.
     const buildBlankMonthForRender = () => {
+      const capacityCfg = getMonthCapacity(curMonth, curYear);
+      const thirdSet = new Set(capacityCfg.thirdShifts);
       const weeks = [];
       for (let w = 1; w <= 4; w++) {
         const scheduleTable = {};
@@ -4738,8 +4950,10 @@ window.adminDeleteStudent = async function(studentId) {
           scheduleTable[shift.id] = {
             shiftId: shift.id,
             shiftInfo: shift,
+            capacity: thirdSet.has(shift.id) ? 3 : capacityCfg.peoplePerShift,
             oldMember: null,
             newMember: null,
+            thirdMember: null,
             status: 'empty'
           };
         });
@@ -4875,81 +5089,7 @@ window.adminDeleteStudent = async function(studentId) {
   }
 
   function renderShiftSlotHtmlForWeek(shiftId, slot, weekNum) {
-    if (!slot) {
-      const info = getShiftInfo(shiftId) || {};
-      return `
-        <div class="grid-cell shift-duty-slot">
-          <div class="shift-slot-header">
-            <span>${escapeHtml(info.dayName || '')}</span>
-            <span class="shift-status-pill empty">Trống</span>
-          </div>
-          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Chính Thức ở Tuần ${weekNum} (kể cả chưa đăng ký)">
-            <span>+ Chưa có Chính Thức</span>
-          </div>
-          <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Tập Sự ở Tuần ${weekNum} (kể cả chưa đăng ký)">
-            <span>+ Chưa có Tập Sự</span>
-          </div>
-        </div>
-      `;
-    }
-
-    const oldMem = slot.oldMember;
-    const newMem = slot.newMember;
-    const oldRoleMismatch = !!(oldMem && oldMem.role && oldMem.role !== 'old');
-    const newRoleMismatch = !!(newMem && newMem.role && newMem.role !== 'new');
-
-    let statusPill = '';
-    if (slot.status === 'full') {
-      statusPill = `<span class="shift-status-pill full">✓ Đủ 2 bạn</span>`;
-    } else if (slot.status === 'partial') {
-      statusPill = `<span class="shift-status-pill warning">Thiếu 1 bạn</span>`;
-    } else {
-      statusPill = `<span class="shift-status-pill empty">Trống</span>`;
-    }
-    if (oldRoleMismatch || newRoleMismatch) {
-      statusPill += ` <span class="shift-status-pill warning" title="Ca này đang có người trái vai trò do xếp thủ công">⚠️ Trái vai trò</span>`;
-    }
-
-    const oldCard = oldMem ? `
-      <div class="duty-member-card role-old" title="Chính Thức - Có kinh nghiệm">
-        <div class="member-info">
-          <span class="member-role-tag">🎓 Chính Thức${oldRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
-          <span class="member-name">${escapeHtml(oldMem.fullName)}</span>
-          <span class="member-mssv">MSSV: ${escapeHtml(oldMem.studentId)}</span>
-        </div>
-        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
-      </div>
-    ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'old', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Chính Thức ở Tuần ${weekNum}">
-        <span>+ Chưa có Chính Thức</span>
-      </div>
-    `;
-
-    const newCard = newMem ? `
-      <div class="duty-member-card role-new" title="Tập Sự">
-        <div class="member-info">
-          <span class="member-role-tag">🌱 Tập Sự${newRoleMismatch ? ' · ⚠️ trái vai trò' : ''}</span>
-          <span class="member-name">${escapeHtml(newMem.fullName)}</span>
-          <span class="member-mssv">MSSV: ${escapeHtml(newMem.studentId)}</span>
-        </div>
-        <button class="duty-change-btn" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" title="Đổi bạn khác ở Tuần ${weekNum}">🔄</button>
-      </div>
-    ` : `
-      <div class="duty-member-card empty-member" onclick="window.adminOpenReassignModal('${shiftId}', 'new', ${weekNum})" style="cursor: pointer;" title="Nhấn để gán Tập Sự ở Tuần ${weekNum}">
-        <span>+ Chưa có Tập Sự</span>
-      </div>
-    `;
-
-    return `
-      <div class="grid-cell shift-duty-slot">
-        <div class="shift-slot-header">
-          <span>${slot.shiftInfo?.dayName || ''}</span>
-          ${statusPill}
-        </div>
-        ${oldCard}
-        ${newCard}
-      </div>
-    `;
+    return buildShiftSlotCardHtml(shiftId, slot, weekNum);
   }
 
   window.adminQuickSwitchToSingleWeek = function(w) {
@@ -5059,6 +5199,90 @@ window.adminDeleteStudent = async function(studentId) {
     }
     setTimeout(() => openImportModal('google_form'), 100);
   };
+
+  function openShiftCapacityModal() {
+    const month = state.currentMonth || 10;
+    const year = state.currentYear || 2026;
+    const cfg = getMonthCapacity(month, year);
+    const modal = document.getElementById('modal-shift-capacity');
+    if (!modal) return;
+
+    const label = document.getElementById('shift-capacity-month-label');
+    if (label) {
+      label.textContent = `Tháng ${String(month).padStart(2, '0')}/${year} — áp dụng cho cả 4 tuần`;
+    }
+    modal.querySelectorAll('input[name="shiftCapacityMode"]').forEach(radio => {
+      radio.checked = Number(radio.value) === cfg.peoplePerShift;
+    });
+    const list = document.getElementById('shift-capacity-third-list');
+    if (list) {
+      list.innerHTML = (SHIFTS || []).map(shift => `
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer;">
+          <input type="checkbox" name="shiftCapacityThird" value="${escapeHtml(shift.id)}"
+            ${cfg.thirdShifts.includes(shift.id) ? 'checked' : ''}
+            style="accent-color: var(--primary);">
+          <span>${escapeHtml(shift.dayName)} · ${escapeHtml(shift.period)}</span>
+        </label>
+      `).join('');
+    }
+    const rerun = document.getElementById('shift-capacity-rerun');
+    if (rerun) rerun.checked = true;
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
+
+  function closeShiftCapacityModal() {
+    const modal = document.getElementById('modal-shift-capacity');
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+
+  function saveShiftCapacityFromModal() {
+    const month = state.currentMonth || 10;
+    const year = state.currentYear || 2026;
+    const modeRadio = document.querySelector('input[name="shiftCapacityMode"]:checked');
+    const peoplePerShift = modeRadio && modeRadio.value === '1' ? 1 : 2;
+    const thirdShifts = Array.from(
+      document.querySelectorAll('input[name="shiftCapacityThird"]:checked')
+    ).map(cb => cb.value);
+    const rerun = document.getElementById('shift-capacity-rerun');
+    const shouldRerun = !rerun || rerun.checked;
+
+    saveMonthCapacity(month, year, { peoplePerShift, thirdShifts });
+    closeShiftCapacityModal();
+
+    const monthLabel = `Tháng ${String(month).padStart(2, '0')}/${year}`;
+    if (shouldRerun) {
+      runFullSchedule();
+      renderAll();
+      showToast(
+        `Đã lưu ${peoplePerShift} người/ca cho ${monthLabel} và xếp lại lịch (giữ nguyên ca gán tay).`,
+        'success',
+        7000
+      );
+    } else {
+      renderAll();
+      showToast(
+        `Đã lưu cấu hình ${peoplePerShift} người/ca cho ${monthLabel}. Bấm Xếp tự động để áp dụng.`,
+        'info',
+        7000
+      );
+    }
+  }
+
+  window.adminOpenShiftCapacityModal = openShiftCapacityModal;
+  window.adminCloseShiftCapacityModal = closeShiftCapacityModal;
+
+  function bindShiftCapacityEvents() {
+    document.getElementById('btn-shift-capacity')?.addEventListener('click', openShiftCapacityModal);
+    document.getElementById('btn-shift-capacity-close')?.addEventListener('click', closeShiftCapacityModal);
+    document.getElementById('btn-shift-capacity-cancel')?.addEventListener('click', closeShiftCapacityModal);
+    document.getElementById('btn-shift-capacity-save')?.addEventListener('click', saveShiftCapacityFromModal);
+    document.getElementById('modal-shift-capacity')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeShiftCapacityModal();
+    });
+  }
 
   function downloadImportTemplateCsv() {
     const csvContent = '\uFEFF' + [
@@ -6084,7 +6308,9 @@ window.adminDeleteStudent = async function(studentId) {
       if (sid === req.shiftId) return false;
       const oKey = (window.SchedulerEngine?.SHIFT_MAP || {})[sid];
       if (!oKey || oKey.dayKey !== targetDayKey) return false;
-      return other.oldMember?.id === targetStudent.id || other.newMember?.id === targetStudent.id;
+      return other.oldMember?.id === targetStudent.id
+        || other.newMember?.id === targetStudent.id
+        || other.thirdMember?.id === targetStudent.id;
     });
     if (alreadyThatDay) {
       showToast(`${targetStudent.fullName} đã có ca khác trong cùng ngày ${targetDayKey}! Vui lòng kiểm tra lại.`, 'error');
@@ -6099,6 +6325,9 @@ window.adminDeleteStudent = async function(studentId) {
     } else if (slot.newMember?.studentId?.toLowerCase() === senderMssv) {
       slot.newMember = targetStudent;
       replaced = true;
+    } else if (slot.thirdMember?.studentId?.toLowerCase() === senderMssv) {
+      slot.thirdMember = targetStudent;
+      replaced = true;
     }
 
     if (!replaced) {
@@ -6106,7 +6335,9 @@ window.adminDeleteStudent = async function(studentId) {
       return;
     }
 
-    slot.status = (slot.oldMember && slot.newMember) ? 'full' : ((slot.oldMember || slot.newMember) ? 'partial' : 'empty');
+    const capacity = slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2;
+    const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
+    slot.status = memberCount === 0 ? 'empty' : (memberCount >= capacity ? 'full' : 'partial');
     slot.manuallyEdited = true;
 
     // Tính lại toàn bộ thống kê của tuần (studentStats + summary).
@@ -6173,12 +6404,12 @@ window.adminDeleteStudent = async function(studentId) {
     let full = 0, partial = 0, empty = 0;
     const table = weekData.scheduleTable;
     Object.values(table).forEach(slot => {
-      [slot.oldMember, slot.newMember].forEach(member => {
+      [slot.oldMember, slot.newMember, slot.thirdMember].forEach(member => {
         if (member && stats[member.id]) stats[member.id].assignedCount += 1;
       });
-      const hasOld = !!slot.oldMember;
-      const hasNew = !!slot.newMember;
-      slot.status = (hasOld && hasNew) ? 'full' : ((hasOld || hasNew) ? 'partial' : 'empty');
+      const capacity = slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2;
+      const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
+      slot.status = memberCount === 0 ? 'empty' : (memberCount >= capacity ? 'full' : 'partial');
       if (slot.status === 'full') full++;
       else if (slot.status === 'partial') partial++;
       else empty++;
@@ -6905,7 +7136,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
                    (targetMssv && (member.studentId === targetMssv || member.id === targetMssv));
           };
 
-          if (isMatch(slot.oldMember) || isMatch(slot.newMember)) {
+          if (isMatch(slot.oldMember) || isMatch(slot.newMember) || isMatch(slot.thirdMember)) {
             count += 1;
             const dayKey = slot.dayKey || shiftId.split('_')[0];
             const period = slot.period || (shiftId.endsWith('_S') ? 'S' : 'C');
@@ -8793,15 +9024,22 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
     const schedule = state.currentSchedule.scheduleTable;
     let csvContent = '\uFEFF';
-    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới (Tập Sự),MSSV Người Mới,Trạng Thái Ca\r\n';
+    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới (Tập Sự),MSSV Người Mới,Người Thứ 3 (Gán Tay),MSSV Người Thứ 3,Số Người/Ca,Trạng Thái Ca\r\n';
 
     SHIFTS.forEach((shift, index) => {
       const slot = schedule[shift.id];
+      const capacity = slot?.capacity === 1 || slot?.capacity === 3 ? slot.capacity : 2;
       const oldName = slot?.oldMember?.fullName || 'Chưa có';
       const oldMssv = slot?.oldMember?.studentId || '-';
-      const newName = slot?.newMember?.fullName || 'Chưa có';
-      const newMssv = slot?.newMember?.studentId || '-';
-      const statusText = slot?.status === 'full' ? 'Đủ 2 bạn' : (slot?.status === 'partial' ? 'Thiếu 1 bạn' : 'Trống ca');
+      const newName = capacity === 1 ? '-' : (slot?.newMember?.fullName || 'Chưa có');
+      const newMssv = capacity === 1 ? '-' : (slot?.newMember?.studentId || '-');
+      const thirdName = slot?.thirdMember?.fullName || '-';
+      const thirdMssv = slot?.thirdMember?.studentId || '-';
+      const memberCount = [slot?.oldMember, slot?.newMember, slot?.thirdMember].filter(Boolean).length;
+      let statusText = 'Trống ca';
+      if (memberCount > 0) {
+        statusText = memberCount >= capacity ? `Đủ ${capacity} bạn` : `Thiếu ${capacity - memberCount} bạn`;
+      }
 
       // escapeCsvCell: chống CSV injection + escape đúng chuẩn RFC 4180.
       // Trước đây dấu " trong tên làm hỏng cột, và tên bắt đầu "=" bị Excel
@@ -8815,6 +9053,9 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         escapeCsvCell(oldMssv),
         escapeCsvCell(newName),
         escapeCsvCell(newMssv),
+        escapeCsvCell(thirdName),
+        escapeCsvCell(thirdMssv),
+        escapeCsvCell(capacity),
         escapeCsvCell(statusText)
       ].join(',') + '\r\n';
     });
@@ -8984,11 +9225,13 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         const mList = [];
         if (morningSlot?.oldMember) mList.push(`${morningSlot.oldMember.fullName} - ${morningSlot.oldMember.studentId}`);
         if (morningSlot?.newMember) mList.push(`${morningSlot.newMember.fullName} - ${morningSlot.newMember.studentId}`);
+        if (morningSlot?.thirdMember) mList.push(`${morningSlot.thirdMember.fullName} - ${morningSlot.thirdMember.studentId} (người thứ 3)`);
         morningText = mList.join('\n');
 
         const aList = [];
         if (afternoonSlot?.oldMember) aList.push(`${afternoonSlot.oldMember.fullName} - ${afternoonSlot.oldMember.studentId}`);
         if (afternoonSlot?.newMember) aList.push(`${afternoonSlot.newMember.fullName} - ${afternoonSlot.newMember.studentId}`);
+        if (afternoonSlot?.thirdMember) aList.push(`${afternoonSlot.thirdMember.fullName} - ${afternoonSlot.thirdMember.studentId} (người thứ 3)`);
         afternoonText = aList.join('\n');
       } else {
         // Thứ 7 / Chủ Nhật: KHÔNG có ca trực trong hệ thống (chỉ T2–T6).

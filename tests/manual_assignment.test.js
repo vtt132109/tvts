@@ -582,6 +582,83 @@ runTest('Khởi tạo kỳ mới: sổ tay gán ca của tháng đó cũng bị 
     'Sau khi xoá bảng phân công phải xoá sổ tay gán ca của tháng để auto không áp lại người cũ');
 });
 
+runTest('Cấu hình tháng 1 người/ca: mỗi ca 1 người, gán tay 1 người được giữ sau auto', () => {
+  seed();
+  const students = JSON.parse(LS.getItem('ts_scheduler_students'));
+  students.forEach(s => {
+    s.availableShifts = ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'];
+    s.monthlyAvailableShifts = { 1: [...s.availableShifts], 2: [...s.availableShifts], 3: [...s.availableShifts], 4: [...s.availableShifts] };
+  });
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
+    '2026-11': { peoplePerShift: 1, thirdShifts: [] }
+  }));
+  H.loadData();
+  H.runFullSchedule();
+
+  const sched = H.getState().monthSchedule;
+  Object.values(sched.weeks[0].scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 1, 'Mọi ca phải là capacity 1');
+    assert.strictEqual(slot.newMember, null, 'Ca 1 người không có vị trí thứ 2');
+  });
+
+  assignViaUi('T2_S', 'single', 1, 's_2');
+  const slot = savedSlot(1, 'T2_S');
+  assert.strictEqual(slot.oldMember && slot.oldMember.id, 's_2', 'Phải gán được người trực duy nhất');
+  assert.strictEqual(slot.newMember, null);
+  assert.strictEqual(slot.thirdMember, null);
+  assert.strictEqual(slot.capacity, 1);
+  assert.strictEqual(slot.status, 'full');
+
+  H.runFullSchedule();
+  const after = savedSlot(1, 'T2_S');
+  assert.strictEqual(after.oldMember && after.oldMember.id, 's_2', 'Auto phải giữ ca 1 người đã gán tay');
+});
+
+runTest('Ca đặc biệt 3 người: auto chỉ xếp 2, người thứ 3 gán tay được giữ và tính công bằng', () => {
+  seed();
+  const students = JSON.parse(LS.getItem('ts_scheduler_students'));
+  students.forEach(s => {
+    s.availableShifts = ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'];
+    s.monthlyAvailableShifts = { 1: [...s.availableShifts], 2: [...s.availableShifts], 3: [...s.availableShifts], 4: [...s.availableShifts] };
+  });
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
+    '2026-10': { peoplePerShift: 2, thirdShifts: ['T2_S'] }
+  }));
+  H.loadData();
+  H.runFullSchedule();
+
+  const before = savedSlot(1, 'T2_S');
+  assert.strictEqual(before.capacity, 3, 'T2_S phải là ca 3 người');
+  assert.strictEqual(before.thirdMember, null, 'Auto không được điền người thứ 3');
+  assert.strictEqual(before.status, 'partial', 'Ca 3 người thiếu người thứ 3 phải partial');
+
+  assignViaUi('T2_S', 'third', 1, 's_1');
+  const afterAssign = savedSlot(1, 'T2_S');
+  assert.strictEqual(afterAssign.thirdMember && afterAssign.thirdMember.id, 's_1',
+    'Phải gán được người thứ 3');
+  assert.strictEqual(afterAssign.status, 'full', 'Đủ 3 người phải full');
+  const stats = H.getState().monthSchedule.weeks[0].studentStats['s_1'];
+  assert.ok(stats && stats.assignedCount >= 2, 'Người thứ 3 phải được tính vào công bằng');
+
+  H.runFullSchedule();
+  const afterAuto = savedSlot(1, 'T2_S');
+  assert.strictEqual(afterAuto.thirdMember && afterAuto.thirdMember.id, 's_1',
+    'Auto phải giữ người thứ 3 đã gán tay');
+});
+
+runTest('Giao diện: có nút Số người/ca và modal cấu hình tháng', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  const js = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
+  assert.ok(html.includes('id="btn-shift-capacity"'), 'Phải có nút Số người/ca');
+  assert.ok(html.includes('id="modal-shift-capacity"'), 'Phải có modal cấu hình');
+  assert.ok(js.includes('saveMonthCapacity'), 'Phải có hàm lưu cấu hình tháng');
+  assert.ok(js.includes('slot.thirdMember'), 'Phải hỗ trợ người thứ 3');
+});
+
 // ============================================================================
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round((passed / (total || 1)) * 100)}%)`);

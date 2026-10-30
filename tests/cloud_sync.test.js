@@ -2835,6 +2835,64 @@ console.log('\n▶ [GROUP 19] Gộp Ca Rảnh Từ Cloud & Auto-Pull Im Lặng:'
 }
 
 // -----------------------------------------------------------------------------
+// GROUP 20: Cấu hình số người/ca & hiển thị người thứ 3 trên nhánh công khai
+// -----------------------------------------------------------------------------
+console.log('\n▶ [GROUP 20] Cấu Hình 1/2/3 Người Mỗi Ca:');
+
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+  env.localStorage.setItem(K.SHIFT_CAPACITY, JSON.stringify({
+    '2026-11': { peoplePerShift: 1, thirdShifts: ['T2_S'] }
+  }));
+  csm.saveConfig({
+    enabled: false,
+    databaseUrl: 'https://capacity-db.firebaseio.com',
+    apiKey: 'AIza_CAP'
+  });
+
+  const payload = csm.buildPayload();
+  assert(payload.shiftCapacity
+    && payload.shiftCapacity['2026-11']
+    && payload.shiftCapacity['2026-11'].peoplePerShift === 1,
+  '20.1: Payload Cloud phải có cấu hình số người/ca theo tháng');
+
+  csm.applyPayload({
+    shiftCapacity: { '2026-12': { peoplePerShift: 2, thirdShifts: [] } }
+  });
+  const stored = JSON.parse(env.localStorage.getItem(K.SHIFT_CAPACITY) || '{}');
+  assert(stored['2026-12'] && stored['2026-12'].peoplePerShift === 2,
+    '20.2: applyPayload phải khôi phục cấu hình số người/ca');
+
+  const thirdMember = {
+    id: 's_9', studentId: '99000009', fullName: 'Mẫu Người Ba', role: 'new', phone: '0900000000'
+  };
+  const schedule = {
+    month: 11, year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: {
+          shiftId: 'T2_S', capacity: 3, status: 'full',
+          oldMember: { id: 's_1', studentId: '99000001', fullName: 'Mẫu Cũ', role: 'old' },
+          newMember: { id: 's_2', studentId: '99000002', fullName: 'Mẫu Mới', role: 'new' },
+          thirdMember
+        }
+      }
+    }]
+  };
+  env.localStorage.setItem(K.MONTH_SCHEDULE, JSON.stringify(schedule));
+  const publicPayload = csm.buildPublicPayload();
+  const slot = publicPayload.monthSchedule.weeks[0].scheduleTable.T2_S;
+  assert(slot.capacity === 3 && slot.thirdMember
+    && slot.thirdMember.fullName === 'Mẫu Người Ba',
+  '20.3: Nhánh công khai phải giữ người thứ 3 để sinh viên tra cứu');
+  assert(!slot.thirdMember.phone,
+    '20.4: Nhánh công khai phải lọc SĐT của người thứ 3');
+}
+
+// -----------------------------------------------------------------------------
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');

@@ -240,7 +240,7 @@ function paintSlotAvailability() {
     }
 
     const full = slot.status === 'full';
-    const names = [slot.oldMember?.fullName, slot.newMember?.fullName]
+    const names = [slot.oldMember?.fullName, slot.newMember?.fullName, slot.thirdMember?.fullName]
       .filter(Boolean)
       .map((n) => String(n).split(' ').slice(-2).join(' '));
 
@@ -1831,7 +1831,7 @@ function paintSlotAvailability() {
         const slot = schedule[`${day.key}_${period.key}`];
         const members = [];
         if (slot) {
-          [slot.oldMember, slot.newMember].forEach(member => {
+          [slot.oldMember, slot.newMember, slot.thirdMember].forEach(member => {
             if (member && member.fullName) {
               members.push(
                 `<li class="sv-agenda-member">
@@ -1889,19 +1889,25 @@ function paintSlotAvailability() {
       `;
     };
 
-    const card1 = renderMemberCard(slot.oldMember);
-    const card2 = renderMemberCard(slot.newMember);
+    const capacity = slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2;
+    const card1 = renderMemberCard(capacity === 1 ? (slot.oldMember || slot.newMember) : slot.oldMember);
+    const card2 = capacity === 1 ? '' : renderMemberCard(slot.newMember);
+    const card3 = capacity === 3 ? renderMemberCard(slot.thirdMember) : '';
+    const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
 
     return `
       <div class="grid-cell shift-duty-slot">
         <div class="shift-slot-header">
           <span>${slot.shiftInfo?.dayName || ''}</span>
-          <span class="shift-status-pill ${slot.status === 'full' ? 'full' : 'warning'}">
-            ${slot.status === 'full' ? '✓ Đủ 2 bạn' : 'Đang bố trí'}
+          <span class="shift-status-pill ${memberCount >= capacity ? 'full' : 'warning'}">
+            ${memberCount >= capacity
+              ? (capacity === 1 ? '✓ Đủ 1 bạn' : (capacity === 2 ? '✓ Đủ 2 bạn' : '✓ Đủ 3 bạn'))
+              : (capacity === 1 ? 'Đang bố trí' : `Đang bố trí (${memberCount}/${capacity})`)}
           </span>
         </div>
         ${card1}
         ${card2}
+        ${card3}
       </div>
     `;
   }
@@ -1928,20 +1934,34 @@ function paintSlotAvailability() {
         if (!slot) return;
         const isOld = slot.oldMember?.studentId?.toLowerCase() === mssv;
         const isNew = slot.newMember?.studentId?.toLowerCase() === mssv;
-        if (isOld || isNew) {
-          const self = isOld ? slot.oldMember : slot.newMember;
-          const partner = isOld ? slot.newMember : slot.oldMember;
+        const isThird = slot.thirdMember?.studentId?.toLowerCase() === mssv;
+        if (isOld || isNew || isThird) {
+          const self = isOld ? slot.oldMember : (isNew ? slot.newMember : slot.thirdMember);
+          let partner = null;
+          let extra = null;
+          if (isThird) {
+            partner = slot.oldMember || slot.newMember;
+            extra = slot.oldMember && slot.newMember ? slot.newMember : null;
+          } else {
+            partner = isOld ? slot.newMember : slot.oldMember;
+            extra = slot.thirdMember;
+          }
           myShifts.push({
             shiftId,
             weekNum,
             shift: slot.shiftInfo || { dayName: shiftId.split('_')[0], period: shiftId.split('_')[1] === 'S' ? 'Sáng' : 'Chiều', time: shiftId.split('_')[1] === 'S' ? '07:30 - 11:30' : '13:00 - 16:30' },
+            capacity: slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2,
+            selfPosition: isThird ? 'third' : (isOld ? 'old' : 'new'),
             selfName: self?.fullName || '',
             selfMssv: self?.studentId || '',
             selfPhone: self?.phone || '',
-            selfRole: isOld ? 'old' : 'new',
+            selfRole: isOld ? 'old' : (isNew ? 'new' : (self?.role || 'new')),
             partnerName: partner ? partner.fullName : 'Chưa có bạn trực cùng',
             partnerMssv: partner ? partner.studentId : '',
-            partnerPhone: partner?.phone || ''
+            partnerPhone: partner?.phone || '',
+            thirdName: extra ? extra.fullName : '',
+            thirdMssv: extra ? extra.studentId : '',
+            thirdPhone: extra?.phone || ''
           });
         }
       });
@@ -2357,8 +2377,11 @@ function paintSlotAvailability() {
 
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <div class="shift-card-partner">
-              👥 Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>
-              ${s.partnerMssv ? `(${escapeHtml(s.partnerMssv)})` : ''}
+              ${s.capacity === 1
+                ? '👤 Ca 1 người trực (không có bạn trực cùng)'
+                : `👥 Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>
+                   ${s.partnerMssv ? `(${escapeHtml(s.partnerMssv)})` : ''}
+                   ${s.thirdName ? ` · ${s.selfPosition === 'third' ? 'Cùng ca' : 'Người thứ 3'}: <strong>${escapeHtml(s.thirdName)}</strong>${s.thirdMssv ? ` (${escapeHtml(s.thirdMssv)})` : ''}` : ''}`}
             </div>
             ${isCurrent ? `
               <button type="button" class="btn btn-secondary btn-sm btn-swap-shift-trigger" onclick="window.studentOpenSwapForShift('${s.shiftId}', ${s.weekNum})" title="Đề xuất đổi hoặc nhờ trực thay ca này">
@@ -2588,18 +2611,28 @@ function paintSlotAvailability() {
     function findInTable(table, weekNum) {
       if (!table) return;
       Object.entries(table).forEach(([shiftId, slot]) => {
+        if (!slot) return;
         const isOld = slot.oldMember?.studentId?.toLowerCase() === mssv;
         const isNew = slot.newMember?.studentId?.toLowerCase() === mssv;
-        if (isOld || isNew) {
-          const self = isOld ? slot.oldMember : slot.newMember;
-          const partner = isOld ? slot.newMember : slot.oldMember;
+        const isThird = slot.thirdMember?.studentId?.toLowerCase() === mssv;
+        if (isOld || isNew || isThird) {
+          const self = isOld ? slot.oldMember : (isNew ? slot.newMember : slot.thirdMember);
+          let partner = null;
+          let extra = null;
+          if (isThird) {
+            partner = slot.oldMember || slot.newMember;
+            extra = slot.oldMember && slot.newMember ? slot.newMember : null;
+          } else {
+            partner = isOld ? slot.newMember : slot.oldMember;
+            extra = slot.thirdMember;
+          }
 
           if (!studentInfo && self) {
             studentInfo = {
               studentId: self.studentId,
               fullName: self.fullName,
               phone: self.phone || '',
-              role: isOld ? 'old' : 'new'
+              role: isOld ? 'old' : (isNew ? 'new' : (self.role || 'new'))
             };
           }
 
@@ -2607,11 +2640,15 @@ function paintSlotAvailability() {
             shiftId,
             weekNum,
             shift: slot.shiftInfo,
+            capacity: slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2,
+            selfPosition: isThird ? 'third' : (isOld ? 'old' : 'new'),
             myRole: '',
-            roleKey: isOld ? 'old' : 'new',
+            roleKey: isOld ? 'old' : (isNew ? 'new' : (self?.role || 'new')),
             partnerName: partner ? partner.fullName : 'Chưa có bạn trực cùng',
             partnerMssv: partner ? partner.studentId : '',
-            partnerPhone: partner?.phone || ''
+            partnerPhone: partner?.phone || '',
+            thirdName: extra ? extra.fullName : '',
+            thirdMssv: extra ? extra.studentId : ''
           });
         }
       });
@@ -2668,7 +2705,7 @@ function paintSlotAvailability() {
           const val = `${s.weekNum}__${s.shiftId}`;
           const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
           return `<option value="${val}" ${isSelected ? 'selected' : ''}>
-            Tuần ${s.weekNum} - ${escapeHtml(s.shift?.dayName || '')} (${escapeHtml(s.shift?.period || '')}: ${escapeHtml(s.shift?.time || '')}) | Trực cùng: ${escapeHtml(s.partnerName || 'Chưa có bạn')}
+            Tuần ${s.weekNum} - ${escapeHtml(s.shift?.dayName || '')} (${escapeHtml(s.shift?.period || '')}: ${escapeHtml(s.shift?.time || '')}) | ${s.capacity === 1 ? 'Ca 1 người trực' : `Trực cùng: ${escapeHtml(s.partnerName || 'Chưa có bạn')}${s.thirdName ? ` · Người thứ 3: ${escapeHtml(s.thirdName)}` : ''}`}
           </option>`;
         }).join('');
       }
