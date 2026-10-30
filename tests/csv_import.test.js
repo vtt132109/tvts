@@ -373,6 +373,17 @@ runTest('Giao diện: có nút Nhập Google Form và gợi ý đúng chế đ�
   'admin.js phải xuất bộ phân tích Google Form cho kiểm thử');
 });
 
+runTest('Giao diện: có nút Lưu & Đẩy Cloud cố định, lưu cục bộ trước khi push', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  const js = fs.readFileSync(path.join(ROOT, 'js/admin.js'), 'utf8');
+  assert.ok(html.includes('id="btn-sticky-save-cloud"'),
+    'Phải có nút Lưu & Đẩy Cloud trên thanh sticky');
+  assert.ok(js.includes('skipPush: true'),
+    'Nút lưu phải chặn push tự động để tránh hai request chồng nhau');
+  assert.ok(js.includes('Cần đăng nhập Google cán bộ để đẩy Cloud'),
+    'Nút lưu phải báo rõ khi chưa có phiên Google cán bộ');
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round((passed / total) * 100)}%)`);
 console.log('================================================================\n');

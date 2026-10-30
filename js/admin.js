@@ -2228,8 +2228,9 @@
     });
   }
 
-  function saveStudents(syncImmediate = true) {
+  function saveStudents(syncImmediate = true, options) {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+    if (options && options.skipPush === true) return;
     if (window.CloudSyncManager) {
       if (syncImmediate && canAutoPushToCloud()) {
         pushCloudWithWarning();
@@ -2239,7 +2240,7 @@
     }
   }
 
-  function saveSchedule(syncImmediate = true) {
+  function saveSchedule(syncImmediate = true, options) {
     if (state.currentSchedule) {
       localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
     } else {
@@ -2276,7 +2277,7 @@
       localStorage.removeItem(STORAGE_KEYS.MONTH_SCHEDULE);
       localStorage.removeItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
     }
-    if (window.CloudSyncManager) {
+    if (window.CloudSyncManager && !(options && options.skipPush === true)) {
       if (syncImmediate && canAutoPushToCloud()) {
         pushCloudWithWarning();
       } else if (typeof window.CloudSyncManager.triggerAutoPush === 'function') {
@@ -9707,24 +9708,68 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
     // Đồng bộ tức thì lên Cloud qua các nút bấm ☁️ Lưu Lên Cloud
     window.adminForceSyncCloud = async function() {
-      if (!window.CloudSyncManager) {
-        showToast('⚠️ Hệ thống Cloud Sync chưa sẵn sàng!', 'warning');
-        return;
+      const saveBtn = document.getElementById('btn-sticky-save-cloud');
+      const saveLabel = document.getElementById('btn-sticky-save-cloud-label');
+      if (saveBtn && saveBtn.disabled) return;
+      const originalLabel = saveLabel ? saveLabel.innerHTML : '';
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.style.opacity = '0.7';
       }
-      showToast('⏳ Đang lưu và đẩy dữ liệu lên Firebase Đám Mây…', 'info', 2000);
+      if (saveLabel) saveLabel.innerHTML = '⏳ Đang lưu &amp; đẩy…';
+
       try {
-        saveStudents(true);
-        saveSchedule(true);
+        if (!window.CloudSyncManager) {
+          showToast('⚠️ Hệ thống Cloud Sync chưa sẵn sàng!', 'warning');
+          return;
+        }
+        // Phiên khôi phục cục bộ cố ý không có quyền đẩy Cloud.
+        if (state.localOnlySession) {
+          showToast('Phiên khôi phục cục bộ không đẩy Cloud được. Hãy đăng nhập Google cán bộ.', 'warning', 8000);
+          return;
+        }
+        const cfg = window.CloudSyncManager.getConfig() || {};
+        if (!cfg.enabled || !cfg.databaseUrl) {
+          showToast('Đồng bộ Cloud đang tắt hoặc chưa cấu hình URL. Bật trong Trung tâm Đồng bộ trước.', 'warning', 8000);
+          return;
+        }
+        let user = null;
+        if (typeof window.CloudSyncManager.whenAuthReady === 'function') {
+          try { user = await window.CloudSyncManager.whenAuthReady(1200); } catch (e) { user = null; }
+        } else if (typeof window.CloudSyncManager.getCurrentAuthUser === 'function') {
+          user = window.CloudSyncManager.getCurrentAuthUser();
+        }
+        if (!user || user.isAnonymous) {
+          showToast('Cần đăng nhập Google cán bộ để đẩy Cloud. Mở "Đồng Bộ Cloud" để đăng nhập.', 'warning', 9000);
+          return;
+        }
+
+        showToast('⏳ Đang lưu và đẩy dữ liệu lên Firebase Đám Mây…', 'info', 2000);
+        // Lưu cục bộ trước, nhưng chặn push tự động để chỉ có MỘT lần push
+        // bên dưới (tránh hai request chồng nhau gây xung đột giả).
+        saveStudents(true, { skipPush: true });
+        saveSchedule(true, { skipPush: true });
         const res = await pushCloudWithOverridePrompt();
         if (res && res.success) {
           showToast('☁️ ĐÃ LƯU VÀ ĐỒNG BỘ LÊN CLOUD THÀNH CÔNG! Dữ liệu đã an toàn trên mọi thiết bị và không bị mất khi tải lại trang.', 'success', 5000);
           notifyPublicSyncResult(res);
           updateCloudUIStatus();
+          if (saveLabel) saveLabel.innerHTML = '✅ Đã lưu Cloud';
         } else {
-          showToast('Lỗi đẩy dữ liệu lên Cloud: ' + (res?.error || 'Không xác định'), 'error', 4000);
+          showToast('Lỗi đẩy dữ liệu lên Cloud: ' + ((res && res.error) || 'Không xác định'), 'error', 4000);
         }
       } catch (err) {
         showToast('Lỗi đẩy dữ liệu lên Cloud: ' + err.message, 'error', 4000);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.style.opacity = '1';
+        }
+        if (saveLabel) {
+          setTimeout(() => {
+            saveLabel.innerHTML = originalLabel || '☁️ Lưu &amp; Đẩy Cloud';
+          }, 2500);
+        }
       }
     };
 
