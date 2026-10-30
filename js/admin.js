@@ -488,6 +488,7 @@
 
       // Hero Action Buttons
       btnClearSchedule: document.getElementById('btn-clear-schedule'),
+      btnClearWeek: document.getElementById('btn-clear-week'),
       btnClearStudents: document.getElementById('btn-clear-students'),
 
       // Excel & Google Sheets Export Elements (Mẫu HCM-UTE)
@@ -3304,6 +3305,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       auditLog('STUDENT_DELETE', 'Xoá TOÀN BỘ danh sách CTV và bảng phân công');
     };
 
+    elements.btnClearWeek?.addEventListener('click', clearCurrentWeekAssignments);
     elements.btnClearStudents?.addEventListener('click', handleClearAllStudents);
     elements.btnResetData?.addEventListener('click', handleClearAllStudents);
 
@@ -4529,6 +4531,94 @@ function renderStudentTable() {
     }
     auditLog('SHIFT_ASSIGN',
       `Gán thủ công ca ${shiftId} tuần ${realWeekNumber} cho ${newStudent ? `"${newStudent.fullName}" (${newStudent.studentId})` : 'vị trí trống'}`);
+  }
+
+  /**
+   * Xóa toàn bộ người đã xếp trong MỘT tuần (giữ capacity/3 người, CTV, ca rảnh).
+   * Xóa luôn sổ tay gán ca của tuần đó để auto không áp lại người cũ.
+   */
+  function clearWeekAssignments(weekNum, month, year) {
+    const week = parseInt(weekNum, 10) || state.viewWeek || 1;
+    const m = parseInt(month, 10) || state.currentMonth || 10;
+    const y = parseInt(year, 10) || state.currentYear || 2026;
+    const weekData = state.monthSchedule?.weeks?.[week - 1];
+    if (!weekData || !weekData.scheduleTable) {
+      return { success: false, cleared: 0, week, error: 'Tuần này chưa có lịch để xóa.' };
+    }
+
+    let cleared = 0;
+    Object.values(weekData.scheduleTable).forEach(slot => {
+      if (!slot) return;
+      const hadMember = !!(slot.oldMember || slot.newMember || slot.thirdMember);
+      slot.oldMember = null;
+      slot.newMember = null;
+      slot.thirdMember = null;
+      slot.status = 'empty';
+      slot.manuallyEdited = false;
+      if (hadMember) cleared++;
+    });
+
+    try {
+      const map = readManualSlotMap();
+      const key = manualSlotMonthKey(m, y);
+      if (map[key] && map[key][String(week)]) {
+        delete map[key][String(week)];
+        localStorage.setItem(STORAGE_KEYS.MANUAL_SLOTS, JSON.stringify(map));
+      }
+    } catch (e) {
+      console.warn('[Admin] Không xóa được sổ tay của tuần:', e);
+    }
+
+    recomputeWeekStats(weekData);
+    state.currentSchedule = weekData;
+    state.twoWeekSchedule = state.monthSchedule;
+    saveSchedule(true);
+    return { success: true, cleared, week, month: m, year: y };
+  }
+
+  async function clearCurrentWeekAssignments() {
+    const week = Math.min(Math.max(1, state.viewWeek || 1), 4);
+    const weekData = state.monthSchedule?.weeks?.[week - 1];
+    if (!weekData || !weekData.scheduleTable) {
+      showToast('Tuần này chưa có lịch để xóa.', 'info');
+      return;
+    }
+    const assigned = Object.values(weekData.scheduleTable)
+      .filter(slot => slot && (slot.oldMember || slot.newMember || slot.thirdMember)).length;
+    if (assigned === 0) {
+      showToast(`Tuần ${week} chưa có người nào được xếp.`, 'info');
+      return;
+    }
+    const cal = weekData.calendarInfo
+      || (window.SchedulerEngine?.MonthCalendarHelper?.getMonthWeeks(state.currentMonth, state.currentYear) || [])[week - 1];
+    const range = cal ? ` (${cal.startDateStr} - ${cal.endDateStr})` : '';
+
+    const accepted = await confirmDangerAction({
+      title: `Xóa toàn bộ người đã xếp trong Tuần ${week}`,
+      message: `Toàn bộ người trong Tuần ${week}${range} sẽ bị xóa để xếp lại. `
+        + 'Các tuần khác, danh sách CTV và ca rảnh được giữ nguyên.',
+      losses: [
+        `${assigned} ca đang có người trực trong tuần này`,
+        'Sổ tay gán ca của tuần này',
+        'Lịch các tuần khác và danh sách CTV: GIỮ NGUYÊN'
+      ],
+      keyword: 'XOA TUAN',
+      confirmLabel: 'Xóa tuần này'
+    });
+    if (!accepted) return;
+
+    const res = clearWeekAssignments(week, state.currentMonth, state.currentYear);
+    if (!res.success) {
+      showToast(res.error || 'Không xóa được tuần này.', 'error');
+      return;
+    }
+    renderAll();
+    showToast(
+      `Đã xóa ${res.cleared} ca trong Tuần ${week}. Bấm Xếp tự động để xếp lại.`,
+      'success',
+      7000
+    );
+    auditLog('SHIFT_CLEAR', `Xóa toàn bộ người đã xếp trong Tuần ${week} (${res.cleared} ca)`);
   }
 
   function openAddStudentModal() {
@@ -8307,6 +8397,7 @@ async function handleDeleteEvent(id) {
     recordManualSlot,
     reapplyManualSlots,
     harvestManualSlotsFromSchedule,
+    clearWeekAssignments,
     // Dùng cho kiểm thử: chuẩn hoá id CTV + vẽ bảng CTV.
     normalizeStudentIds,
     renderStudentTable,

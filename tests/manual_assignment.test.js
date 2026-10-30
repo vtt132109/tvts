@@ -659,6 +659,42 @@ runTest('Giao diện: có nút Số người/ca và modal cấu hình tháng', (
   assert.ok(js.includes('slot.thirdMember'), 'Phải hỗ trợ người thứ 3');
 });
 
+runTest('Xóa tuần: chỉ xóa người trong tuần đang xem, giữ tuần khác và sổ tay tuần khác', () => {
+  seed();
+  H.loadData();
+  H.runFullSchedule();
+
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assignViaUi('T2_S', 'old', 2, 's_1');
+  const beforeWeek2 = savedSlot(2, 'T2_S').oldMember?.id;
+  assert.strictEqual(beforeWeek2, 's_1');
+
+  const res = H.clearWeekAssignments(1, 10, 2026);
+  assert.ok(res.success, 'Phải xóa được tuần 1');
+  assert.ok(res.cleared > 0, 'Phải đếm số ca đã xóa');
+
+  const week1 = savedSlot(1, 'T2_S');
+  assert.strictEqual(week1.oldMember, null, 'Tuần 1 phải xóa người cũ');
+  assert.strictEqual(week1.newMember, null, 'Tuần 1 phải xóa người mới');
+  assert.strictEqual(week1.thirdMember, null, 'Tuần 1 phải xóa người thứ 3');
+  assert.strictEqual(week1.status, 'empty');
+
+  const week2 = savedSlot(2, 'T2_S');
+  assert.strictEqual(week2.oldMember && week2.oldMember.id, 's_1',
+    'Tuần 2 KHÔNG được xóa');
+
+  const map = manualMap();
+  assert.ok(!(map['2026-10'] && map['2026-10']['1']),
+    'Sổ tay tuần 1 phải bị xóa để auto không áp lại');
+  assert.ok(map['2026-10'] && map['2026-10']['2'],
+    'Sổ tay tuần 2 phải còn');
+});
+
+runTest('Giao diện: có nút Xóa Tuần Này', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  assert.ok(html.includes('id="btn-clear-week"'), 'Phải có nút Xóa Tuần Này');
+});
+
 // ============================================================================
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passed}/${total} TESTS ĐẠT CHUẨN (${Math.round((passed / (total || 1)) * 100)}%)`);
