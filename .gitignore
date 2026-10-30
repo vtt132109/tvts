@@ -21,6 +21,10 @@ skills-lock.json
 *.xlsx
 *.xls
 *.tsv
+# File nén chứa CSV phản hồi Google Form (Họ tên/MSSV) — chặn commit lây nhiễm
+*.zip
+*.rar
+*.7z
 
 # Ngoại lệ: fixture CSV tổng hợp, không chứa PII, cần cho test/CI
 !tests/fixtures/roster_sample.csv

@@ -129,7 +129,7 @@ eval(readSrc('js/common.js'));
 eval(readSrc('js/admin.js'));
 
 assert.ok(global.window.csvImportTestHelper, 'admin.js phải export window.csvImportTestHelper');
-const { parseStudentsCsv, analyzeStudentsCsv } = global.window.csvImportTestHelper;
+const { parseStudentsCsv, analyzeStudentsCsv, isGoogleFormResponseCsv, analyzeGoogleFormCsv } = global.window.csvImportTestHelper;
 
 // ---------------------------------------------------------------------------
 // 3. Runner
@@ -285,6 +285,92 @@ runTest('Fixture synthetic không chứa dấu vết PII thật', () => {
   // MSSV synthetic nằm trong dải 99000001-99000006, không phải MSSV thật.
   const ids = [...fixtureCsv.matchAll(/(?:^|,)(9900000\d)(?=,|$)/gm)].map(m => m[1]);
   assert.strictEqual(new Set(ids).size, 6, 'Phải có đúng 6 MSSV synthetic dạng 9900000x');
+});
+
+// ---------------------------------------------------------------------------
+// Google Form response importer
+// ---------------------------------------------------------------------------
+function seedFormStudents() {
+  mockLocalStorage.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
+  mockLocalStorage.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify([
+    { id: 's_21', studentId: '99000021', fullName: 'Mẫu Form Một', role: 'old', availableShifts: [], monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: [] }, updatedAt: 1 },
+    { id: 's_22', studentId: '99000022', fullName: 'Mẫu Form Hai', role: 'new', availableShifts: [], monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: [] }, updatedAt: 1 }
+  ]));
+  global.window.adminTestHelper.loadData();
+}
+
+const FORM_HEADER = '"Dấu thời gian","Họ và tên","Mã số sinh viên",'
+  + '"Ngày 2–6/11/2026 — Chọn các buổi có thể làm",'
+  + '"Ngày 9–13/11/2026 — Chọn các buổi có thể làm",'
+  + '"Ngày 16–20/11/2026 — Chọn các buổi có thể làm",'
+  + '"Ngày 23–27/11/2026 — Chọn các buổi có thể làm"';
+
+const FORM_ROWS = [
+  '"2026/10/16 9:50:18 CH GMT+7","Mẫu Form Một","99000021","2/11 (Thứ Hai) — Sáng;3/11 (Thứ Ba) — Chiều;20/10 (Thứ Ba) — Sáng","9/11 (Thứ Hai) — Chiều","16/11 (Thứ Hai) — Sáng","23/11 (Thứ Ba) — Chiều"',
+  '"2026/10/30 10:00:00 CH GMT+7","Mẫu Form Một","99000021","4/11 (Thứ Tư) — Sáng","10/11 (Thứ Ba) — Sáng","17/11 (Thứ Ba) — Sáng","24/11 (Thứ Ba) — Sáng"',
+  '"2026/10/16 9:55:00 CH GMT+7","Mẫu Form Hai","99000022","5/11 (Thứ Năm) — Chiều","","",""',
+  '"2026/10/16 9:56:00 CH GMT+7","Mẫu Ngoài Danh Sách","99000099","2/11 (Thứ Hai) — Sáng","","",""'
+];
+
+runTest('Google Form: nhận dạng đúng file phản hồi, không nhận nhầm CSV danh sách', () => {
+  assert.strictEqual(isGoogleFormResponseCsv(FORM_HEADER + '\n' + FORM_ROWS[0]), true);
+  assert.strictEqual(isGoogleFormResponseCsv(fixtureCsv), false);
+});
+
+runTest('Google Form tháng 11: ánh xạ ngày → tuần/mã ca, bỏ ngày tháng 10, bỏ MSSV lạ', () => {
+  seedFormStudents();
+  const report = analyzeGoogleFormCsv(FORM_HEADER + '\n' + FORM_ROWS.join('\n'), { month: 11, year: 2026 });
+
+  assert.strictEqual(report.errors.length, 0, report.errors.join(' | '));
+  assert.strictEqual(report.candidates.length, 2, 'Chỉ 2 MSSV có trong danh sách CTV');
+  assert.strictEqual(report.stats.duplicateRows, 1, 'Một MSSV gửi 2 phản hồi');
+  assert.strictEqual(report.stats.unmatchedRows, 1, 'Một MSSV không có trong danh sách');
+  assert.strictEqual(report.stats.outOfMonthSelections, 1, 'Một lựa chọn ngày 20/10 phải bị bỏ');
+  assert.strictEqual(report.stats.validRows, 2);
+
+  const one = report.candidates.find(c => c.studentId === '99000021');
+  // Phản hồi mới nhất (30/10) thắng: 4/11, 10/11, 17/11, 24/11.
+  assert.deepStrictEqual(one.monthlyAvailableShifts[1], ['T4_S']);
+  assert.deepStrictEqual(one.monthlyAvailableShifts[2], ['T3_S']);
+  assert.deepStrictEqual(one.monthlyAvailableShifts[3], ['T3_S']);
+  assert.deepStrictEqual(one.monthlyAvailableShifts[4], ['T3_S']);
+  assert.deepStrictEqual(one.availableShifts.sort(), ['T3_S', 'T4_S']);
+
+  const two = report.candidates.find(c => c.studentId === '99000022');
+  assert.deepStrictEqual(two.monthlyAvailableShifts[1], ['T5_C']);
+  assert.strictEqual(two.role, 'new', 'Phải giữ vai trò hiện có của CTV');
+});
+
+runTest('Google Form: bỏ qua người đã có ca rảnh cập nhật SAU thời điểm form', () => {
+  seedFormStudents();
+  const students = JSON.parse(mockLocalStorage.getItem('ts_scheduler_students'));
+  students[0].monthlyAvailableShifts = { 1: ['T2_S'], 2: [], 3: [], 4: [] };
+  students[0].availableShifts = ['T2_S'];
+  students[0].updatedAt = Date.parse('2030-01-01T00:00:00Z');
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify(students));
+  global.window.adminTestHelper.loadData();
+
+  const report = analyzeGoogleFormCsv(FORM_HEADER + '\n' + FORM_ROWS.join('\n'), { month: 11, year: 2026 });
+  assert.strictEqual(report.stats.skippedNewerRows, 1, 'Phải bỏ qua phản hồi cũ hơn dữ liệu đang có');
+  assert.ok(!report.candidates.some(c => c.studentId === '99000021'));
+  assert.strictEqual(report.candidates.length, 1);
+});
+
+runTest('Google Form: chọn tháng không có ngày nào => báo lỗi rõ, không nhập rỗng', () => {
+  seedFormStudents();
+  const report = analyzeGoogleFormCsv(FORM_HEADER + '\n' + FORM_ROWS.join('\n'), { month: 12, year: 2026 });
+  assert.ok(report.errors.length > 0, 'Phải báo không có ca trong tháng 12');
+  assert.strictEqual(report.candidates.length, 0);
+});
+
+runTest('Giao diện: có nút Nhập Google Form và gợi ý đúng chế độ', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  assert.ok(html.includes('id="btn-open-form-import"'), 'Phải có nút Nhập Google Form');
+  assert.ok(html.includes('id="import-mode-hint"'), 'Modal nhập phải có gợi ý chế độ');
+  assert.ok(typeof isGoogleFormResponseCsv === 'function'
+    && typeof analyzeGoogleFormCsv === 'function',
+  'admin.js phải xuất bộ phân tích Google Form cho kiểm thử');
 });
 
 console.log('\n================================================================');
