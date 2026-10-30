@@ -186,6 +186,80 @@ runTest('Edge Case: Luân phiên 4 Tuần (runMonthSchedule) xử lý trơn tru 
   assert.strictEqual(monthResultOlds.totalStudents, onlyOlds.length);
 });
 
+runTest('Capacity 1 người/ca: mỗi ca đúng 1 người, không điền vị trí thứ 2', () => {
+  const result = runMonthSchedule(sampleStudents, 2026, 11, { peoplePerShift: 1, thirdShifts: [] });
+  assert.ok(result && result.weeks && result.weeks.length === 4);
+  let total = 0;
+  result.weeks.forEach(week => {
+    Object.values(week.scheduleTable).forEach(slot => {
+      total++;
+      assert.strictEqual(slot.capacity, 1, 'Mọi ca phải có capacity 1');
+      assert.ok(slot.oldMember, 'Ca 1 người phải có người trực');
+      assert.strictEqual(slot.newMember, null, 'Không được điền vị trí thứ 2');
+      assert.strictEqual(slot.thirdMember, null, 'Không có người thứ 3');
+      assert.strictEqual(slot.status, 'full', 'Ca 1 người có người là đủ');
+    });
+  });
+  assert.strictEqual(total, 40, 'Đủ 40 ca trong tháng');
+});
+
+runTest('Capacity 2 + ca đặc biệt 3: auto chỉ điền 2, người thứ 3 để trống', () => {
+  const result = runMonthSchedule(sampleStudents, 2026, 11, {
+    peoplePerShift: 2,
+    thirdShifts: ['T2_S']
+  });
+  result.weeks.forEach(week => {
+    const special = week.scheduleTable['T2_S'];
+    assert.strictEqual(special.capacity, 3, 'T2_S phải là ca 3 người');
+    assert.ok(special.oldMember && special.newMember, 'Auto phải điền đủ 2 người');
+    assert.strictEqual(special.thirdMember, null, 'Auto KHÔNG được điền người thứ 3');
+    assert.strictEqual(special.status, 'partial', 'Ca 3 người còn thiếu người thứ 3 phải là partial');
+    Object.entries(week.scheduleTable).forEach(([id, slot]) => {
+      if (id !== 'T2_S') {
+        assert.strictEqual(slot.capacity, 2, 'Ca thường phải là capacity 2');
+      }
+    });
+  });
+});
+
+runTest('Capacity 1 + ca đặc biệt 3: 9 ca 1 người + 1 ca 3 người mỗi tuần', () => {
+  const result = runMonthSchedule(sampleStudents, 2026, 11, {
+    peoplePerShift: 1,
+    thirdShifts: ['T2_S']
+  });
+  result.weeks.forEach(week => {
+    let single = 0;
+    let special = 0;
+    Object.entries(week.scheduleTable).forEach(([id, slot]) => {
+      if (id === 'T2_S') {
+        special++;
+        assert.strictEqual(slot.capacity, 3);
+        assert.ok(slot.oldMember && slot.newMember);
+        assert.strictEqual(slot.thirdMember, null);
+        assert.strictEqual(slot.status, 'partial');
+      } else {
+        single++;
+        assert.strictEqual(slot.capacity, 1);
+        assert.strictEqual(slot.newMember, null);
+        assert.strictEqual(slot.thirdMember, null);
+      }
+    });
+    assert.strictEqual(single, 9, 'Phải có 9 ca 1 người mỗi tuần');
+    assert.strictEqual(special, 1, 'Phải có 1 ca đặc biệt 3 người mỗi tuần');
+
+    // Không ai trực 2 ca cùng ngày (kể cả ca đặc biệt).
+    const seen = new Set();
+    Object.entries(week.scheduleTable).forEach(([id, slot]) => {
+      const day = id.split('_')[0];
+      [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).forEach(member => {
+        const key = `${member.id}@${day}`;
+        assert.ok(!seen.has(key), `CTV ${member.id} bị xếp 2 ca cùng ngày ${day}`);
+        seen.add(key);
+      });
+    });
+  });
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');

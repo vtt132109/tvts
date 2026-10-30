@@ -23,6 +23,7 @@
     EVENTS: 'ts_scheduler_events_v1',
     ALL_MONTHS: 'ts_scheduler_all_months_v1',
     AVAILABILITY_MONTH: 'ts_scheduler_availability_month_v1',
+    SHIFT_CAPACITY: 'ts_scheduler_shift_capacity_v1',
     ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
@@ -1251,6 +1252,8 @@
       // Khoá tháng ca rảnh: gửi lên Cloud để máy mới biết ca rảnh hiện tại thuộc
       // tháng nào, thay vì tự đoán "chưa đăng ký" rồi xoá nhầm ca rảnh thật.
       availabilityMonth: readKey(STORAGE_KEYS.AVAILABILITY_MONTH, null),
+      // Cấu hình 1/2 người mỗi ca + các ca đặc biệt 3 người (theo tháng).
+      shiftCapacity: readKey(STORAGE_KEYS.SHIFT_CAPACITY, {}),
       updatedAt: Date.now(),
       deviceId: getOrCreateDeviceId(),
     };
@@ -1440,6 +1443,12 @@
         if (!currentLocal) {
           writeKey(STORAGE_KEYS.AVAILABILITY_MONTH, payload.availabilityMonth);
         }
+      }
+
+      // 4c. Cấu hình số người/ca theo tháng (1/2 + ca đặc biệt 3 người).
+      if (payload.shiftCapacity && typeof payload.shiftCapacity === 'object'
+        && !Array.isArray(payload.shiftCapacity)) {
+        writeKey(STORAGE_KEYS.SHIFT_CAPACITY, payload.shiftCapacity);
       }
 
       // 5. Đồng bộ sự kiện & sao lưu
