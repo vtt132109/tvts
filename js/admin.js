@@ -622,6 +622,8 @@
     bootstrapIndexedDbRecovery();
     bindAuthEvents();
     bindUserMgmtEvents();
+    // Máy mới/mất localStorage: tự lấy Web API Key công khai để đăng nhập Google.
+    schedulePublicConfigBootstrap();
     // LƯU Ý: bindSwapMgmtEvents / bindBackupCenterEvents / bindCloudSyncEvents
     // cố ý KHÔNG gọi ở đây — chúng đã nằm trong unlockAdminDashboard() và
     // chỉ chạy 1 lần. Gọi ở cả hai nơi sẽ khiến mỗi nút có 2 listener:
@@ -756,10 +758,26 @@
 
     const cfg = window.CloudSyncManager.getConfig();
     if (!cfg || !String(cfg.apiKey || '').trim()) {
-      const msg = 'Chưa cấu hình Firebase Web API Key. Bấm "☁️ Kéo Dữ Liệu Mới Nhất Từ Cloud" ngay dưới để nhập cấu hình, hoặc dùng "🔑 Khôi phục bằng mã thiết bị" nếu máy này đã tạo mã.';
-      showAuthError(msg);
-      updateAdminGoogleStatus('⚠️ ' + msg, 'error');
-      return;
+      // Máy mới/mất localStorage: tự lấy Web API Key công khai từ Cloud rồi
+      // đăng nhập tiếp, không bắt người dùng mở Trung tâm Đồng bộ trước.
+      updateAdminGoogleStatus('⏳ Đang lấy Web API Key công khai từ Cloud…', 'info');
+      let pub = null;
+      try {
+        pub = typeof window.CloudSyncManager.pullPublicClientConfig === 'function'
+          ? await window.CloudSyncManager.pullPublicClientConfig()
+          : null;
+      } catch (e) {
+        pub = { success: false, error: e.message };
+      }
+      const freshCfg = window.CloudSyncManager.getConfig();
+      if (!freshCfg || !String(freshCfg.apiKey || '').trim()) {
+        const msg = 'Chưa lấy được Web API Key từ Cloud'
+          + (pub && pub.error ? ': ' + pub.error : '.')
+          + ' Bấm "☁️ Kéo Dữ Liệu Mới Nhất Từ Cloud" để thử lại.';
+        showAuthError(msg);
+        updateAdminGoogleStatus('⚠️ ' + msg, 'error');
+        return;
+      }
     }
 
     const btn = elements.btnAdminGoogleLogin;
@@ -944,48 +962,102 @@
   }
 
   /**
+   * Máy mới/mất localStorage: tự lấy Web API Key công khai để nút Google dùng
+   * được ngay, không bắt người dùng bấm gì. Không ghi đè danh sách CTV.
+   */
+  function schedulePublicConfigBootstrap() {
+    setTimeout(async () => {
+      if (!window.CloudSyncManager
+        || typeof window.CloudSyncManager.pullPublicClientConfig !== 'function') {
+        return;
+      }
+      const cfg = window.CloudSyncManager.getConfig();
+      if (cfg.apiKey) return;
+      try {
+        const res = await window.CloudSyncManager.pullPublicClientConfig();
+        if (res && res.success) {
+          const box = document.getElementById('auth-cloud-sync-status');
+          if (box) {
+            box.style.display = 'block';
+            box.textContent = '✅ Đã tự lấy Web API Key từ Cloud. Bấm "Đăng nhập bằng Google" để tiếp tục.';
+            box.style.color = '#16a34a';
+          }
+        }
+      } catch (e) {
+        console.warn('[Admin] Không tự lấy được Web API Key công khai:', e && e.message);
+      }
+    }, 300);
+  }
+
+  /**
    * Nút "Kéo Dữ Liệu Mới Nhất Từ Cloud" trên màn đăng nhập.
-   * Phải chạy được TRƯỚC khi đăng nhập (đặc biệt khi máy trống), nên không
-   * nằm trong bindCloudSyncEvents() vốn chỉ chạy sau khi mở dashboard.
+   * Phải chạy được TRƯỚC khi đăng nhập (đặc biệt khi máy trống):
+   *   1) đọc clientConfig công khai để có Web API Key;
+   *   2) chỉ kéo dữ liệu riêng tư khi đã có phiên Google cán bộ.
    */
   async function adminTriggerAuthCloudPull() {
     const statusBox = document.getElementById('auth-cloud-sync-status');
-    if (statusBox) {
+    const setStatus = (text, color) => {
+      if (!statusBox) return;
       statusBox.style.display = 'block';
-      statusBox.textContent = '⏳ Đang kết nối Đám mây kéo tài khoản & dữ liệu mới nhất…';
-      statusBox.style.color = '#0284c7';
-    }
+      statusBox.textContent = text;
+      statusBox.style.color = color;
+      statusBox.style.webkitTextFillColor = color;
+    };
 
     if (!window.CloudSyncManager) {
-      if (statusBox) statusBox.textContent = '⚠️ Module Cloud Sync chưa sẵn sàng.';
+      setStatus('⚠️ Module Cloud Sync chưa sẵn sàng.', '#f59e0b');
       return;
     }
 
     const cfg = window.CloudSyncManager.getConfig();
     if (!cfg.databaseUrl) {
       const msg = 'Chưa cấu hình Firebase URL. Hãy đăng nhập Google (cán bộ) hoặc khôi phục từ bản sao lưu JSON.';
-      if (statusBox) {
-        statusBox.textContent = 'ℹ️ ' + msg;
-        statusBox.style.color = '#f59e0b';
-      }
+      setStatus('ℹ️ ' + msg, '#f59e0b');
       showToast(msg, 'info');
       return;
     }
 
-    const res = await window.CloudSyncManager.pullFromCloud();
-    if (res.success) {
+    setStatus('⏳ Đang lấy Web API Key công khai từ Đám mây…', '#0284c7');
+    let pub = null;
+    try {
+      pub = typeof window.CloudSyncManager.pullPublicClientConfig === 'function'
+        ? await window.CloudSyncManager.pullPublicClientConfig()
+        : { success: false, error: 'Bản Cloud Sync này chưa hỗ trợ lấy clientConfig.' };
+    } catch (e) {
+      pub = { success: false, error: e.message };
+    }
+
+    let user = getCurrentGoogleStaffUser();
+    if (!user && typeof window.CloudSyncManager.whenAuthReady === 'function') {
+      try { user = await window.CloudSyncManager.whenAuthReady(1200); } catch (e) { user = null; }
+    }
+
+    if (!user) {
+      if (pub && pub.success) {
+        setStatus(
+          '✅ Đã lấy Web API Key công khai. Bấm "Đăng nhập bằng Google" để kéo tài khoản & dữ liệu riêng tư.',
+          '#16a34a'
+        );
+        showToast('Đã lấy Web API Key công khai từ Cloud. Hãy đăng nhập Google cán bộ.', 'success', 6000);
+      } else {
+        setStatus('✕ ' + ((pub && pub.error) || 'Không lấy được cấu hình Cloud.'), '#ef4444');
+      }
+      return;
+    }
+
+    setStatus('⏳ Đang kéo tài khoản & dữ liệu riêng tư từ Đám mây…', '#0284c7');
+    const res = await window.CloudSyncManager.pullFromCloud(undefined, { auto: true });
+    if (res && res.success && !res.skipped) {
       loadAdminUsers();
       renderAuthMode();
-      if (statusBox) {
-        statusBox.textContent = '✅ Đã đồng bộ tài khoản & dữ liệu mới nhất từ Cloud! Bạn có thể đăng nhập ngay.';
-        statusBox.style.color = '#16a34a';
-      }
+      setStatus('✅ Đã đồng bộ tài khoản & dữ liệu mới nhất từ Cloud! Bạn có thể đăng nhập ngay.', '#16a34a');
       showToast('Đã đồng bộ dữ liệu mới nhất từ Cloud!', 'success');
+    } else if (res && res.success && res.skipped) {
+      setStatus('✅ Đã lấy Web API Key. Máy có thay đổi chưa đẩy nên giữ dữ liệu cục bộ.', '#16a34a');
+      showToast('Đã lấy cấu hình Cloud. Giữ dữ liệu cục bộ vì có thay đổi chưa đẩy.', 'info', 6000);
     } else {
-      if (statusBox) {
-        statusBox.textContent = '✕ Lỗi đồng bộ: ' + res.error;
-        statusBox.style.color = '#ef4444';
-      }
+      setStatus('✕ Lỗi đồng bộ: ' + ((res && res.error) || 'không rõ nguyên nhân'), '#ef4444');
     }
   }
 

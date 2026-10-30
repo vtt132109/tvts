@@ -1927,6 +1927,62 @@
   }
 
   /**
+   * Lấy riêng `clientConfig` công khai (Web API Key) — KHÔNG cần đăng nhập.
+   * Dùng để máy mới/mất localStorage tự dựng lại cấu hình Firebase trước khi
+   * đăng nhập Google. Không ghi đè danh sách CTV hay dữ liệu riêng tư.
+   */
+  async function pullPublicClientConfig(customCfg) {
+    const cfg = customCfg || getConfig();
+    if (!cfg.databaseUrl) {
+      return { success: false, error: 'Chưa cấu hình URL Cơ sở dữ liệu Firebase!' };
+    }
+    const url = formatFirebaseUrl(
+      cfg.databaseUrl,
+      (cfg.publicPath || 'tvts_public') + '/clientConfig',
+      ''
+    );
+    if (!url) return { success: false, error: 'URL Firebase không hợp lệ!' };
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
+    try {
+      const response = await fbFetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!response.ok) {
+        return { success: false, error: `Firebase HTTP ${response.status}: ${response.statusText}` };
+      }
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+      if (!data || typeof data !== 'object' || !data.apiKey) {
+        return {
+          success: false,
+          error: 'Cloud chưa công bố Web API Key trong tvts_public/clientConfig.'
+        };
+      }
+      const fresh = getConfig();
+      fresh.apiKey = String(data.apiKey);
+      if (data.authDomain) fresh.authDomain = String(data.authDomain);
+      if (data.projectId) fresh.projectId = String(data.projectId);
+      safeSetItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(fresh));
+      notifyStatusChange();
+      return { success: true, apiKey: fresh.apiKey };
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      const timeout = err && err.name === 'AbortError';
+      return {
+        success: false,
+        error: timeout
+          ? 'Hết thời gian kết nối Firebase (>8 giây). Kiểm tra mạng rồi thử lại.'
+          : (err.message || 'Lỗi kết nối Firebase Cloud')
+      };
+    }
+  }
+
+  /**
    * ==========================================================================
    * YÊU CẦU TỪ SINH VIÊN (đăng ký ca & đổi ca)
    * ==========================================================================
@@ -3154,6 +3210,7 @@
     applyPublicPayload,
     pushPublicToCloud,
     pullPublicFromCloud,
+    pullPublicClientConfig,
     mergePublicSwapStatuses,
 
     // ---- Yêu cầu từ sinh viên ----
