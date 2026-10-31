@@ -729,6 +729,52 @@ runTest('Tháng 2 người/ca: vẫn gán tay thêm được người thứ 3, a
     'Auto phải giữ người thứ 3 đã gán tay');
 });
 
+runTest('Xếp tự động 2 người/ca không phân biệt vai trò: toàn bộ là Tập Sự vẫn đủ ca', () => {
+  LS.clear();
+  SS.clear();
+  const allShifts = ['T2_S', 'T2_C', 'T3_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T5_C', 'T6_S', 'T6_C'];
+  const students = ['A', 'B', 'C', 'D', 'E', 'F'].map((name, idx) => ({
+    id: `any_${idx}`, studentId: `230000${idx}`, fullName: `Any ${name}`, role: 'new',
+    availableShifts: allShifts,
+    monthlyAvailableShifts: { 1: allShifts, 2: allShifts, 3: allShifts, 4: allShifts }
+  }));
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 10, year: 2026 }));
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-10');
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({ '2026-10': { peoplePerShift: 2 } }));
+  H.loadData();
+  H.runFullSchedule();
+
+  const sched = H.getState().monthSchedule;
+  Object.values(sched.weeks[0].scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 2);
+    assert.ok(slot.oldMember && slot.newMember,
+      `Ca ${slot.shiftId} phải đủ 2 người dù cả danh sách đều là Tập Sự`);
+    assert.strictEqual(slot.oldMember.role, 'new');
+    assert.strictEqual(slot.newMember.role, 'new');
+  });
+  assert.strictEqual(sched.weeks[0].summary.fullShifts, 10, 'Phải đủ 10/10 ca, không bị chặn vì thiếu Chính Thức');
+});
+
+runTest('Bấm nhanh 1/2 người/ca trên bảng phân công đổi đúng cấu hình tháng', () => {
+  seed();
+  H.loadData();
+  H.runFullSchedule();
+  assert.strictEqual(savedSlot(1, 'T2_S').capacity, 2, 'Mặc định ban đầu là 2 người/ca');
+
+  H.setMonthCapacityQuick(1);
+  let cfg = JSON.parse(LS.getItem('ts_scheduler_shift_capacity_v1') || '{}');
+  assert.strictEqual(cfg['2026-10'] && cfg['2026-10'].peoplePerShift, 1,
+    'Bấm 1 người phải lưu cấu hình tháng 10 = 1');
+  assert.strictEqual(savedSlot(1, 'T2_S').capacity, 1, 'Lịch phải được xếp lại với 1 người/ca');
+
+  H.setMonthCapacityQuick(2);
+  cfg = JSON.parse(LS.getItem('ts_scheduler_shift_capacity_v1') || '{}');
+  assert.strictEqual(cfg['2026-10'] && cfg['2026-10'].peoplePerShift, 2,
+    'Bấm 2 người phải lưu cấu hình tháng 10 = 2');
+  assert.strictEqual(savedSlot(1, 'T2_S').capacity, 2, 'Lịch phải được xếp lại với 2 người/ca');
+});
+
 runTest('Cấu hình số người/ca chỉ áp dụng đúng tháng, không kế thừa tháng trước', () => {
   seed();
   H.loadData();
@@ -760,8 +806,10 @@ runTest('Cấu hình số người/ca chỉ áp dụng đúng tháng, không k�
 runTest('Giao diện: có nút Số người/ca, modal chỉ chọn mức nền, thêm người theo từng ca', () => {
   const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
-  assert.ok(html.includes('id="btn-shift-capacity"'), 'Phải có nút Số người/ca');
-  assert.ok(html.includes('id="btn-shift-capacity-label"'), 'Nút phải hiện mức nền của tháng đang mở');
+  assert.ok(html.includes('id="month-capacity-control"'), 'Phải có bộ chọn Số người/ca ngay bảng phân công');
+  assert.ok(html.includes('id="btn-month-capacity-1"'), 'Phải có nút chọn 1 người/ca');
+  assert.ok(html.includes('id="btn-month-capacity-2"'), 'Phải có nút chọn 2 người/ca');
+  assert.ok(!html.includes('id="btn-shift-capacity"'), 'Nút cũ trên thanh sticky phải được gỡ');
   assert.ok(html.includes('id="modal-shift-capacity"'), 'Phải có modal cấu hình');
   assert.ok(html.includes('không dính sang tháng sau'), 'Modal phải nói rõ cấu hình theo từng tháng');
   assert.ok(html.includes('➕ Thêm người'), 'Modal phải hướng dẫn thêm người theo từng ca');

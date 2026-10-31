@@ -328,7 +328,7 @@ runTest('Dây nối: các thao tác quan trọng trong admin.js thực sự gọ
   const src = fs.readFileSync(path.resolve(__dirname, '../js/admin.js'), 'utf8');
   const requiredActions = [
     'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
-    'STUDENT_ADD', 'STUDENT_UPDATE', 'STUDENT_DELETE', 'STUDENT_CLEAR', 'ROLE_CHANGE',
+    'STUDENT_ADD', 'STUDENT_UPDATE', 'STUDENT_DELETE', 'STUDENT_CLEAR',
     'SCHEDULE_RUN', 'SHIFT_ASSIGN', 'SHIFT_CLEAR',
     'SWAP_APPROVE', 'SWAP_REJECT',
     'MONTH_SWITCH', 'MONTH_RESET', 'BACKUP_CREATE', 'BACKUP_DELETE', 'BACKUP_RESTORE', 'BACKUP_IMPORT',

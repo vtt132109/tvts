@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261031_0930">
+  <link rel="stylesheet" href="css/style.css?v=20261031_1200">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -147,7 +147,7 @@
   <!-- In ấn banner -->
   <div class="print-header-banner">
     <h1>BẢNG PHÂN CÔNG LỊCH TRỰC VĂN PHÒNG TƯ VẤN TUYỂN SINH</h1>
-    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Quy định: 1 Chính Thức (Kinh nghiệm) + 1 Tập Sự mỗi ca</p>
+    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Mỗi ca xếp 1 hoặc 2 người bất kỳ theo cấu hình tháng</p>
   </div>
 
   <!-- ====================================================================
@@ -425,9 +425,6 @@
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-import-form" onclick="window.adminOpenFormImport && window.adminOpenFormImport()" style="font-weight: 700; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" title="Nhập file CSV phản hồi Google Form cho tháng đang mở">
         <span>📥 Nhập Google Form</span>
       </button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-shift-capacity" onclick="window.adminOpenShiftCapacityModal && window.adminOpenShiftCapacityModal()" style="font-weight: 700; background: #eef2ff; color: #4338ca; border-color: #c7d2fe;" title="Chọn 1 hoặc 2 người mỗi ca cho riêng tháng đang mở">
-        <span id="btn-shift-capacity-label">👥 Số người/ca: 2</span>
-      </button>
       <button type="button" class="btn btn-secondary btn-sm" id="btn-sticky-quick-copy" style="font-weight: 700;" title="Sao chép nhanh sang Google Sheets">
         <span>📋 Copy Google Sheets</span>
       </button>
@@ -446,14 +443,14 @@
         <div class="value" id="count-total-students">0</div>
       </div>
     </div>
-    <div class="summary-card">
+    <div class="summary-card" style="display: none;">
       <div class="summary-icon old">🎓</div>
       <div class="summary-info">
         <div class="label">Chính Thức (Kinh nghiệm)</div>
         <div class="value" id="count-old-students">0</div>
       </div>
     </div>
-    <div class="summary-card">
+    <div class="summary-card" style="display: none;">
       <div class="summary-icon new">🌱</div>
       <div class="summary-info">
         <div class="label">Tập Sự (Mới)</div>
@@ -478,7 +475,7 @@
       <div class="summary-info">
         <div class="label">Ca trực đã lấp đầy</div>
         <div class="value" id="count-filled-shifts">0/10 ca</div>
-        <p class="summary-note">Một ca tính là <strong>đủ</strong> khi có <strong>1 Chính Thức + 1 Tập Sự</strong> cùng ca.</p>
+        <p class="summary-note">Một ca tính là <strong>đủ</strong> khi có đủ số người theo cấu hình của tháng.</p>
         <span class="summary-state" id="summary-state-not-scheduled">⏳ Chưa xếp ca — bấm ⚡ Tự động phân bổ lịch</span>
       </div>
     </div>
@@ -496,7 +493,7 @@
       <section class="schedule-hero-enterprise">
         <div class="hero-left">
           <h2>⚡ Điều Phối & Phân Bổ Lịch Trực</h2>
-          <p>Tự động ghép 1 Chính Thức + 1 Tập Sự mỗi ca, đảm bảo công bằng.</p>
+          <p>Tự động xếp 1 hoặc 2 người bất kỳ mỗi ca theo cấu hình tháng, đảm bảo công bằng.</p>
         </div>
         <!--
           10 nút cũ nằm chung một hàng không nhóm nên không biết nút nào chính,
@@ -524,7 +521,7 @@
                 <span>📥 NHẬP GOOGLE FORM</span>
               </button>
             </div>
-            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự ghép 1 Chính Thức + 1 Tập Sự mỗi ca. Gán tay: bấm trực tiếp vào ô ca trống bên dưới, chọn bất kỳ CTV nào (kể cả người chưa đăng ký) — lựa chọn của bạn sẽ được giữ nguyên qua các lần xếp tự động.</p>
+            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự xếp đủ 1 hoặc 2 người bất kỳ mỗi ca theo cấu hình tháng. Gán tay: bấm trực tiếp vào ô ca bên dưới, chọn bất kỳ CTV nào (kể cả người chưa đăng ký) — lựa chọn của bạn sẽ được giữ nguyên qua các lần xếp tự động.</p>
           </section>
 
           <!-- NHÓM 2 · XUẤT & CHIA SẺ -->
@@ -788,6 +785,15 @@
             <p class="card-desc">Nhấn nút 🔄 trong từng thẻ nhân sự để hoán đổi hoặc chỉ định người trực thủ công</p>
           </div>
           <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+            <!-- Số người/ca của RIÊNG tháng đang mở: đặt ngay bảng phân công để dễ thấy -->
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">👥 Số người/ca:</span>
+              <div class="filter-group" id="month-capacity-control" role="group" aria-label="Số người mỗi ca của tháng đang mở">
+                <button type="button" class="filter-btn" data-month-capacity="1" id="btn-month-capacity-1" title="Mỗi ca tự động xếp 1 người">1 người</button>
+                <button type="button" class="filter-btn active" data-month-capacity="2" id="btn-month-capacity-2" title="Mỗi ca tự động xếp 2 người bất kỳ">2 người</button>
+              </div>
+            </div>
+
             <!-- Chế độ xem: Từng Tuần vs Toàn Cảnh Cả Tháng (Task 16) -->
             <div class="view-mode-toggle" id="admin-view-mode-toggle">
               <button type="button" class="view-mode-btn active" data-mode="single" id="btn-view-single-week" title="Xem chi tiết từng tuần">
@@ -809,14 +815,6 @@
               </div>
             </div>
 
-            <div style="display: flex; gap: 0.75rem; font-size: 0.78rem;">
-              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span> Chính Thức
-              </span>
-              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span> Tập Sự
-              </span>
-            </div>
           </div>
         </div>
         <div class="card-body" style="padding: 1rem;">
@@ -878,33 +876,29 @@
       <!-- Khu vực Thống Kê Độ Công Bằng (Fairness Analytics) -->
       <div class="fairness-section">
         
-        <!-- Cột Chính Thức -->
-        <div class="card">
+        <div class="card" style="grid-column: 1 / -1;">
           <div class="card-header">
             <div>
-              <h3 class="card-title">🎓 Thống Kê Số Ca: Chính Thức</h3>
-              <p class="card-desc">Theo dõi phân bổ đều khối lượng ca trực</p>
+              <h3 class="card-title">📊 Thống Kê Số Ca: Tất Cả CTV</h3>
+              <p class="card-desc">Theo dõi phân bổ đều khối lượng ca trực, không phân biệt vai trò</p>
             </div>
           </div>
           <div class="card-body">
             <div class="fairness-list" id="fairness-list-old">
-              <!-- Render số ca chính thức -->
+              <!-- Render số ca của tất cả CTV -->
             </div>
           </div>
         </div>
 
-        <!-- Cột Tập Sự -->
-        <div class="card">
+        <div class="card" style="display: none;">
           <div class="card-header">
             <div>
-              <h3 class="card-title">🌱 Thống Kê Số Ca: Tập Sự</h3>
-              <p class="card-desc">Đảm bảo ai đăng ký cũng được phân công trực</p>
+              <h3 class="card-title">Thống Kê Số Ca</h3>
+              <p class="card-desc">Đã gộp vào danh sách chung</p>
             </div>
           </div>
           <div class="card-body">
-            <div class="fairness-list" id="fairness-list-new">
-              <!-- Render số ca tập sự -->
-            </div>
+            <div class="fairness-list" id="fairness-list-new"></div>
           </div>
         </div>
 
@@ -949,8 +943,6 @@
           <div class="table-toolbar">
             <div class="filter-group">
               <button class="filter-btn active" data-filter="all">Tất cả</button>
-              <button class="filter-btn" data-filter="old">🎓 Chính Thức</button>
-              <button class="filter-btn" data-filter="new">🌱 Tập Sự</button>
             </div>
 
             <div class="search-input-wrap">
@@ -964,8 +956,6 @@
           <div id="bulk-student-actions" class="bulk-actions-bar" style="display: none; margin-bottom: 1rem; padding: 0.85rem 1.25rem; background: var(--bg-card); border: 1.5px solid var(--primary); border-radius: var(--radius-md); box-shadow: var(--shadow-md); align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
             <div style="font-weight: 600;">Đã chọn <strong id="bulk-selected-count" style="color: var(--primary); font-size: 1.1rem;">0</strong> sinh viên:</div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-role-old"><span>🎓 Chuyển sang Chính Thức</span></button>
-              <button type="button" class="btn btn-success btn-sm" id="btn-bulk-role-new" style="background: #10b981; color: #fff;"><span>🌱 Chuyển sang Tập Sự</span></button>
               <button type="button" class="btn btn-warning-outline btn-sm" id="btn-bulk-clear-shifts" style="border-color: #f59e0b; color: #d97706;"><span>🧹 Xóa ca đã chọn</span></button>
               <button type="button" class="btn btn-danger-outline btn-sm" id="btn-bulk-delete-students"><span>🗑️ Xóa khỏi danh sách</span></button>
             </div>
@@ -987,7 +977,6 @@
                   <th style="width: 46px;">STT</th>
                   <th>Họ và Tên</th>
                   <th>MSSV</th>
-                  <th>Phân Loại</th>
                   <th>Ca Rảnh Đã Đăng Ký</th>
                   <th>Số Ca Trực</th>
                   <th class="col-actions">Thao Tác</th>
@@ -1119,16 +1108,10 @@
               <input type="tel" id="admin-input-phone" class="form-input" inputmode="numeric" pattern="[0-9]{9,11}" maxlength="11" placeholder="0912345678" aria-label="Số Điện Thoại">
             </div>
             <div class="form-group">
-              <div class="form-label" id="label-admin-student-role" style="font-weight: 700;">Phân Loại <span class="required">*</span></div>
-              <div style="display: flex; gap: 1rem; margin-top: 0.4rem;" role="radiogroup" aria-labelledby="label-admin-student-role">
-                <label for="admin-role-old" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" id="admin-role-old" name="adminStudentRole" value="old" aria-label="Thành viên Chính Thức">
-                  <span>🎓 Thành viên Chính Thức</span>
-                </label>
-                <label for="admin-role-new" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer;">
-                  <input type="radio" id="admin-role-new" name="adminStudentRole" value="new" checked aria-label="Cộng tác viên Tập Sự">
-                  <span>🌱 Cộng tác viên Tập Sự</span>
-                </label>
+              <div id="label-admin-student-role" style="display: none;"></div>
+              <div style="display: none;" role="radiogroup" aria-labelledby="label-admin-student-role">
+                <input type="radio" id="admin-role-old" name="adminStudentRole" value="old">
+                <input type="radio" id="admin-role-new" name="adminStudentRole" value="new" checked>
               </div>
             </div>
           </div>
@@ -1460,7 +1443,6 @@
                   <th>Họ và Tên</th>
                   <th>MSSV</th>
                   <th>SĐT</th>
-                  <th>Phân Loại</th>
                   <th>Ca Rảnh</th>
                   <th>Trạng Thái</th>
                 </tr>
@@ -1518,7 +1500,7 @@
         </label>
         <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; margin-bottom: 0.75rem; cursor: pointer;">
           <input type="radio" name="shiftCapacityMode" value="2" style="accent-color: var(--primary);">
-          <span><strong>2 người/ca</strong> — Xếp tự động xếp 1 Chính Thức + 1 Tập Sự; vẫn thêm tay được người thứ 3</span>
+          <span><strong>2 người/ca</strong> — Xếp tự động xếp 2 người bất kỳ; vẫn thêm tay được người thứ 3</span>
         </label>
 
         <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 0.25rem;">
@@ -1861,16 +1843,6 @@
         <!-- Toolbar Bộ Lọc & Tìm Kiếm & Nút Xuất/In -->
         <div class="payroll-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem; margin-bottom: 1rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
           
-          <!-- Bộ Lọc Vai Trò -->
-          <div class="payroll-filter-group" style="display: flex; align-items: center; gap: 0.4rem;">
-            <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); margin-right: 0.25rem;">Lọc vai trò:</span>
-            <div class="filter-group" id="payroll-role-filters">
-              <button type="button" class="filter-btn active" data-payroll-filter="all" id="btn-payroll-filter-all">Tất cả</button>
-              <button type="button" class="filter-btn" data-payroll-filter="old" id="btn-payroll-filter-old">🎓 Chính Thức</button>
-              <button type="button" class="filter-btn" data-payroll-filter="new" id="btn-payroll-filter-new">🌱 Tập Sự</button>
-            </div>
-          </div>
-
           <!-- Ô Tìm Kiếm Nhanh CTV -->
           <div class="search-input-wrap" style="min-width: 250px; flex: 1; max-width: 380px;">
             <span class="search-icon">🔍</span>
@@ -1897,7 +1869,6 @@
                 <th style="width: 50px; text-align: center;">STT</th>
                 <th>Họ và Tên</th>
                 <th style="width: 110px;">MSSV</th>
-                <th style="width: 120px; text-align: center;">Vai Trò</th>
                 <th style="width: 150px; text-align: center;">Số Ca Trực (Công)</th>
                 <th style="width: 150px; text-align: center; display: none;" id="th-payroll-events">Đi Sự Kiện</th>
                 <th style="width: 130px; text-align: center;">TỔNG CÔNG</th>
@@ -2239,17 +2210,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261031_0930"></script>
+  <script src="js/a11y_modal.js?v=20261031_1200"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261031_0930"></script>
-  <script src="js/month_calendar.js?v=20261031_0930"></script>
-  <script src="js/scheduler.js?v=20261031_0930"></script>
-  <script src="js/roster.js?v=20261031_0930"></script>
-  <script src="js/common.js?v=20261031_0930"></script>
-  <script src="js/audit.js?v=20261031_0930"></script>
-  <script src="js/store.js?v=20261031_0930"></script>
-  <script src="js/admin.js?v=20261031_0930"></script>
+  <script src="js/cloud_sync.js?v=20261031_1200"></script>
+  <script src="js/month_calendar.js?v=20261031_1200"></script>
+  <script src="js/scheduler.js?v=20261031_1200"></script>
+  <script src="js/roster.js?v=20261031_1200"></script>
+  <script src="js/common.js?v=20261031_1200"></script>
+  <script src="js/audit.js?v=20261031_1200"></script>
+  <script src="js/store.js?v=20261031_1200"></script>
+  <script src="js/admin.js?v=20261031_1200"></script>
 </body>
 </html>

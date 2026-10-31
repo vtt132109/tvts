@@ -260,6 +260,59 @@ runTest('Capacity 1 + ca đặc biệt 3: 9 ca 1 người + 1 ca 3 người mỗ
   });
 });
 
+runTest('Any-role 2 người/ca: 2 CTV cùng vai trò vẫn được xếp đủ, không cần Cũ + Mới', () => {
+  const allShifts = SHIFTS.map(s => s.id);
+  const sameRole = [
+    { id: 'any_a', studentId: '90000001', fullName: 'Any A', role: 'new', availableShifts: allShifts },
+    { id: 'any_b', studentId: '90000002', fullName: 'Any B', role: 'new', availableShifts: allShifts },
+    { id: 'any_c', studentId: '90000003', fullName: 'Any C', role: 'new', availableShifts: allShifts },
+    { id: 'any_d', studentId: '90000004', fullName: 'Any D', role: 'new', availableShifts: allShifts }
+  ];
+  const week = window.SchedulerEngine.solveWeeklyScheduleAnyRole(sameRole, [], {}, 2);
+  assert.strictEqual(week.summary.fullShifts, 10,
+    `Cả 10 ca phải đủ 2 người dù tất cả cùng vai trò (thực tế ${week.summary.fullShifts})`);
+  Object.values(week.scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 2);
+    assert.ok(slot.oldMember && slot.newMember, 'Mỗi ca phải có đủ 2 người bất kỳ');
+    assert.strictEqual(slot.thirdMember, null);
+  });
+  const seen = new Set();
+  Object.entries(week.scheduleTable).forEach(([id, slot]) => {
+    const day = id.split('_')[0];
+    [slot.oldMember, slot.newMember].forEach(member => {
+      const key = `${member.id}@${day}`;
+      assert.ok(!seen.has(key), `${member.fullName} bị xếp 2 ca cùng ngày ${day}`);
+      seen.add(key);
+    });
+  });
+});
+
+runTest('Any-role 2 người/ca: mọi người đều role old vẫn xếp đủ 2 người', () => {
+  const allShifts = SHIFTS.map(s => s.id);
+  const sameRole = ['a', 'b', 'c', 'd'].map((k, idx) => ({
+    id: `old_${k}`, studentId: `8000000${idx}`, fullName: `Old ${k.toUpperCase()}`,
+    role: 'old', availableShifts: allShifts
+  }));
+  const week = window.SchedulerEngine.solveWeeklyScheduleAnyRole(sameRole, [], {}, 2);
+  assert.strictEqual(week.summary.fullShifts, 10,
+    'Không được để ca trống chỉ vì thiếu nhóm Tập Sự');
+});
+
+runTest('Any-role 1 người/ca: chọn 1 người bất kỳ', () => {
+  const allShifts = SHIFTS.map(s => s.id);
+  const sameRole = ['a', 'b', 'c', 'd'].map((k, idx) => ({
+    id: `one_${k}`, studentId: `7000000${idx}`, fullName: `One ${k.toUpperCase()}`,
+    role: idx % 2 === 0 ? 'old' : 'new', availableShifts: allShifts
+  }));
+  const week = window.SchedulerEngine.solveWeeklyScheduleAnyRole(sameRole, [], {}, 1);
+  assert.strictEqual(week.summary.fullShifts, 10);
+  Object.values(week.scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 1);
+    assert.ok(slot.oldMember);
+    assert.strictEqual(slot.newMember, null);
+  });
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');

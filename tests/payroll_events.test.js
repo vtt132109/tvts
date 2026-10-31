@@ -1086,7 +1086,9 @@ runTest('5.4: Xuất báo cáo HTML định dạng chuẩn để nhúng vào mod
   assert.ok(html.includes('<table'), 'Phải sinh ra thẻ <table>');
   assert.ok(html.includes('2102001'), 'Phải có mã số sinh viên');
   assert.ok(html.includes('Đặng Tuấn Anh'), 'Phải có họ tên sinh viên');
-  assert.ok(html.includes('Người Cũ'), 'Phải hiển thị nhãn Người Cũ');
+  assert.ok(!html.includes('Người Cũ') && !html.includes('Phân Loại'),
+    'Báo cáo không còn cột/nhãn phân loại Chính Thức/Tập Sự');
+  assert.ok(html.includes('Trực VP'), 'Phải có cột số ca trực văn phòng');
 });
 
 runTest('5.5: Xử lý bản sao lưu Tháng 10 không có sự kiện nào (Edge case: events rỗng)', () => {
