@@ -19,6 +19,8 @@
     REG_CONFIG: 'ts_scheduler_reg_config',
     ADMIN_USERS: 'ts_scheduler_admin_users',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
+    CLAIM_REQUESTS: 'ts_scheduler_claim_requests_v1',
+    CLAIM_REJECTED: 'ts_scheduler_claim_rejected_v1',
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
     EVENTS: 'ts_scheduler_events_v1',
     ALL_MONTHS: 'ts_scheduler_all_months_v1',
@@ -2535,17 +2537,49 @@
     });
 
     let mergedCount = 0;
+    const pendingClaims = [];
     Object.keys(remoteMap || {}).forEach(key => {
       const req = remoteMap[key];
       if (!req || typeof req !== 'object') return;
       const mssv = String(req.mssv || key || '');
-      const idx = indexByMssv.get(mssv.toLowerCase());
-      if (idx === undefined) return;
+      if (!mssv) return;
 
       // Ca rảnh được đăng ký LẠI TỪ ĐẦU mỗi tháng. Đăng ký của tháng khác
       // không được ghi đè ca rảnh của tháng đang quản lý.
       const reqMonthKey = monthKeyOf(req.month);
       if (targetMonthKey && reqMonthKey && reqMonthKey !== targetMonthKey) return;
+
+      const idx = indexByMssv.get(mssv.toLowerCase());
+      if (idx === undefined) {
+        // MSSV chưa có trong danh sách: KHÔNG tự thêm. Đưa vào hàng chờ để
+        // cán bộ xác minh, tránh người lạ chiếm MSSV và tự đưa ca rảnh vào lịch.
+        const safeShifts = sanitizeWeeklyAvailability(req.shifts);
+        const safeAvailable = sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
+        const hasWeeklyShifts = Boolean(safeShifts)
+          && WEEK_KEYS.some(week => (safeShifts[week] || []).length > 0);
+        const union = [];
+        if (safeShifts) {
+          WEEK_KEYS.forEach(week => {
+            (safeShifts[week] || []).forEach(shiftId => {
+              if (!union.includes(shiftId)) union.push(shiftId);
+            });
+          });
+        }
+        const availableShifts = safeAvailable && safeAvailable.length ? safeAvailable : union;
+        if (!hasWeeklyShifts && availableShifts.length === 0) return;
+        const submittedAt = typeof req.submittedAt === 'string'
+          ? req.submittedAt.slice(0, 40) : '';
+        pendingClaims.push({
+          mssv,
+          fullName: typeof req.fullName === 'string' ? req.fullName.trim().slice(0, 100) : '',
+          monthKey: reqMonthKey,
+          shifts: safeShifts || { 1: [], 2: [], 3: [], 4: [] },
+          availableShifts,
+          submittedAt,
+          uid: typeof req.uid === 'string' ? req.uid.slice(0, 128) : ''
+        });
+        return;
+      }
 
       const current = students[idx];
       // Mốc thời gian do client gửi -> chặn tương lai để không "khoá" bản ghi
@@ -2593,7 +2627,7 @@
       mergedCount++;
     });
 
-    return { students, mergedCount };
+    return { students, mergedCount, pendingClaims };
   }
 
   /**
@@ -2614,6 +2648,34 @@
           localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(merged.students));
           touchedKeys.push(STORAGE_KEYS.STUDENTS);
           mergedRegistrations = merged.mergedCount;
+        }
+        if (Array.isArray(merged.pendingClaims) && merged.pendingClaims.length > 0) {
+          const existing = readStorageJson(STORAGE_KEYS.CLAIM_REQUESTS, []);
+          const rejected = readStorageJson(STORAGE_KEYS.CLAIM_REJECTED, []);
+          const rejectedSet = new Set(
+            (Array.isArray(rejected) ? rejected : []).map(item => String(item))
+          );
+          const map = new Map();
+          (Array.isArray(existing) ? existing : []).forEach(claim => {
+            if (claim && claim.mssv) map.set(String(claim.mssv), claim);
+          });
+          let changed = false;
+          merged.pendingClaims.forEach(claim => {
+            const key = String(claim.mssv || '');
+            if (!key || rejectedSet.has(key)) return;
+            const prev = map.get(key);
+            if (!prev || String(claim.submittedAt || '') >= String(prev.submittedAt || '')) {
+              map.set(key, claim);
+              changed = true;
+            }
+          });
+          if (changed) {
+            const list = Array.from(map.values())
+              .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')))
+              .slice(0, 200);
+            localStorage.setItem(STORAGE_KEYS.CLAIM_REQUESTS, JSON.stringify(list));
+            touchedKeys.push(STORAGE_KEYS.CLAIM_REQUESTS);
+          }
         }
       }
 

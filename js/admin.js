@@ -37,6 +37,8 @@
     AUTH_TOKEN: 'ts_admin_authenticated',
     CURRENT_USER: 'ts_admin_user_data',
     SWAP_REQUESTS: 'ts_scheduler_swap_requests',
+    CLAIM_REQUESTS: 'ts_scheduler_claim_requests_v1',
+    CLAIM_REJECTED: 'ts_scheduler_claim_rejected_v1',
     WEB_BACKUPS: 'ts_scheduler_web_backups_v1',
     EVENTS: 'ts_scheduler_events_v1',
     ALL_MONTHS: 'ts_scheduler_all_months_v1',
@@ -642,14 +644,51 @@
       isAuth = false;
     }
     if (isAuth) {
-      state.isAuthenticated = true;
       try {
         const storedUser = sessionStorage.getItem(STORAGE_KEYS.CURRENT_USER);
         if (storedUser) state.currentUser = JSON.parse(storedUser);
       } catch (err) {
         state.currentUser = state.adminUsers[0] || null;
       }
-      unlockAdminDashboard();
+
+      // Không tin mỗi cờ sessionStorage: nó có thể bị đặt tay hoặc còn sót
+      // sau khi phiên Firebase/Google đã hết. Chỉ mở dashboard khi có phiên
+      // Google thật, hoặc trong môi trường test có cờ riêng.
+      const currentAuthUser = window.CloudSyncManager
+        && typeof window.CloudSyncManager.getCurrentAuthUser === 'function'
+        ? window.CloudSyncManager.getCurrentAuthUser()
+        : null;
+      const hasGoogleSession = !!(currentAuthUser && !currentAuthUser.isAnonymous);
+      if (isTestEnv() || hasGoogleSession) {
+        state.isAuthenticated = true;
+        unlockAdminDashboard();
+      } else {
+        state.isAuthenticated = false;
+        lockAdminDashboard();
+        const whenReady = window.CloudSyncManager
+          && typeof window.CloudSyncManager.whenAuthReady === 'function'
+          ? window.CloudSyncManager.whenAuthReady
+          : null;
+        if (whenReady) {
+          // Firebase có thể đang khôi phục phiên Google sau khi tải lại.
+          whenReady(2000).then(user => {
+            if (user && !user.isAnonymous && !state.isAuthenticated) {
+              state.isAuthenticated = true;
+              unlockAdminDashboard();
+            } else if (!state.isAuthenticated) {
+              clearAdminSession();
+              lockAdminDashboard();
+            }
+          }).catch(() => {
+            if (!state.isAuthenticated) {
+              clearAdminSession();
+              lockAdminDashboard();
+            }
+          });
+        } else {
+          clearAdminSession();
+        }
+      }
     } else {
       lockAdminDashboard();
     }
@@ -687,7 +726,8 @@
 
       if (touched(STORAGE_KEYS.STUDENTS) || touched(STORAGE_KEYS.MONTH_SCHEDULE)
         || touched(STORAGE_KEYS.ALL_MONTHS) || touched(STORAGE_KEYS.ACTIVE_MONTH)
-        || touched(STORAGE_KEYS.SCHEDULE) || touched(STORAGE_KEYS.TWO_WEEK_SCHEDULE)) {
+        || touched(STORAGE_KEYS.SCHEDULE) || touched(STORAGE_KEYS.TWO_WEEK_SCHEDULE)
+        || touched(STORAGE_KEYS.CLAIM_REQUESTS)) {
         loadData();
         renderAll();
         if (typeof window.renderEventsTable === 'function') window.renderEventsTable();
@@ -3473,6 +3513,16 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       }
     });
 
+    // Duyệt / từ chối yêu cầu MSSV mới bằng data-attribute + event delegation.
+    document.getElementById('pending-claim-box')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-claim-action]');
+      if (!btn) return;
+      handlePendingClaimAction(
+        btn.getAttribute('data-claim-action'),
+        btn.getAttribute('data-claim-mssv')
+      );
+    });
+
 elements.btnBulkClearShifts?.addEventListener('click', async () => {
       const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
       if (selectedIds.length === 0) {
@@ -3799,8 +3849,136 @@ function renderStudentRegistrationSummary() {
   }
 }
 
+function readPendingClaims() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLAIM_REQUESTS) || '[]');
+    return Array.isArray(raw) ? raw.filter(c => c && c.mssv) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writePendingClaims(list) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CLAIM_REQUESTS, JSON.stringify(list));
+  } catch (e) { /* hết chỗ: bỏ qua, lần kéo sau sẽ có lại */ }
+}
+
+function renderPendingClaims() {
+  const box = document.getElementById('pending-claim-box');
+  if (!box) return;
+  const currentKey = `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`;
+  const claims = readPendingClaims().filter(
+    claim => !claim.monthKey || claim.monthKey === currentKey
+  );
+  if (claims.length === 0) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div style="border: 1px solid #fcd34d; background: #fffbeb; border-radius: var(--radius-md); padding: 0.9rem 1rem; margin-bottom: 1rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.65rem;">
+        <div style="font-weight: 800; color: #92400e; font-size: 0.9rem;">⏳ Yêu cầu MSSV mới chờ duyệt (${claims.length})</div>
+        <div style="font-size: 0.76rem; color: #a16207;">Chỉ thêm vào danh sách sau khi cán bộ xác minh đúng người.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        ${claims.map(claim => {
+          const name = claim.fullName || 'Chưa có họ tên';
+          const shiftCount = Array.isArray(claim.availableShifts) ? claim.availableShifts.length : 0;
+          const month = claim.monthKey || 'không rõ tháng';
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; background: #fff; border: 1px solid #fde68a; border-radius: 8px; padding: 0.55rem 0.7rem;">
+              <div style="min-width: 0;">
+                <strong style="color: #78350f;">${escapeHtml(name)}</strong>
+                <span style="color: #92400e; font-size: 0.82rem;"> · MSSV <code>${escapeHtml(claim.mssv)}</code> · ${escapeHtml(month)} · ${shiftCount} lượt ca</span>
+                ${claim.submittedAt ? `<div style="font-size: 0.72rem; color: #a16207;">Gửi lúc ${escapeHtml(claim.submittedAt)}</div>` : ''}
+              </div>
+              <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-primary btn-sm" data-claim-action="approve" data-claim-mssv="${escapeHtml(claim.mssv)}" style="font-weight: 700;">✓ Duyệt &amp; thêm CTV</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-claim-action="reject" data-claim-mssv="${escapeHtml(claim.mssv)}" style="font-weight: 700; color: #b91c1c;">Từ chối</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function approvePendingClaim(mssv) {
+  const key = String(mssv || '');
+  const claims = readPendingClaims();
+  const claim = claims.find(c => String(c.mssv) === key);
+  if (!claim) {
+    showToast('Không tìm thấy yêu cầu MSSV này.', 'warning');
+    return false;
+  }
+  const currentKey = `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`;
+  if (claim.monthKey && claim.monthKey !== currentKey) {
+    showToast(`Yêu cầu này thuộc ${claim.monthKey}, không phải tháng đang mở.`, 'warning');
+    return false;
+  }
+
+  const existing = state.students.find(
+    s => String(s.studentId || '').toLowerCase() === key.toLowerCase()
+  );
+  const shifts = claim.shifts && typeof claim.shifts === 'object'
+    ? claim.shifts
+    : { 1: [], 2: [], 3: [], 4: [] };
+  const available = Array.isArray(claim.availableShifts) ? claim.availableShifts : [];
+  if (existing) {
+    existing.monthlyAvailableShifts = shifts;
+    existing.availableShifts = available;
+    existing.updatedAt = Date.now();
+  } else {
+    state.students.push({
+      id: 'claim_' + Date.now(),
+      studentId: key,
+      fullName: claim.fullName || ('CTV ' + key),
+      role: 'new',
+      availableShifts: available,
+      monthlyAvailableShifts: shifts,
+      updatedAt: Date.now()
+    });
+  }
+  writePendingClaims(claims.filter(c => String(c.mssv) !== key));
+  saveStudents();
+  renderAll();
+  showToast(`Đã duyệt MSSV ${key} và thêm vào danh sách CTV.`, 'success', 6000);
+  auditLog('STUDENT_ADD', `Duyệt MSSV mới ${key} từ yêu cầu đăng ký`);
+  return true;
+}
+
+function rejectPendingClaim(mssv) {
+  const key = String(mssv || '');
+  let rejected = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLAIM_REJECTED) || '[]');
+    rejected = Array.isArray(raw) ? raw.map(String) : [];
+  } catch (e) { rejected = []; }
+  if (!rejected.includes(key)) rejected.push(key);
+  try {
+    localStorage.setItem(STORAGE_KEYS.CLAIM_REJECTED, JSON.stringify(rejected.slice(0, 500)));
+  } catch (e) {}
+  const claims = readPendingClaims();
+  writePendingClaims(claims.filter(c => String(c.mssv) !== key));
+  renderPendingClaims();
+  showToast(`Đã từ chối yêu cầu MSSV ${key}.`, 'info', 5000);
+  auditLog('STUDENT_DELETE', `Từ chối yêu cầu MSSV mới ${key}`);
+  return true;
+}
+
+function handlePendingClaimAction(action, mssv) {
+  if (action === 'approve') approvePendingClaim(mssv);
+  else if (action === 'reject') rejectPendingClaim(mssv);
+}
+
 function renderStudentTable() {
     renderStudentRegistrationSummary();
+    renderPendingClaims();
     if (!elements.studentTableBody) return;
 
     let filtered = [...state.students];
@@ -4166,7 +4344,7 @@ function renderStudentTable() {
       : '';
 
     return `
-      <div class="grid-cell shift-duty-slot">
+      <div class="grid-cell shift-duty-slot" data-shift-id="${escapeHtml(shiftId)}"${weekNum ? ` data-week-number="${weekNum}"` : ''}>
         <div class="shift-slot-header">
           <span>${escapeHtml(info.dayName || '')}</span>
           ${statusPill}
@@ -8500,6 +8678,9 @@ async function handleDeleteEvent(id) {
     renderStudentRegistrationSummary,
     getRegisteredShiftCount,
     normalizeConfiguredMonthCapacity,
+    renderPendingClaims,
+    approvePendingClaim,
+    rejectPendingClaim,
     getState: () => ({ ...state })
   };
 
