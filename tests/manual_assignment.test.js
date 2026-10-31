@@ -585,6 +585,43 @@ runTest('Khởi tạo kỳ mới: sổ tay gán ca của tháng đó cũng bị 
     'Sau khi xoá bảng phân công phải xoá sổ tay gán ca của tháng để auto không áp lại người cũ');
 });
 
+runTest('Trang Quản Lý Sinh Viên: hiển thị số CTV đã đăng ký ca tháng này', () => {
+  seed();
+  const students = [
+    {
+      id: 'reg_1', studentId: '2102001', fullName: 'CTV Một', role: 'new',
+      monthlyAvailableShifts: {
+        1: ['T2_S'], 2: [], 3: [], 4: []
+      }
+    },
+    {
+      id: 'reg_2', studentId: '2211005', fullName: 'CTV Hai', role: 'new',
+      monthlyAvailableShifts: {
+        1: ['T2_S', 'T3_S'], 2: ['T4_S'], 3: [], 4: []
+      }
+    }
+  ];
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 10, year: 2026 }));
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-10');
+  ['student-reg-count', 'student-reg-total', 'student-reg-month-label', 'student-reg-shifts']
+    .forEach(id => mockEl(id));
+  H.loadData();
+  H.renderStudentRegistrationSummary();
+
+  assert.strictEqual(els['student-reg-count'].textContent, '2', 'Phải đếm 2 CTV có ca rảnh');
+  assert.strictEqual(els['student-reg-total'].textContent, '2', 'Tổng danh sách là 2 CTV');
+  assert.strictEqual(els['student-reg-month-label'].textContent, '10/2026');
+  assert.strictEqual(els['student-reg-shifts'].textContent, 'Tổng lượt ca rảnh: 4');
+
+  // Dữ liệu ca rảnh của tháng khác không được tính cho tháng đang mở.
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  H.renderStudentRegistrationSummary();
+  assert.strictEqual(els['student-reg-count'].textContent, '0', 'Không được đếm dữ liệu tháng khác');
+  assert.ok(els['student-reg-shifts'].textContent.includes('Chưa có dữ liệu'),
+    'Phải báo chưa có dữ liệu ca rảnh cho tháng này');
+});
+
 runTest('Cấu hình tháng 1 người/ca: mỗi ca 1 người, gán tay 1 người được giữ sau auto', () => {
   seed();
   const students = JSON.parse(LS.getItem('ts_scheduler_students'));
@@ -817,6 +854,18 @@ runTest('Giao diện: có nút Số người/ca, modal chỉ chọn mức nền,
   assert.ok(js.includes('saveMonthCapacity'), 'Phải có hàm lưu cấu hình tháng');
   assert.ok(js.includes('slot.thirdMember'), 'Phải hỗ trợ người thêm thứ 3');
   assert.ok(!/shiftCapacityThird/.test(js), 'Không còn đọc checkbox ca 3 người đã bị gỡ');
+});
+
+runTest('Giao diện Quản Lý Sinh Viên: có ô thống kê số CTV đã đăng ký ca tháng này', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+  const js = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
+  ['student-registration-summary', 'student-reg-count', 'student-reg-total',
+    'student-reg-month-label', 'student-reg-shifts'].forEach(id => {
+    assert.ok(html.includes(`id="${id}"`), `Thiếu phần tử #${id}`);
+  });
+  assert.ok(html.includes('Sinh viên đã đăng ký ca tháng'), 'Phải có nhãn thống kê đăng ký');
+  assert.ok(js.includes('renderStudentRegistrationSummary'),
+    'Phải có hàm cập nhật thống kê đăng ký tháng');
 });
 
 runTest('Xóa tuần: chỉ xóa người trong tuần đang xem, giữ tuần khác và sổ tay tuần khác', () => {
