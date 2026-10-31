@@ -1015,14 +1015,52 @@ runTest('Thống kê số ca: tính đủ cả tháng, không chỉ tuần đang
 
   const html = els['fairness-list-old'].innerHTML;
   const counts = {};
-  html.split('<div class="fairness-item">').slice(1).forEach(chunk => {
+  html.split(/(?=<div class="fairness-item(?: |"))/).slice(1).forEach(chunk => {
     const name = chunk.includes('Nguyen Van A') ? 's1'
       : chunk.includes('Tran Thi B') ? 's2' : null;
-    const m = chunk.match(/>(\d+) ca</);
+    const m = chunk.match(/class="fairness-assigned[^"]*">(\d+) ca</);
     if (name && m) counts[name] = Number(m[1]);
   });
   assert.strictEqual(counts.s1, 3, 'Phải cộng dồn tuần 1 + tuần 2 = 3 ca, thực tế: ' + JSON.stringify(counts));
   assert.strictEqual(counts.s2, 1, 'Tran Thi B phải có 1 ca trong tháng, thực tế: ' + JSON.stringify(counts));
+});
+
+runTest('Thống kê số ca: hiện ca đăng ký và tô đỏ người có đăng ký nhưng chưa xếp ca', () => {
+  seed();
+  const schedule = {
+    month: 10,
+    year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: {
+          capacity: 2,
+          shiftId: 'T2_S',
+          oldMember: { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A' },
+          newMember: null,
+          thirdMember: null,
+          status: 'partial'
+        }
+      }
+    }]
+  };
+  LS.setItem('ts_scheduler_month_result', JSON.stringify(schedule));
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-10');
+  H.loadData();
+  H.renderFairness();
+
+  const html = els['fairness-list-old'].innerHTML;
+  const chunks = html.split(/(?=<div class="fairness-item(?: |"))/);
+  const s1 = chunks.find(c => c.includes('Nguyen Van A'));
+  const s2 = chunks.find(c => c.includes('Tran Thi B'));
+
+  assert.ok(s1 && !s1.includes('fairness-item--alert'),
+    's_1 đã được xếp ca thì không được tô đỏ');
+  assert.ok(s2 && s2.includes('fairness-item--alert'),
+    's_2 có đăng ký nhưng chưa được xếp ca phải tô đỏ. HTML: ' + s2);
+  assert.ok(s2 && s2.includes('Chưa xếp ca nào'), 'Phải có nhãn giải thích chưa xếp ca');
+  assert.ok(s2 && /Đăng ký\s*<strong[^>]*>1 ca<\/strong>/.test(s2),
+    'Phải hiện số ca đăng ký của s_2, thực tế: ' + s2);
 });
 
 runTest('Yêu cầu MSSV mới: chờ duyệt, duyệt thì thêm CTV và xóa khỏi hàng chờ', () => {

@@ -4512,6 +4512,10 @@ function renderStudentTable() {
     // Thống kê phải tính cho CẢ THÁNG (4 tuần). Trước đây lấy
     // state.currentSchedule.studentStats nên chỉ phản ánh tuần đang xem.
     const monthlyCounts = computeMonthlyAssignedCounts();
+    // Số ca đăng ký chỉ có nghĩa khi khoá tháng khớp tháng đang xem.
+    const currentMonthKey = `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`;
+    const availabilityMonthKey = readAvailabilityMonthKey();
+    const hasMonthData = !availabilityMonthKey || availabilityMonthKey === currentMonthKey;
     // Không còn chia Chính Thức/Tập Sự: tất cả CTV được theo dõi chung.
     const allMembers = state.students
       .filter(Boolean)
@@ -4526,19 +4530,28 @@ function renderStudentTable() {
 
       container.innerHTML = members.map(m => {
         const assigned = monthlyCounts[m.id] || 0;
+        const registered = hasMonthData ? getRegisteredShiftCount(m) : 0;
+        // Có đăng ký mà chưa được xếp ca nào trong tháng -> báo đỏ để admin xử lý.
+        const needsAssignment = registered > 0 && assigned === 0;
         const fillPercentage = Math.min(100, Math.round((assigned / maxAssigned) * 100));
 
         return `
-          <div class="fairness-item">
+          <div class="fairness-item${needsAssignment ? ' fairness-item--alert' : ''}">
             <div class="fairness-item-left">
-              <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">${escapeHtml(m.fullName)}</span>
-              <span style="font-size: 0.72rem; color: var(--text-muted);">(${escapeHtml(m.studentId)})</span>
+              <div class="fairness-item-person">
+                <span class="fairness-name">${escapeHtml(m.fullName)}</span>
+                <span class="fairness-id">(${escapeHtml(m.studentId)})</span>
+              </div>
+              <div class="fairness-item-meta">
+                Đăng ký <strong class="${needsAssignment ? 'is-danger' : ''}">${registered} ca</strong>
+                ${needsAssignment ? '<span class="fairness-unassigned">Chưa xếp ca nào</span>' : ''}
+              </div>
             </div>
             <div class="fairness-item-count">
               <div class="shift-progress-bar">
                 <div class="shift-progress-fill" style="width: ${fillPercentage}%; background: ${roleColor};"></div>
               </div>
-              <strong style="color: var(--text-main); font-size: 0.95rem; width: 45px; text-align: right;">${assigned} ca</strong>
+              <strong class="fairness-assigned${needsAssignment ? ' is-danger' : ''}">${assigned} ca</strong>
             </div>
           </div>
         `;
