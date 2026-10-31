@@ -320,6 +320,27 @@ runTest('a11y_modal.js disconnect observer trên pagehide và guard window', () 
 });
 
 // ===========================================================================
+// TEST 7b: Public payload chỉ có allMonthSchedules + activeMonth
+// ===========================================================================
+runTest('Đọc được lịch tháng đang áp dụng từ allMonthSchedules khi thiếu monthSchedule', () => {
+  const archived = {
+    month: 11,
+    year: 2026,
+    weeks: [{ weekNumber: 1, scheduleTable: { T2_S: { status: 'full' } } }]
+  };
+  const { window: w } = bootStudentPortal({
+    store: {
+      ts_scheduler_active_month_v1: JSON.stringify({ month: 11, year: 2026 }),
+      ts_scheduler_all_months_v1: JSON.stringify({ '2026-11': archived })
+    }
+  });
+  const schedule = w.studentTestHelper.readMonthScheduleStore();
+  assert.ok(schedule, 'Phải tìm được lịch trong allMonthSchedules');
+  assert.strictEqual(schedule.month, 11);
+  assert.strictEqual(schedule.weeks[0].scheduleTable.T2_S.status, 'full');
+});
+
+// ===========================================================================
 // TEST 8: Ca nền 1 người vẫn hiển thị đủ người thêm thứ 2/thứ 3
 // ===========================================================================
 runTest('Ca 1 người/ca có người thêm: hiển thị đủ 3 người, trạng thái đủ + số thêm', () => {
