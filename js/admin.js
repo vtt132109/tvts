@@ -6363,7 +6363,6 @@ window.adminDeleteStudent = async function(studentId) {
 
     const unmatched = [];
     const noShifts = [];
-    const skippedNewer = [];
 
     byMssv.forEach(entry => {
       const student = (state.students || []).find(
@@ -6389,17 +6388,9 @@ window.adminDeleteStudent = async function(studentId) {
         return;
       }
 
-      const currentHasWeekly = student.monthlyAvailableShifts
-        && typeof student.monthlyAvailableShifts === 'object'
-        && Object.values(student.monthlyAvailableShifts).some(
-          list => Array.isArray(list) && list.length > 0
-        );
-      if (entry.stamp && currentHasWeekly && entry.stamp <= (Number(student.updatedAt) || 0)) {
-        report.stats.skippedNewerRows++;
-        skippedNewer.push(entry.studentId);
-        return;
-      }
-
+      // Admin chủ động nhập file mới: file phải thắng dữ liệu ca rảnh đang có.
+      // Trước đây phản hồi cũ hơn updatedAt bị bỏ qua, khiến nhập file mới
+      // nhưng 13 CTV không được cập nhật và F5 trông như "quay về như cũ".
       report.candidates.push({
         fullName: entry.fullName,
         studentId: entry.studentId,
@@ -6427,9 +6418,6 @@ window.adminDeleteStudent = async function(studentId) {
     }
     if (noShifts.length > 0) {
       report.warnings.push(`Bỏ qua ${noShifts.length} người không chọn ca nào trong tháng ${targetMonth}/${targetYear}.`);
-    }
-    if (skippedNewer.length > 0) {
-      report.warnings.push(`Bỏ qua ${skippedNewer.length} người đã có ca rảnh cập nhật sau thời điểm form: ${skippedNewer.slice(0, 5).join(', ')}${skippedNewer.length > 5 ? '…' : ''}.`);
     }
     if (report.candidates.length === 0) {
       report.errors.push(`Không có CTV nào có ca rảnh trong tháng ${targetMonth}/${targetYear} để nhập.`);
