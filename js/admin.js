@@ -3976,6 +3976,28 @@ function handlePendingClaimAction(action, mssv) {
   else if (action === 'reject') rejectPendingClaim(mssv);
 }
 
+function computeMonthlyAssignedCounts() {
+  const counts = {};
+  const weeks = (state.monthSchedule && Array.isArray(state.monthSchedule.weeks))
+    ? state.monthSchedule.weeks
+    : (state.currentSchedule ? [state.currentSchedule] : []);
+  weeks.forEach(week => {
+    Object.values((week && week.scheduleTable) || {}).forEach(slot => {
+      if (!slot) return;
+      const ids = new Set(
+        [slot.oldMember, slot.newMember, slot.thirdMember]
+          .filter(Boolean)
+          .map(member => member.id)
+          .filter(Boolean)
+      );
+      ids.forEach(id => {
+        counts[id] = (counts[id] || 0) + 1;
+      });
+    });
+  });
+  return counts;
+}
+
 function renderStudentTable() {
     renderStudentRegistrationSummary();
     renderPendingClaims();
@@ -4029,11 +4051,12 @@ function renderStudentTable() {
     }
 
     const assignedCounts = state.currentSchedule?.studentStats || {};
-    const combinedStats = state.twoWeekSchedule?.combinedStats || {};
+    const monthlyCounts = computeMonthlyAssignedCounts();
+    const hasMonthSchedule = !!(state.monthSchedule && Array.isArray(state.monthSchedule.weeks));
 
     elements.studentTableBody.innerHTML = filtered.map((s, index) => {
       const currentAssigned = assignedCounts[s.id]?.assignedCount || 0;
-      const totalTwoWeeks = combinedStats[s.id]?.totalCount || currentAssigned;
+      const monthlyAssigned = monthlyCounts[s.id] || 0;
       
       const shiftTags = (s.availableShifts || []).map(id => {
         const info = SHIFT_MAP[id];
@@ -4056,8 +4079,9 @@ function renderStudentTable() {
             </div>
           </td>
           <td>
-            <strong style="color: var(--primary); font-size: 1rem;">${currentAssigned}</strong> ca tuần này
-            ${state.twoWeekSchedule ? `<div style="font-size: 0.72rem; color: var(--text-muted);">(Tổng 2 tuần: ${totalTwoWeeks} ca)</div>` : ''}
+            <strong style="color: var(--primary); font-size: 1rem;">${hasMonthSchedule ? monthlyAssigned : currentAssigned}</strong>
+            ${hasMonthSchedule ? 'ca tháng này' : 'ca tuần này'}
+            ${hasMonthSchedule ? `<div style="font-size: 0.72rem; color: var(--text-muted);">Tuần này: ${currentAssigned} ca</div>` : ''}
           </td>
           <td>
             <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
@@ -8677,6 +8701,7 @@ async function handleDeleteEvent(id) {
     renderStudentTable,
     renderStudentRegistrationSummary,
     getRegisteredShiftCount,
+    computeMonthlyAssignedCounts,
     normalizeConfiguredMonthCapacity,
     renderPendingClaims,
     approvePendingClaim,

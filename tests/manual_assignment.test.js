@@ -924,6 +924,44 @@ runTest('Giao diện Quản Lý Sinh Viên: có ô thống kê số CTV đã đ�
     'Phải có hàm cập nhật thống kê đăng ký tháng');
 });
 
+runTest('Bảng CTV: đếm đúng số ca đã xếp trong cả tháng cho từng người', () => {
+  seed();
+  const s1 = { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A' };
+  const s2 = { id: 's_2', studentId: '2211005', fullName: 'Tran Thi B' };
+  const slot = (oldMember, newMember, thirdMember) => ({
+    capacity: 2, oldMember: oldMember || null, newMember: newMember || null,
+    thirdMember: thirdMember || null, status: 'full'
+  });
+  const schedule = {
+    month: 10,
+    year: 2026,
+    weeks: [
+      {
+        weekNumber: 1,
+        scheduleTable: {
+          T2_S: slot(s1),
+          T3_S: slot(s1, s2),
+          T4_S: slot(s1, s2, s2)
+        }
+      },
+      {
+        weekNumber: 2,
+        scheduleTable: {
+          T2_S: slot(s1),
+          T3_S: slot(s2)
+        }
+      }
+    ]
+  };
+  LS.setItem('ts_scheduler_month_result', JSON.stringify(schedule));
+  H.loadData();
+
+  const counts = H.computeMonthlyAssignedCounts();
+  assert.strictEqual(counts.s_1, 4, 's_1 phải có 4 ca trong tháng');
+  assert.strictEqual(counts.s_2, 3,
+    's_2 phải có 3 ca, không nhân đôi khi vừa là người thêm vừa là người thứ 3 trong cùng ca');
+});
+
 runTest('Yêu cầu MSSV mới: chờ duyệt, duyệt thì thêm CTV và xóa khỏi hàng chờ', () => {
   seed();
   const claim = {
