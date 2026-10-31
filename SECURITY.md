@@ -350,3 +350,23 @@ với thông báo "MSSV này đã được một phiên khác đăng ký trướ
 
 Test canh: `tests/cloud_sync.test.js` mục **12.17b**, **18.1–18.8**.
 
+
+---
+
+## 11. P0 credential rotation — 2026-10-31
+
+Audit xác nhận file `data/admin_accounts.json` từng chứa `password`/`pin` plaintext
+trong lịch sử Git (các commit cũ), dù file đã bị xoá ở HEAD. Không in lại giá trị.
+
+Checklist bắt buộc trước khi coi là đã xử lý:
+
+1. Đổi toàn bộ mật khẩu/PIN từng xuất hiện trong các commit đó, kể cả nếu tài khoản
+   cục bộ hiện đã bị vô hiệu hoá. Không dùng lại giá trị cũ ở bất kỳ hệ thống nào.
+2. Kiểm tra các tài khoản Google staff trong `/staff_emails` và `/staff`; thu hồi
+   email/UID không còn thuộc Ban Tuyển Sinh.
+3. Nếu cần xoá vĩnh viễn khỏi lịch sử Git (thay đổi destructive, làm invalid clone cũ):
+   - Clone sạch, chạy `git filter-repo --path data/admin_accounts.json --invert-paths`.
+   - Kiểm tra lại bằng `git log --all -- data/admin_accounts.json`.
+   - Chỉ force-push khi chủ sở hữu đã đồng ý; sau đó thông báo cho mọi máy clone cũ.
+4. Bật CSP/SRI ở đợt hardening tiếp theo; hiện tại không thêm CSP `unsafe-inline` vì
+   trang còn nhiều inline handler và sẽ không tạo ra bảo vệ thực chất.
