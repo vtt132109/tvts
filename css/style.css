@@ -251,6 +251,17 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* Admin: header cuộn đi bình thường, không bám theo khi kéo xuống. */
+body.admin-page .app-header {
+  position: relative;
+  top: auto;
+}
+
+/* Admin: tắt hẳn thanh quick-action cố định (đã có cùng nút trong hero). */
+body.admin-page .sticky-hero-bar {
+  display: none !important;
+}
+
 .header-container {
   max-width: 1400px;
   margin: 0 auto;
