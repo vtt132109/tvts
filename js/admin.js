@@ -619,6 +619,7 @@
   }
 
   function initAdminPortal() {
+    buildWeeklyAvailabilityEditor();
     cacheDOMElements();
     initThemeToggle();
     loadAdminUsers();
@@ -2220,14 +2221,23 @@
         console.warn('[Admin] Không kiểm tra được tháng của ca rảnh:', e);
       }
 
-      // Nếu tháng đã có cấu hình 1/2 người/ca, chuẩn hoá lịch theo cấu hình
-      // ngay khi nạp để lưới/KPI/cổng sinh viên không lệch nhau.
-      if (state.monthSchedule) {
+      // Áp lại sổ tay gán ca (kể cả ô đã xoá = tombstone) sau khi nạp/kéo
+      // lịch, để ca vừa xoá không bị bản Cloud cũ làm sống lại sau F5.
+      if (state.monthSchedule && Array.isArray(state.monthSchedule.weeks)) {
+        try { reapplyManualSlots(state.monthSchedule); } catch (e) {
+          console.warn('[Admin] Không áp lại được sổ tay gán ca khi nạp dữ liệu:', e);
+        }
+
+        // Nếu tháng đã có cấu hình 1/2 người/ca, chuẩn hoá lịch theo cấu hình
+        // ngay khi nạp để lưới/KPI/cổng sinh viên không lệch nhau.
         const key = `${state.currentYear}-${String(state.currentMonth).padStart(2, '0')}`;
         if (readShiftCapacityMap()[key]) {
           normalizeConfiguredMonthCapacity(state.monthSchedule);
-          saveSchedule(false, { skipPush: true });
         }
+        state.monthSchedule.weeks.forEach(week => {
+          try { recomputeWeekStats(week, state.monthSchedule); } catch (e) {}
+        });
+        saveSchedule(false, { skipPush: true });
       }
 
       // Nhãn nút phải khớp cấu hình của tháng ngay khi dữ liệu được nạp/kéo về.
@@ -2669,7 +2679,7 @@ function runFullSchedule() {
       // Chuẩn hoá mức nền + trạng thái cho MỌI ô (engine cũ không gắn capacity),
       // đồng thời tính lại thống kê/tính công bằng ngay sau khi xếp.
       (monthResult.weeks || []).forEach(week => {
-        try { recomputeWeekStats(week); } catch (e) {}
+        try { recomputeWeekStats(week, monthResult); } catch (e) {}
       });
     }
 
@@ -3489,13 +3499,19 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
 
     elements.btnAdminQuickAll?.addEventListener('click', () => {
       elements.adminSlotCbs.forEach(cb => cb.checked = true);
+      updateStudentModalShiftSummary();
     });
     elements.btnAdminQuickClear?.addEventListener('click', () => {
       elements.adminSlotCbs.forEach(cb => cb.checked = false);
+      updateStudentModalShiftSummary();
     });
     elements.btnAdminModalClearShifts?.addEventListener('click', () => {
       elements.adminSlotCbs.forEach(cb => cb.checked = false);
+      updateStudentModalShiftSummary();
       showToast('Đã xóa tất cả ca chọn trong bảng (đưa về 0 ca). Bấm "Lưu Thông Tin" để hoàn tất.', 'info');
+    });
+    elements.adminSlotCbs.forEach(cb => {
+      cb.addEventListener('change', updateStudentModalShiftSummary);
     });
 
     // Bulk Multi-Select Actions (Task 2)
@@ -3815,6 +3831,62 @@ function getRegisteredShiftCount(student) {
  * Thống kê số CTV đã đăng ký ca rảnh cho tháng đang mở.
  * Không đếm dữ liệu ca rảnh còn sót của tháng khác.
  */
+function buildWeeklyAvailabilityEditor() {
+  const host = document.getElementById('weekly-availability-editor');
+  if (!host) return;
+  if (host.dataset && host.dataset.built === '1') return;
+  const days = [
+    { key: 'T2', label: 'T2' }, { key: 'T3', label: 'T3' }, { key: 'T4', label: 'T4' },
+    { key: 'T5', label: 'T5' }, { key: 'T6', label: 'T6' }
+  ];
+  const periods = [{ key: 'S', label: 'Sáng' }, { key: 'C', label: 'Chiều' }];
+  host.innerHTML = [1, 2, 3, 4].map(week => `
+    <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem 0.65rem; background: var(--bg-card);">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
+        <strong style="font-size: 0.84rem;">Tuần ${week}</strong>
+        <span id="admin-week-count-${week}" style="font-size: 0.72rem; color: #64748b; font-weight: 600;">0 ca</span>
+      </div>
+      <table class="matrix-table" style="width: 100%;" aria-label="Ca rảnh tuần ${week}">
+        <thead><tr><th style="font-size: 0.72rem;">Ca</th>${days.map(d => `<th style="font-size: 0.72rem;">${d.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${periods.map(period => `
+            <tr>
+              <td style="font-size: 0.72rem; font-weight: 700;">${period.label}</td>
+              ${days.map(day => {
+                const id = `${day.key}_${period.key}`;
+                return `<td style="text-align:center;"><input type="checkbox" id="admin-cb-w${week}-${id}" class="admin-slot-cb" data-week="${week}" value="${id}" aria-label="Tuần ${week}, ${period.label} ${day.label}"></td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `).join('');
+  if (host.dataset) host.dataset.built = '1';
+  updateStudentModalShiftSummary();
+}
+
+function updateStudentModalShiftSummary() {
+  const summary = document.getElementById('student-shift-summary');
+  if (!summary) return;
+  const checkboxes = document.querySelectorAll('.admin-slot-cb');
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  let total = 0;
+  checkboxes.forEach(cb => {
+    if (!cb.checked) return;
+    const week = parseInt(cb.dataset && cb.dataset.week, 10) || 1;
+    counts[week] = (counts[week] || 0) + 1;
+    total++;
+  });
+  const month = state.currentMonth || 10;
+  const year = state.currentYear || 2026;
+  summary.textContent = `Tháng ${String(month).padStart(2, '0')}/${year}: ${total} lượt ca đã đăng ký`;
+  [1, 2, 3, 4].forEach(week => {
+    const el = document.getElementById(`admin-week-count-${week}`);
+    if (el) el.textContent = `${counts[week] || 0} ca`;
+  });
+}
+
 function renderStudentRegistrationSummary() {
   const countEl = document.getElementById('student-reg-count');
   if (!countEl) return;
@@ -4262,7 +4334,7 @@ function renderStudentTable() {
           changed = true;
         }
       });
-      try { recomputeWeekStats(week); } catch (e) {}
+      try { recomputeWeekStats(week, schedule); } catch (e) {}
     });
     return changed;
   }
@@ -4927,6 +4999,7 @@ function renderStudentTable() {
     elements.inputAdminStudentId.value = '';
     if (elements.inputAdminPhone) elements.inputAdminPhone.value = '';
     elements.adminSlotCbs.forEach(cb => cb.checked = false);
+    updateStudentModalShiftSummary();
 
     const roleRadio = document.querySelector('input[name="adminStudentRole"][value="new"]');
     if (roleRadio) roleRadio.checked = true;
@@ -4948,10 +5021,18 @@ function renderStudentTable() {
     const roleRadio = document.querySelector(`input[name="adminStudentRole"][value="${student.role}"]`);
     if (roleRadio) roleRadio.checked = true;
 
-    const availSet = new Set(student.availableShifts || []);
+    // Hiển thị đúng ca rảnh của TỪNG TUẦN trong tháng, không chỉ danh sách
+    // 10 ca gộp — nếu không, sửa một ca sẽ âm thầm giữ nguyên dữ liệu tuần cũ.
+    const flat = new Set(student.availableShifts || []);
+    const weekly = (student.monthlyAvailableShifts && typeof student.monthlyAvailableShifts === 'object')
+      ? student.monthlyAvailableShifts
+      : { 1: [...flat], 2: [...flat], 3: [...flat], 4: [...flat] };
     elements.adminSlotCbs.forEach(cb => {
-      cb.checked = availSet.has(cb.value);
+      const week = parseInt(cb.dataset && cb.dataset.week, 10) || 1;
+      const list = weekly[week] || weekly[String(week)] || [];
+      cb.checked = Array.isArray(list) && list.includes(cb.value);
     });
+    updateStudentModalShiftSummary();
 
     elements.studentModal.classList.add('active');
   };
@@ -4969,10 +5050,16 @@ function renderStudentTable() {
     const phone = elements.inputAdminPhone ? elements.inputAdminPhone.value.trim() : '';
     const role = document.querySelector('input[name="adminStudentRole"]:checked')?.value || 'new';
 
-    const availableShifts = [];
+    const weeklyShifts = { 1: [], 2: [], 3: [], 4: [] };
     elements.adminSlotCbs.forEach(cb => {
-      if (cb.checked) availableShifts.push(cb.value);
+      if (!cb.checked) return;
+      const week = parseInt(cb.dataset && cb.dataset.week, 10) || 1;
+      if (!weeklyShifts[week]) weeklyShifts[week] = [];
+      if (!weeklyShifts[week].includes(cb.value)) weeklyShifts[week].push(cb.value);
     });
+    const availableShifts = Array.from(new Set(
+      Object.values(weeklyShifts).flat()
+    ));
 
     if (!fullName || !studentId) {
       showToast('Vui lòng nhập đầy đủ Họ tên và MSSV!', 'error');
@@ -4983,10 +5070,6 @@ function renderStudentTable() {
       const idx = state.students.findIndex(s => s.id === editId);
       if (idx !== -1) {
         const studentToUpdate = state.students[idx];
-        const monthlyShifts = (availableShifts.length === 0)
-          ? { 1: [], 2: [], 3: [], 4: [] }
-          : (studentToUpdate.monthlyAvailableShifts || { 1: [...availableShifts], 2: [...availableShifts], 3: [...availableShifts], 4: [...availableShifts] });
-
         state.students[idx] = {
           ...studentToUpdate,
           fullName,
@@ -4994,7 +5077,7 @@ function renderStudentTable() {
           phone,
           role,
           availableShifts,
-          monthlyAvailableShifts: monthlyShifts,
+          monthlyAvailableShifts: weeklyShifts,
           updatedAt: Date.now()
         };
         showToast(`Đã cập nhật sinh viên ${fullName}!`, 'success');
@@ -5015,7 +5098,7 @@ function renderStudentTable() {
         phone,
         role,
         availableShifts,
-        monthlyAvailableShifts: { 1: [...availableShifts], 2: [...availableShifts], 3: [...availableShifts], 4: [...availableShifts] },
+        monthlyAvailableShifts: weeklyShifts,
         createdAt: Date.now()
       };
       state.students.unshift(newStudent);
@@ -6776,7 +6859,7 @@ window.adminDeleteStudent = async function(studentId) {
    * Tính lại studentStats + summary cho một tuần sau khi thay đổi thủ công.
    * @param {object} weekData - Đối tượng tuần trong monthSchedule
    */
-  function recomputeWeekStats(weekData) {
+  function recomputeWeekStats(weekData, scheduleContext) {
     if (!weekData || !weekData.scheduleTable) return;
     const stats = {};
     state.students.forEach(s => {
@@ -6791,7 +6874,14 @@ window.adminDeleteStudent = async function(studentId) {
 
     let full = 0, partial = 0, empty = 0;
     const table = weekData.scheduleTable;
-    const baseCapacity = getMonthCapacity(state.currentMonth, state.currentYear, weekData).peoplePerShift;
+    const context = scheduleContext || state.monthSchedule || {
+      month: state.currentMonth,
+      year: state.currentYear,
+      weeks: [weekData]
+    };
+    const baseCapacity = getMonthCapacity(
+      state.currentMonth, state.currentYear, context
+    ).peoplePerShift;
     Object.values(table).forEach(slot => {
       if (!slot) return;
       if (slot.oldMember === undefined) slot.oldMember = null;

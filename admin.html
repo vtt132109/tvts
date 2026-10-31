@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261031_1600">
+  <link rel="stylesheet" href="css/style.css?v=20261031_1700">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -1095,7 +1095,7 @@
        MODAL 2: THÊM / SỬA SINH VIÊN (DÀNH CHO ADMIN)
        ==================================================================== -->
   <div class="modal-overlay" id="student-form-modal" role="dialog" aria-modal="true" aria-labelledby="student-modal-title" tabindex="-1">
-    <div class="modal-box" style="max-width: 650px;">
+    <div class="modal-box" style="max-width: 980px;">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="student-modal-title">Thêm Sinh Viên Mới</h3>
@@ -1136,48 +1136,23 @@
             </div>
           </div>
 
-          <!-- Ma trận ca rảnh trong modal -->
+          <!-- Ma trận ca rảnh theo TỪNG TUẦN trong tháng -->
           <div class="form-group" style="margin-top: 0.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
-              <div class="form-label" style="margin: 0; font-weight: 700;">Chọn Các Ca Rảnh:</div>
+              <div>
+                <div class="form-label" style="margin: 0; font-weight: 700;">Ca rảnh đã đăng ký theo tuần:</div>
+                <div class="form-hint" id="student-shift-summary" style="font-size: 0.8rem; margin-top: 0.15rem;">Tháng này: 0 lượt ca</div>
+              </div>
               <div style="display: flex; gap: 0.35rem; align-items: center;">
-                <button type="button" class="btn-chip" id="btn-admin-quick-all">Cả tuần</button>
+                <button type="button" class="btn-chip" id="btn-admin-quick-all">Cả 4 tuần</button>
                 <button type="button" class="btn-chip" id="btn-admin-quick-clear">Xóa hết</button>
                 <button type="button" class="btn btn-warning-outline btn-sm" id="btn-admin-modal-clear-shifts" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; border-color: #f59e0b; color: #d97706;">🧹 Đưa về 0 ca</button>
               </div>
             </div>
 
-            <div class="matrix-wrapper">
-              <table class="matrix-table" aria-label="Bảng chọn ca rảnh sinh viên">
-                <thead>
-                  <tr>
-                    <th>Ca</th>
-                    <th>T2</th>
-                    <th>T3</th>
-                    <th>T4</th>
-                    <th>T5</th>
-                    <th>T6</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="font-weight: 700; font-size: 0.78rem;">Sáng</td>
-                    <td><input type="checkbox" id="admin-cb-T2_S" class="admin-slot-cb" value="T2_S" aria-label="Ca Sáng Thứ Hai"></td>
-                    <td><input type="checkbox" id="admin-cb-T3_S" class="admin-slot-cb" value="T3_S" aria-label="Ca Sáng Thứ Ba"></td>
-                    <td><input type="checkbox" id="admin-cb-T4_S" class="admin-slot-cb" value="T4_S" aria-label="Ca Sáng Thứ Tư"></td>
-                    <td><input type="checkbox" id="admin-cb-T5_S" class="admin-slot-cb" value="T5_S" aria-label="Ca Sáng Thứ Năm"></td>
-                    <td><input type="checkbox" id="admin-cb-T6_S" class="admin-slot-cb" value="T6_S" aria-label="Ca Sáng Thứ Sáu"></td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: 700; font-size: 0.78rem;">Chiều</td>
-                    <td><input type="checkbox" id="admin-cb-T2_C" class="admin-slot-cb" value="T2_C" aria-label="Ca Chiều Thứ Hai"></td>
-                    <td><input type="checkbox" id="admin-cb-T3_C" class="admin-slot-cb" value="T3_C" aria-label="Ca Chiều Thứ Ba"></td>
-                    <td><input type="checkbox" id="admin-cb-T4_C" class="admin-slot-cb" value="T4_C" aria-label="Ca Chiều Thứ Tư"></td>
-                    <td><input type="checkbox" id="admin-cb-T5_C" class="admin-slot-cb" value="T5_C" aria-label="Ca Chiều Thứ Năm"></td>
-                    <td><input type="checkbox" id="admin-cb-T6_C" class="admin-slot-cb" value="T6_C" aria-label="Ca Chiều Thứ Sáu"></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div id="weekly-availability-editor" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem;"></div>
+            <div class="form-hint" style="font-size: 0.76rem; margin-top: 0.45rem;">
+              Tick đúng ca của từng tuần. Khi lưu, hệ thống ghi đè toàn bộ ca rảnh tháng này bằng lựa chọn bên trên.
             </div>
           </div>
 
@@ -2230,17 +2205,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261031_1600"></script>
+  <script src="js/a11y_modal.js?v=20261031_1700"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261031_1600"></script>
-  <script src="js/month_calendar.js?v=20261031_1600"></script>
-  <script src="js/scheduler.js?v=20261031_1600"></script>
-  <script src="js/roster.js?v=20261031_1600"></script>
-  <script src="js/common.js?v=20261031_1600"></script>
-  <script src="js/audit.js?v=20261031_1600"></script>
-  <script src="js/store.js?v=20261031_1600"></script>
-  <script src="js/admin.js?v=20261031_1600"></script>
+  <script src="js/cloud_sync.js?v=20261031_1700"></script>
+  <script src="js/month_calendar.js?v=20261031_1700"></script>
+  <script src="js/scheduler.js?v=20261031_1700"></script>
+  <script src="js/roster.js?v=20261031_1700"></script>
+  <script src="js/common.js?v=20261031_1700"></script>
+  <script src="js/audit.js?v=20261031_1700"></script>
+  <script src="js/store.js?v=20261031_1700"></script>
+  <script src="js/admin.js?v=20261031_1700"></script>
 </body>
 </html>
