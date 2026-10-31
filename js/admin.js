@@ -916,13 +916,55 @@
     }
   }
 
+  /**
+   * Chuẩn hoá khoá tháng ca rảnh về 'YYYY-MM'.
+   *
+   * Cloud cũ từng ghi khoá này bằng JSON.stringify nên localStorage có thể là
+   * `"2026-11"` (kèm ngoặc kép). Nếu so nguyên chuỗi, regex tháng không khớp
+   * và resetAvailabilityIfNewMonth tưởng là tháng khác -> xoá sạch ca rảnh.
+   */
+  function normalizeAvailabilityMonthKey(value) {
+    if (value === null || value === undefined) return '';
+    let text = String(value).trim();
+    if (!text) return '';
+    if ((text.startsWith('"') && text.endsWith('"'))
+      || (text.startsWith("'") && text.endsWith("'"))) {
+      try {
+        text = JSON.parse(text);
+      } catch (e) {
+        text = text.slice(1, -1);
+      }
+      text = String(text).trim();
+    }
+    const match = /^(\d{4})-(\d{1,2})$/.exec(text);
+    if (match) return `${match[1]}-${String(match[2]).padStart(2, '0')}`;
+    return text;
+  }
+
   /** Khoá tháng 'YYYY-MM' mà ca rảnh trên máy đang thuộc về. */
   function readAvailabilityMonthKey() {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
-      return raw ? String(raw) : '';
+      const normalized = normalizeAvailabilityMonthKey(raw);
+      // Tự chữa khoá cũ bị bọc ngoặc kép để lần đọc sau không tái phát.
+      if (normalized && normalized !== raw) {
+        try { localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, normalized); } catch (e) {}
+      }
+      return normalized;
     } catch (e) {
       return '';
+    }
+  }
+
+  /** Ghi khoá tháng dưới dạng chuỗi thô 'YYYY-MM' (không JSON.stringify). */
+  function writeAvailabilityMonthKey(value) {
+    const normalized = normalizeAvailabilityMonthKey(value);
+    if (!normalized) return false;
+    try {
+      localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, normalized);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -2905,12 +2947,7 @@ function resetAvailabilityIfNewMonth(month, year) {
   const monthKey = `${year}-${pad2(month)}`;
   const monthNum = (year * 100) + month;
 
-  let storedMonth = null;
-  try {
-    storedMonth = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH) || null;
-  } catch (e) {
-    storedMonth = null;
-  }
+  const storedMonth = readAvailabilityMonthKey() || null;
 
     // Khoá tháng có thể đến từ 2 nơi:
     //   - localStorage của chính máy này (đã dùng nhiều lần trước)
@@ -2928,10 +2965,8 @@ function resetAvailabilityIfNewMonth(month, year) {
     // Vì không biết dữ liệu ca rảnh đang thuộc tháng nào, mà xoá nhầm thì mất
     // thật còn bỏ sót thì chỉ cần bấm "Khởi tạo lịch tháng mới" là xong —
     // thiệt hại không cân bằng nên mặc định KHÔNG xoá.
-    try {
-      localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, monthKey);
-    } catch (e) {
-      console.warn('[Admin] Không lưu được tháng của ca rảnh:', e);
+    if (!writeAvailabilityMonthKey(monthKey)) {
+      console.warn('[Admin] Không lưu được tháng của ca rảnh.');
     }
     return { reset: false, cleared: 0, monthKey, reason: 'khong-co-khoa-thang-giu-nguyen' };
   }
@@ -2959,10 +2994,8 @@ function resetAvailabilityIfNewMonth(month, year) {
     s.monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
   });
 
-  try {
-    localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, monthKey);
-  } catch (e) {
-    console.warn('[Admin] Không lưu được tháng của ca rảnh:', e);
+  if (!writeAvailabilityMonthKey(monthKey)) {
+    console.warn('[Admin] Không lưu được tháng của ca rảnh.');
   }
 
   if (cleared > 0) saveStudents(true);
@@ -6546,12 +6579,9 @@ window.adminDeleteStudent = async function(studentId) {
     // Mọi file nhập đều gắn ca rảnh với tháng đang mở. Nếu chỉ đặt khoá này
     // cho Google Form, lần F5 sau khi nhập CSV danh sách có thể bị
     // resetAvailabilityIfNewMonth xoá sạch ca vừa nhập.
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.AVAILABILITY_MONTH,
-        `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`
-      );
-    } catch (e) {}
+    writeAvailabilityMonthKey(
+      `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`
+    );
 
     saveStudents(true);
     if (!isFormImport) {
