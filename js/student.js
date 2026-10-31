@@ -1863,8 +1863,9 @@ function paintSlotAvailability() {
   }
 
   /**
-   * Render Ô Ca Trực: Tuyệt đối KHÔNG có nhãn/huy hiệu phân loại vai trò (Task 2)
-   * Chỉ hiển thị Họ tên và MSSV của 2 bạn trực ca đó, đảm bảo tính bình đẳng và văn minh 100%.
+   * Render Ô Ca Trực: Tuyệt đối KHÔNG có nhãn/huy hiệu phân loại vai trò.
+   * Mức nền (1 hoặc 2 người) do cấu hình tháng quyết định; ngoài ra mỗi ca
+   * có thể được cán bộ gán tay thêm người thứ 2/thứ 3 — vẫn phải hiển thị đủ.
    */
   function renderReadOnlyShiftSlot(shiftId, slot) {
     if (!slot) {
@@ -1889,25 +1890,40 @@ function paintSlotAvailability() {
       `;
     };
 
-    const capacity = slot.capacity === 1 || slot.capacity === 3 ? slot.capacity : 2;
-    const card1 = renderMemberCard(capacity === 1 ? (slot.oldMember || slot.newMember) : slot.oldMember);
-    const card2 = capacity === 1 ? '' : renderMemberCard(slot.newMember);
-    const card3 = capacity === 3 ? renderMemberCard(slot.thirdMember) : '';
-    const memberCount = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).length;
+    // capacity 3 là dữ liệu kiểu cũ (2 người nền + 1 người thêm) — hiển thị như nền 2.
+    const baseCapacity = slot.capacity === 1 ? 1 : 2;
+    const oldMember = slot.oldMember || null;
+    const newMember = slot.newMember || null;
+    const thirdMember = slot.thirdMember || null;
+    const hasBase = baseCapacity === 1 ? !!oldMember : !!(oldMember && newMember);
+    const baseCount = baseCapacity === 1
+      ? (oldMember ? 1 : 0)
+      : (oldMember ? 1 : 0) + (newMember ? 1 : 0);
+    const extras = baseCapacity === 1
+      ? [newMember, thirdMember].filter(Boolean)
+      : [thirdMember].filter(Boolean);
+
+    const statusText = hasBase
+      ? `${baseCapacity === 1 ? '✓ Đủ 1 bạn' : '✓ Đủ 2 bạn'}${extras.length ? ` · +${extras.length} thêm` : ''}`
+      : (baseCapacity === 1 ? 'Đang bố trí' : `Đang bố trí (${baseCount}/2)`);
+
+    const cards = baseCapacity === 1
+      ? [renderMemberCard(oldMember)]
+      : [renderMemberCard(oldMember), renderMemberCard(newMember)];
+    if (baseCapacity === 1) {
+      if (newMember) cards.push(renderMemberCard(newMember));
+      if (thirdMember) cards.push(renderMemberCard(thirdMember));
+    } else if (thirdMember) {
+      cards.push(renderMemberCard(thirdMember));
+    }
 
     return `
       <div class="grid-cell shift-duty-slot">
         <div class="shift-slot-header">
           <span>${slot.shiftInfo?.dayName || ''}</span>
-          <span class="shift-status-pill ${memberCount >= capacity ? 'full' : 'warning'}">
-            ${memberCount >= capacity
-              ? (capacity === 1 ? '✓ Đủ 1 bạn' : (capacity === 2 ? '✓ Đủ 2 bạn' : '✓ Đủ 3 bạn'))
-              : (capacity === 1 ? 'Đang bố trí' : `Đang bố trí (${memberCount}/${capacity})`)}
-          </span>
+          <span class="shift-status-pill ${hasBase ? 'full' : 'warning'}">${statusText}</span>
         </div>
-        ${card1}
-        ${card2}
-        ${card3}
+        ${cards.join('')}
       </div>
     `;
   }
@@ -2365,7 +2381,19 @@ function paintSlotAvailability() {
       if (!shifts || shifts.length === 0) {
         return `<div style="padding: 1.25rem; text-align: center; color: var(--text-muted); font-size: 0.88rem; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">${emptyText || 'Không có ca trực nào trong kỳ này.'}</div>`;
       }
-      return shifts.map((s, idx) => `
+      return shifts.map((s, idx) => {
+        const hasPartner = !!s.partnerName && s.partnerName !== 'Chưa có bạn trực cùng';
+        const companions = [];
+        if (hasPartner) {
+          companions.push(`Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>${s.partnerMssv ? ` (${escapeHtml(s.partnerMssv)})` : ''}`);
+        }
+        if (s.thirdName) {
+          companions.push(`${s.selfPosition === 'third' ? 'Cùng ca' : 'Người thứ 3'}: <strong>${escapeHtml(s.thirdName)}</strong>${s.thirdMssv ? ` (${escapeHtml(s.thirdMssv)})` : ''}`);
+        }
+        const partnerHtml = companions.length
+          ? `👥 ${companions.join(' · ')}`
+          : '👤 Ca 1 người trực (không có bạn trực cùng)';
+        return `
         <div class="personal-shift-card">
           <div class="shift-card-left">
             <span class="shift-week-chip">Tuần ${s.weekNum}</span>
@@ -2376,13 +2404,7 @@ function paintSlotAvailability() {
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-            <div class="shift-card-partner">
-              ${s.capacity === 1
-                ? '👤 Ca 1 người trực (không có bạn trực cùng)'
-                : `👥 Trực cùng: <strong>${escapeHtml(s.partnerName)}</strong>
-                   ${s.partnerMssv ? `(${escapeHtml(s.partnerMssv)})` : ''}
-                   ${s.thirdName ? ` · ${s.selfPosition === 'third' ? 'Cùng ca' : 'Người thứ 3'}: <strong>${escapeHtml(s.thirdName)}</strong>${s.thirdMssv ? ` (${escapeHtml(s.thirdMssv)})` : ''}` : ''}`}
-            </div>
+            <div class="shift-card-partner">${partnerHtml}</div>
             ${isCurrent ? `
               <button type="button" class="btn btn-secondary btn-sm btn-swap-shift-trigger" onclick="window.studentOpenSwapForShift('${s.shiftId}', ${s.weekNum})" title="Đề xuất đổi hoặc nhờ trực thay ca này">
                 🔄 Đổi ca
@@ -2390,7 +2412,8 @@ function paintSlotAvailability() {
             ` : ''}
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     };
 
     const currentShiftsHtml = renderShiftList(currentShifts, true);
@@ -2704,8 +2727,13 @@ function paintSlotAvailability() {
         elements.selectMyShift.innerHTML = myShifts.map(s => {
           const val = `${s.weekNum}__${s.shiftId}`;
           const isSelected = (preselectedShiftId === s.shiftId && preselectedWeek === s.weekNum);
+          const hasPartner = !!s.partnerName && s.partnerName !== 'Chưa có bạn trực cùng';
+          const companions = [];
+          if (hasPartner) companions.push(`Trực cùng: ${s.partnerName}`);
+          if (s.thirdName) companions.push(`${s.selfPosition === 'third' ? 'Cùng ca' : 'Người thứ 3'}: ${s.thirdName}`);
+          const companionText = companions.length ? companions.join(' · ') : 'Ca 1 người trực';
           return `<option value="${val}" ${isSelected ? 'selected' : ''}>
-            Tuần ${s.weekNum} - ${escapeHtml(s.shift?.dayName || '')} (${escapeHtml(s.shift?.period || '')}: ${escapeHtml(s.shift?.time || '')}) | ${s.capacity === 1 ? 'Ca 1 người trực' : `Trực cùng: ${escapeHtml(s.partnerName || 'Chưa có bạn')}${s.thirdName ? ` · Người thứ 3: ${escapeHtml(s.thirdName)}` : ''}`}
+            Tuần ${s.weekNum} - ${escapeHtml(s.shift?.dayName || '')} (${escapeHtml(s.shift?.period || '')}: ${escapeHtml(s.shift?.time || '')}) | ${escapeHtml(companionText)}
           </option>`;
         }).join('');
       }
@@ -2954,6 +2982,8 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     // lịch tháng trước (chỉ đọc kho lưu trữ, không tự sinh).
     getMonthWeeksConfig: (month, year) => buildMonthWeeksConfig(month, year),
     getPrevMonthSchedule,
+    renderReadOnlyShiftSlot,
+    extractStudentShiftsFromSchedule,
     // #12: lịch sử ca trực nhiều tháng
     buildShiftHistory: (mssv, options) => buildStudentShiftHistory(mssv, options),
     collectArchivedMonthSchedules,

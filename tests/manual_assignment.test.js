@@ -543,9 +543,12 @@ runTest('Giao diện: tháng chưa có lịch vẫn vẽ đủ 40 ô bấm đư�
     && e.innerHTML.includes('adminOpenReassignModal'));
   assert.ok(container, 'Lưới tháng phải render các ô ca bấm được');
 
-  // Mỗi ca có 2 ô bấm được (Chính Thức + Tập Sự): 4 tuần × 10 ca × 2 = 80.
+  // Mỗi ca có 2 ô nền + 1 ô thêm người thứ 3 + nút "➕ Thêm người":
+  // 4 tuần × 10 ca × 4 = 160 điểm bấm.
   const calls = container.innerHTML.match(/adminOpenReassignModal\(/g) || [];
-  assert.strictEqual(calls.length, 80, '4 tuần × 10 ca × 2 vị trí = 80 ô bấm được, thực tế: ' + calls.length);
+  assert.strictEqual(calls.length, 160, '4 tuần × 10 ca × 4 = 160 ô bấm được, thực tế: ' + calls.length);
+  assert.ok((container.innerHTML.match(/➕ Thêm người/g) || []).length >= 40,
+    'Mỗi ca phải có nút thêm người');
   assert.ok(container.innerHTML.includes('admin-blank-month-notice'),
     'Phải có dải nhắc "bấm vào ô ca để gán tay"');
   assert.ok(!container.innerHTML.includes('adminCreateBlankMonth'),
@@ -593,7 +596,7 @@ runTest('Cấu hình tháng 1 người/ca: mỗi ca 1 người, gán tay 1 ngư�
   LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
   LS.setItem('ts_scheduler_availability_month_v1', '2026-11');
   LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
-    '2026-11': { peoplePerShift: 1, thirdShifts: [] }
+    '2026-11': { peoplePerShift: 1 }
   }));
   H.loadData();
   H.runFullSchedule();
@@ -617,46 +620,125 @@ runTest('Cấu hình tháng 1 người/ca: mỗi ca 1 người, gán tay 1 ngư�
   assert.strictEqual(after.oldMember && after.oldMember.id, 's_2', 'Auto phải giữ ca 1 người đã gán tay');
 });
 
-runTest('Ca đặc biệt 3 người: auto chỉ xếp 2, người thứ 3 gán tay được giữ và tính công bằng', () => {
+runTest('Tháng 1 người/ca: vẫn gán tay thêm được người thứ 2 và thứ 3 cho đúng ca đó', () => {
   seed();
   const students = JSON.parse(LS.getItem('ts_scheduler_students'));
   students.forEach(s => {
     s.availableShifts = ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'];
     s.monthlyAvailableShifts = { 1: [...s.availableShifts], 2: [...s.availableShifts], 3: [...s.availableShifts], 4: [...s.availableShifts] };
   });
+  students.push({
+    id: 's_3', studentId: '2311007', fullName: 'Le Van C', role: 'new',
+    availableShifts: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+    monthlyAvailableShifts: { 1: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 2: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 3: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 4: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'] }
+  });
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
+  LS.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
+    '2026-11': { peoplePerShift: 1 }
+  }));
+  H.loadData();
+  H.runFullSchedule();
+
+  const sched = H.getState().monthSchedule;
+  Object.values(sched.weeks[0].scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 1, 'Mọi ca phải là nền 1 người');
+    assert.strictEqual(slot.newMember, null, 'Auto không được thêm người thứ 2');
+    assert.strictEqual(slot.thirdMember, null, 'Auto không được thêm người thứ 3');
+  });
+  assert.ok(savedSlot(1, 'T2_S').oldMember, 'Auto phải xếp người trực chính cho T2_S');
+  const mainId = savedSlot(1, 'T2_S').oldMember.id;
+  const otherIds = ['s_1', 's_2', 's_3'].filter(id => id !== mainId);
+  const extra2 = otherIds[0];
+  const extra3 = otherIds[1];
+
+  // Gán tay người thêm thứ 2 dù tháng cấu hình 1 người/ca.
+  assignViaUi('T2_S', 'new', 1, extra2);
+  let slot = savedSlot(1, 'T2_S');
+  assert.strictEqual(slot.oldMember && slot.oldMember.id, mainId,
+    'Thêm người thứ 2 không được thay người trực chính');
+  assert.strictEqual(slot.newMember && slot.newMember.id, extra2, 'Phải gán được người thêm thứ 2');
+  assert.strictEqual(slot.thirdMember, null);
+  assert.strictEqual(slot.status, 'full', 'Có người chính là đủ, người thêm không đổi trạng thái');
+  assert.strictEqual(slot.capacity, 1, 'Mức nền tháng vẫn là 1');
+
+  // Gán tay người thêm thứ 3.
+  assignViaUi('T2_S', 'third', 1, extra3);
+  slot = savedSlot(1, 'T2_S');
+  assert.strictEqual(slot.thirdMember && slot.thirdMember.id, extra3,
+    'Phải gán được người thêm thứ 3');
+  assert.strictEqual(slot.status, 'full');
+  assert.strictEqual(slot.capacity, 1);
+
+  const stats = H.getState().monthSchedule.weeks[0].studentStats;
+  [mainId, extra2, extra3].forEach(id => {
+    assert.ok(stats[id] && stats[id].assignedCount >= 1,
+      `Người ${id} phải được tính vào thống kê/công bằng`);
+  });
+
+  const rec = manualMap()['2026-11']?.['1']?.['T2_S'];
+  assert.ok(rec, 'Phải ghi sổ tay gán ca của tháng 11');
+  assert.strictEqual(rec.oldId, mainId);
+  assert.strictEqual(rec.newId, extra2);
+  assert.strictEqual(rec.thirdId, extra3);
+
+  H.runFullSchedule();
+  const after = savedSlot(1, 'T2_S');
+  assert.strictEqual(after.oldMember && after.oldMember.id, mainId, 'Auto phải giữ người chính');
+  assert.strictEqual(after.newMember && after.newMember.id, extra2, 'Auto phải giữ người thêm thứ 2');
+  assert.strictEqual(after.thirdMember && after.thirdMember.id, extra3, 'Auto phải giữ người thêm thứ 3');
+});
+
+runTest('Tháng 2 người/ca: vẫn gán tay thêm được người thứ 3, auto giữ nguyên', () => {
+  seed();
+  const students = JSON.parse(LS.getItem('ts_scheduler_students'));
+  students.forEach(s => {
+    s.availableShifts = ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'];
+    s.monthlyAvailableShifts = { 1: [...s.availableShifts], 2: [...s.availableShifts], 3: [...s.availableShifts], 4: [...s.availableShifts] };
+  });
+  students.push({
+    id: 's_3', studentId: '2311007', fullName: 'Le Van C', role: 'new',
+    availableShifts: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'],
+    monthlyAvailableShifts: { 1: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 2: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 3: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'], 4: ['T2_S', 'T3_S', 'T4_S', 'T5_S', 'T6_S'] }
+  });
   LS.setItem('ts_scheduler_students', JSON.stringify(students));
   LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
-    '2026-10': { peoplePerShift: 2, thirdShifts: ['T2_S'] }
+    '2026-10': { peoplePerShift: 2 }
   }));
   H.loadData();
   H.runFullSchedule();
 
   const before = savedSlot(1, 'T2_S');
-  assert.strictEqual(before.capacity, 3, 'T2_S phải là ca 3 người');
+  assert.strictEqual(before.capacity, 2, 'Mức nền tháng 10 là 2 người');
+  assert.ok(before.oldMember && before.newMember, 'Auto phải xếp đủ 2 người nền');
   assert.strictEqual(before.thirdMember, null, 'Auto không được điền người thứ 3');
-  assert.strictEqual(before.status, 'partial', 'Ca 3 người thiếu người thứ 3 phải partial');
 
-  assignViaUi('T2_S', 'third', 1, 's_1');
+  const used = [before.oldMember.id, before.newMember.id];
+  const thirdId = ['s_1', 's_2', 's_3'].find(id => !used.includes(id));
+  assignViaUi('T2_S', 'third', 1, thirdId);
   const afterAssign = savedSlot(1, 'T2_S');
-  assert.strictEqual(afterAssign.thirdMember && afterAssign.thirdMember.id, 's_1',
+  assert.strictEqual(afterAssign.thirdMember && afterAssign.thirdMember.id, thirdId,
     'Phải gán được người thứ 3');
-  assert.strictEqual(afterAssign.status, 'full', 'Đủ 3 người phải full');
-  const stats = H.getState().monthSchedule.weeks[0].studentStats['s_1'];
-  assert.ok(stats && stats.assignedCount >= 2, 'Người thứ 3 phải được tính vào công bằng');
+  assert.strictEqual(afterAssign.status, 'full');
+  assert.strictEqual(afterAssign.capacity, 2, 'Người thứ 3 là người thêm, không đổi mức nền');
 
   H.runFullSchedule();
   const afterAuto = savedSlot(1, 'T2_S');
-  assert.strictEqual(afterAuto.thirdMember && afterAuto.thirdMember.id, 's_1',
+  assert.strictEqual(afterAuto.thirdMember && afterAuto.thirdMember.id, thirdId,
     'Auto phải giữ người thứ 3 đã gán tay');
 });
 
-runTest('Giao diện: có nút Số người/ca và modal cấu hình tháng', () => {
+runTest('Giao diện: có nút Số người/ca, modal chỉ chọn mức nền, thêm người theo từng ca', () => {
   const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
   assert.ok(html.includes('id="btn-shift-capacity"'), 'Phải có nút Số người/ca');
   assert.ok(html.includes('id="modal-shift-capacity"'), 'Phải có modal cấu hình');
+  assert.ok(html.includes('➕ Thêm người'), 'Modal phải hướng dẫn thêm người theo từng ca');
+  assert.ok(!html.includes('shift-capacity-third-list'), 'Không còn danh sách ca 3 người cố định');
   assert.ok(js.includes('saveMonthCapacity'), 'Phải có hàm lưu cấu hình tháng');
-  assert.ok(js.includes('slot.thirdMember'), 'Phải hỗ trợ người thứ 3');
+  assert.ok(js.includes('slot.thirdMember'), 'Phải hỗ trợ người thêm thứ 3');
+  assert.ok(!/shiftCapacityThird/.test(js), 'Không còn đọc checkbox ca 3 người đã bị gỡ');
 });
 
 runTest('Xóa tuần: chỉ xóa người trong tuần đang xem, giữ tuần khác và sổ tay tuần khác', () => {

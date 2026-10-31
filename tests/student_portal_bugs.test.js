@@ -319,6 +319,75 @@ runTest('a11y_modal.js disconnect observer trên pagehide và guard window', () 
     'Vẫn phải giữ focus trap qua keydown như trước');
 });
 
+// ===========================================================================
+// TEST 8: Ca nền 1 người vẫn hiển thị đủ người thêm thứ 2/thứ 3
+// ===========================================================================
+runTest('Ca 1 người/ca có người thêm: hiển thị đủ 3 người, trạng thái đủ + số thêm', () => {
+  const { window: w } = bootStudentPortal();
+  const student = (id, studentId, fullName, role) => ({ id, studentId, fullName, role });
+
+  const slot = {
+    capacity: 1,
+    status: 'full',
+    shiftInfo: { dayName: 'Thứ 2', period: 'Sáng', time: '07:30 - 11:30' },
+    oldMember: student('s1', '2102001', 'Nguyen Van A', 'old'),
+    newMember: student('s2', '2211005', 'Tran Thi B', 'new'),
+    thirdMember: student('s3', '2311007', 'Le Van C', 'new')
+  };
+  const html = w.studentTestHelper.renderReadOnlyShiftSlot('T2_S', slot);
+  ['Nguyen Van A', 'Tran Thi B', 'Le Van C'].forEach(name => {
+    assert.ok(html.includes(name), `Phải hiển thị ${name} dù mức nền là 1 người`);
+  });
+  assert.ok(html.includes('✓ Đủ 1 bạn · +2 thêm'),
+    'Trạng thái phải ghi đủ người chính và số người thêm');
+  assert.ok(!/Chính Thức|Tập Sự|Người thứ 3/.test(html),
+    'Thẻ ca công khai không được gắn nhãn phân loại vai trò');
+});
+
+runTest('Ca 2 người/ca có người thêm thứ 3: hiển thị 3 người và +1 thêm', () => {
+  const { window: w } = bootStudentPortal();
+  const student = (id, studentId, fullName, role) => ({ id, studentId, fullName, role });
+  const slot = {
+    capacity: 2,
+    status: 'full',
+    shiftInfo: { dayName: 'Thứ 3', period: 'Chiều', time: '13:00 - 16:30' },
+    oldMember: student('s1', '2102001', 'Nguyen Van A', 'old'),
+    newMember: student('s2', '2211005', 'Tran Thi B', 'new'),
+    thirdMember: student('s3', '2311007', 'Le Van C', 'new')
+  };
+  const html = w.studentTestHelper.renderReadOnlyShiftSlot('T3_C', slot);
+  ['Nguyen Van A', 'Tran Thi B', 'Le Van C'].forEach(name => {
+    assert.ok(html.includes(name), `Phải hiển thị ${name}`);
+  });
+  assert.ok(html.includes('✓ Đủ 2 bạn · +1 thêm'), 'Trạng thái phải ghi đủ 2 người nền + 1 thêm');
+});
+
+// ===========================================================================
+// TEST 9: Trích xuất ca cá nhân của người thêm vẫn thấy người chính + người thêm
+// ===========================================================================
+runTest('Người thêm thứ 2 ở ca nền 1 người vẫn thấy người chính và người thêm thứ 3', () => {
+  const { window: w } = bootStudentPortal();
+  const student = (id, studentId, fullName, role) => ({ id, studentId, fullName, role });
+  const schedule = {
+    weeks: [{
+      scheduleTable: {
+        T2_S: {
+          capacity: 1,
+          oldMember: student('s1', '2102001', 'Nguyen Van A', 'old'),
+          newMember: student('s2', '2211005', 'Tran Thi B', 'new'),
+          thirdMember: student('s3', '2311007', 'Le Van C', 'new')
+        }
+      }
+    }]
+  };
+  const mine = w.studentTestHelper.extractStudentShiftsFromSchedule('2211005', schedule);
+  assert.strictEqual(mine.length, 1);
+  assert.strictEqual(mine[0].selfPosition, 'new');
+  assert.strictEqual(mine[0].capacity, 1);
+  assert.strictEqual(mine[0].partnerName, 'Nguyen Van A');
+  assert.strictEqual(mine[0].thirdName, 'Le Van C');
+});
+
 console.log('\n==================================================');
 console.log(`KẾT QUẢ: ${testsPassed}/${testsPassed + testsFailed} TESTS ĐẠT CHUẨN`);
 if (testsFailed > 0) {
