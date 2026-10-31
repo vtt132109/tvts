@@ -3884,6 +3884,31 @@ function getRegisteredShiftCount(student) {
 }
 
 /**
+ * Ca rảnh CTV đã đăng ký trong MỘT tuần cụ thể.
+ *
+ * availableShifts là hợp của cả 4 tuần, nên không được dùng nó để kết luận
+ * "rảnh ca này" cho một tuần: người có T6_C ở tuần 2 vẫn bị coi là rảnh T6_C
+ * ở tuần 1. Khi đã có monthlyAvailableShifts, dữ liệu tuần là nguồn sự thật;
+ * tuần thiếu dữ liệu nghĩa là tuần đó không đăng ký.
+ * Chỉ fallback sang availableShifts cho dữ liệu cũ chưa có cấu trúc tuần.
+ */
+function getDeclaredShiftsForWeek(student, weekNumber) {
+  if (!student) return [];
+  const weekly = student.monthlyAvailableShifts;
+  if (weekly && typeof weekly === 'object') {
+    const week = parseInt(weekNumber, 10) || 1;
+    const hasWeeklyStructure = [1, 2, 3, 4].some(
+      n => Array.isArray(weekly[n]) || Array.isArray(weekly[String(n)])
+    );
+    if (hasWeeklyStructure) {
+      const declared = weekly[week] || weekly[String(week)];
+      return Array.isArray(declared) ? declared : [];
+    }
+  }
+  return Array.isArray(student.availableShifts) ? student.availableShifts : [];
+}
+
+/**
  * Thống kê số CTV đã đăng ký ca rảnh cho tháng đang mở.
  * Không đếm dữ liệu ca rảnh còn sót của tháng khác.
  */
@@ -4707,7 +4732,7 @@ function renderStudentTable() {
     // Xếp thủ công: liệt kê TOÀN BỘ CTV, kể cả người chưa đăng ký ca nào.
     // Không phân biệt vai trò; chỉ ưu tiên người đang gán và người có rảnh ca này.
     const rankStudent = (s) => {
-      const isAvailable = (s.availableShifts || []).includes(shiftId) ? 1 : 0;
+      const isAvailable = getDeclaredShiftsForWeek(s, effectiveWeek).includes(shiftId) ? 1 : 0;
       return (currentAssigned?.id === s.id ? 4 : 0) + isAvailable;
     };
     eligibleStudents.sort((a, b) => {
@@ -4717,9 +4742,9 @@ function renderStudentTable() {
     });
 
     eligibleStudents.forEach((s, idx) => {
-      const isAvailable = (s.availableShifts || []).includes(shiftId);
+      const isAvailable = getDeclaredShiftsForWeek(s, effectiveWeek).includes(shiftId);
       const isSelected = currentAssigned?.id && currentAssigned.id === s.id;
-      const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
+      const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh tuần này';
       const monthlyLabel = ` · ${monthlyCounts[s.id] || 0} ca tháng này`;
       const selectedLabel = isSelected ? ' · Đang gán' : '';
 
@@ -4841,11 +4866,8 @@ function renderStudentTable() {
     // rảnh hoặc đã có ca cùng ngày. Chỉ cảnh báo, không chặn cứng.
     const warnings = [];
     if (newStudent) {
-      const declared = newStudent.monthlyAvailableShifts
-        ? (newStudent.monthlyAvailableShifts[realWeekNumber]
-          || newStudent.monthlyAvailableShifts[String(realWeekNumber)])
-        : newStudent.availableShifts;
-      if (Array.isArray(declared) && !declared.includes(shiftId)) {
+      const declared = getDeclaredShiftsForWeek(newStudent, realWeekNumber);
+      if (!declared.includes(shiftId)) {
         warnings.push(`${newStudent.fullName} chưa đăng ký rảnh ca ${shiftId} ở tuần ${realWeekNumber}.`);
       }
 
@@ -6823,12 +6845,7 @@ window.adminDeleteStudent = async function(studentId) {
     // Trước đây không kiểm tra gì -> có thể gán người không đăng ký rảnh.
     const shiftMeta = (window.SchedulerEngine?.SHIFT_MAP || {})[req.shiftId];
     const weekNumber = weekIdx + 1;
-    const declaredAvail = targetStudent.monthlyAvailableShifts
-      ? (targetStudent.monthlyAvailableShifts[weekNumber] || targetStudent.monthlyAvailableShifts[String(weekNumber)])
-      : targetStudent.availableShifts;
-    const isAvailable = Array.isArray(declaredAvail)
-      ? declaredAvail.includes(req.shiftId)
-      : true;
+    const isAvailable = getDeclaredShiftsForWeek(targetStudent, weekNumber).includes(req.shiftId);
     if (!isAvailable) {
       showToast(`${targetStudent.fullName} KHÔNG đăng ký rảnh ${req.shiftId} ở tuần này! Vui lòng kiểm tra lại ca rảnh.`, 'error');
       return;

@@ -206,6 +206,30 @@ runTest('Gán tay: chọn "-- Để trống --" thì xoá người khỏi ô ca'
   assert.strictEqual(savedSlot(1, 'T2_S').oldMember, null, 'Chọn để trống phải xoá người');
 });
 
+runTest('Gán ca: nhãn rảnh phải theo TUẦN, không dùng danh sách gộp 4 tuần', () => {
+  seed();
+  const students = JSON.parse(LS.getItem('ts_scheduler_students'));
+  // s_1 rảnh T6_C ở tuần 2 nhưng KHÔNG rảnh ở tuần 1.
+  students[0].monthlyAvailableShifts = { 1: ['T2_S'], 2: ['T6_C'], 3: [], 4: [] };
+  students[0].availableShifts = ['T2_S', 'T6_C'];
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  H.loadData();
+
+  global.window.adminOpenReassignModal('T6_C', 'old', 1);
+  const week1Option = els['modal-candidate-select'].innerHTML
+    .split('<option')
+    .find(o => o.includes('2102001'));
+  assert.ok(week1Option && week1Option.includes('Không đăng ký rảnh tuần này'),
+    'Tuần 1 phải báo không đăng ký, thực tế: ' + week1Option);
+
+  global.window.adminOpenReassignModal('T6_C', 'old', 2);
+  const week2Option = els['modal-candidate-select'].innerHTML
+    .split('<option')
+    .find(o => o.includes('2102001'));
+  assert.ok(week2Option && week2Option.includes('Có rảnh ca này'),
+    'Tuần 2 phải báo có rảnh, thực tế: ' + week2Option);
+});
+
 runTest('Gán tay: sổ tay lưu theo THÁNG, không phải khoá phẳng theo tuần', () => {
   seed();
   H.loadData();
