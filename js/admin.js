@@ -3732,7 +3732,58 @@ function renderNeedsAction() {
   }
 }
 
+function getRegisteredShiftCount(student) {
+    if (!student) return 0;
+    const monthly = student.monthlyAvailableShifts;
+    if (monthly && typeof monthly === 'object') {
+      return Object.values(monthly).reduce(
+        (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+        0
+      );
+    }
+    return Array.isArray(student.availableShifts) ? student.availableShifts.length : 0;
+}
+
+/**
+ * Thống kê số CTV đã đăng ký ca rảnh cho tháng đang mở.
+ * Không đếm dữ liệu ca rảnh còn sót của tháng khác.
+ */
+function renderStudentRegistrationSummary() {
+  const countEl = document.getElementById('student-reg-count');
+  if (!countEl) return;
+
+  const month = state.currentMonth || 10;
+  const year = state.currentYear || 2026;
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const storedMonth = readAvailabilityMonthKey();
+  const hasMonthData = !storedMonth || storedMonth === monthKey;
+  const students = Array.isArray(state.students) ? state.students : [];
+
+  let registered = 0;
+  let totalShifts = 0;
+  if (hasMonthData) {
+    students.forEach(student => {
+      const count = getRegisteredShiftCount(student);
+      if (count > 0) registered++;
+      totalShifts += count;
+    });
+  }
+
+  const monthLabel = document.getElementById('student-reg-month-label');
+  const totalEl = document.getElementById('student-reg-total');
+  const shiftsEl = document.getElementById('student-reg-shifts');
+  if (monthLabel) monthLabel.textContent = `${String(month).padStart(2, '0')}/${year}`;
+  countEl.textContent = String(registered);
+  if (totalEl) totalEl.textContent = String(students.length);
+  if (shiftsEl) {
+    shiftsEl.textContent = hasMonthData
+      ? `Tổng lượt ca rảnh: ${totalShifts}`
+      : 'Chưa có dữ liệu ca rảnh cho tháng này';
+  }
+}
+
 function renderStudentTable() {
+    renderStudentRegistrationSummary();
     if (!elements.studentTableBody) return;
 
     let filtered = [...state.students];
@@ -8369,6 +8420,8 @@ async function handleDeleteEvent(id) {
     // Dùng cho kiểm thử: chuẩn hoá id CTV + vẽ bảng CTV.
     normalizeStudentIds,
     renderStudentTable,
+    renderStudentRegistrationSummary,
+    getRegisteredShiftCount,
     getState: () => ({ ...state })
   };
 

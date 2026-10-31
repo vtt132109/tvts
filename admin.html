@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261031_1230">
+  <link rel="stylesheet" href="css/style.css?v=20261031_1500">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -938,7 +938,24 @@
           </div>
         </div>
         <div class="card-body">
-          
+
+          <!-- Số lượng CTV đã đăng ký ca rảnh cho tháng đang mở -->
+          <div id="student-registration-summary" style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; padding: 0.8rem 1rem; margin-bottom: 1rem; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: var(--radius-md);">
+            <div aria-hidden="true" style="width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;">📝</div>
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.02em;">
+                Sinh viên đã đăng ký ca tháng <span id="student-reg-month-label">10/2026</span>
+              </div>
+              <div style="font-size: 1.25rem; font-weight: 800; color: #1e3a8a; line-height: 1.25;">
+                <strong id="student-reg-count">0</strong>
+                <span style="font-size: 0.9rem; font-weight: 600; color: #1e40af;">/ <span id="student-reg-total">0</span> CTV</span>
+              </div>
+            </div>
+            <div id="student-reg-shifts" style="margin-left: auto; font-size: 0.82rem; font-weight: 600; color: #1e40af; text-align: right;">
+              Tổng lượt ca rảnh: 0
+            </div>
+          </div>
+
           <!-- Toolbar lọc & tìm kiếm -->
           <div class="table-toolbar">
             <div class="filter-group">
@@ -2210,17 +2227,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261031_1230"></script>
+  <script src="js/a11y_modal.js?v=20261031_1500"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261031_1230"></script>
-  <script src="js/month_calendar.js?v=20261031_1230"></script>
-  <script src="js/scheduler.js?v=20261031_1230"></script>
-  <script src="js/roster.js?v=20261031_1230"></script>
-  <script src="js/common.js?v=20261031_1230"></script>
-  <script src="js/audit.js?v=20261031_1230"></script>
-  <script src="js/store.js?v=20261031_1230"></script>
-  <script src="js/admin.js?v=20261031_1230"></script>
+  <script src="js/cloud_sync.js?v=20261031_1500"></script>
+  <script src="js/month_calendar.js?v=20261031_1500"></script>
+  <script src="js/scheduler.js?v=20261031_1500"></script>
+  <script src="js/roster.js?v=20261031_1500"></script>
+  <script src="js/common.js?v=20261031_1500"></script>
+  <script src="js/audit.js?v=20261031_1500"></script>
+  <script src="js/store.js?v=20261031_1500"></script>
+  <script src="js/admin.js?v=20261031_1500"></script>
 </body>
 </html>
