@@ -793,6 +793,61 @@ runTest('Xếp tự động 2 người/ca không phân biệt vai trò: toàn b�
   assert.strictEqual(sched.weeks[0].summary.fullShifts, 10, 'Phải đủ 10/10 ca, không bị chặn vì thiếu Chính Thức');
 });
 
+runTest('Cấu hình tháng chuẩn hoá capacity mọi ô và tính lại KPI/summary', () => {
+  seed();
+  const s1 = { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A', role: 'old' };
+  const s2 = { id: 's_2', studentId: '2211005', fullName: 'Tran Thi B', role: 'new' };
+  const shiftIds = window.SchedulerEngine.SHIFTS.map(s => s.id);
+  const makeTable = () => {
+    const table = {};
+    shiftIds.forEach(id => {
+      table[id] = {
+        shiftId: id,
+        shiftInfo: window.SchedulerEngine.SHIFT_MAP[id],
+        capacity: 1,
+        oldMember: null,
+        newMember: null,
+        thirdMember: null,
+        status: 'empty'
+      };
+    });
+    table.T2_S.oldMember = s1;
+    table.T2_S.status = 'full';
+    table.T3_S.oldMember = s1;
+    table.T3_S.newMember = s2;
+    table.T3_S.status = 'full';
+    return table;
+  };
+  const staleSchedule = {
+    month: 10,
+    year: 2026,
+    weeks: [1, 2, 3, 4].map(w => ({
+      weekNumber: w,
+      scheduleTable: makeTable(),
+      summary: { fullShifts: 99, emptyShifts: 0 }
+    }))
+  };
+  LS.setItem('ts_scheduler_month_result', JSON.stringify(staleSchedule));
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({
+    '2026-10': { peoplePerShift: 2 }
+  }));
+  H.loadData();
+
+  const sched = H.getState().monthSchedule;
+  Object.values(sched.weeks[0].scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 2, `Ca ${slot.shiftId} phải được đồng bộ capacity 2`);
+  });
+  assert.strictEqual(sched.weeks[0].scheduleTable.T2_S.status, 'partial',
+    'Ca chỉ có 1 người trong tháng 2 người/ca phải là partial');
+  assert.strictEqual(sched.weeks[0].scheduleTable.T3_S.status, 'full');
+  assert.strictEqual(sched.weeks[0].summary.fullShifts, 1,
+    'KPI phải được tính lại từ dữ liệu thật, không dùng summary cũ');
+  const persisted = JSON.parse(LS.getItem('ts_scheduler_month_result'));
+  Object.values(persisted.weeks[0].scheduleTable).forEach(slot => {
+    assert.strictEqual(slot.capacity, 2, 'Capacity chuẩn hoá phải được lưu lại');
+  });
+});
+
 runTest('Bấm nhanh 1/2 người/ca trên bảng phân công đổi đúng cấu hình tháng', () => {
   seed();
   H.loadData();

@@ -2390,25 +2390,73 @@
    * Giữ trạng thái đã xử lý trên máy này; bản approved/rejected từ Cloud sẽ
    * thắng bản pending để sinh viên thấy kết quả duyệt.
    */
+  function sanitizeSwapText(value, maxLength) {
+    if (typeof value !== 'string') return '';
+    return value
+      .replace(/[\u0000-\u001F\u007F]/g, ' ')
+      .slice(0, maxLength);
+  }
+
+  /**
+   * Yêu cầu đổi ca đến từ client sinh viên nên phải coi là dữ liệu không tin cậy.
+   * Chuẩn hoá kiểu/độ dài và ép weekNum/shiftId về miền hợp lệ trước khi render.
+   */
+  function sanitizeSwapRequestRecord(item) {
+    if (!item || typeof item !== 'object') return null;
+    const rawId = item.id === undefined || item.id === null ? '' : String(item.id);
+    const id = sanitizeSwapText(rawId, 128);
+    if (!id) return null;
+
+    const weekNum = Number(item.weekNum);
+    const rawShiftId = sanitizeSwapText(item.shiftId, 12);
+    const shiftId = /^[A-Za-z0-9_-]{1,12}$/.test(rawShiftId) ? rawShiftId : '';
+    const status = PUBLIC_SWAP_STATUS_VALUES.has(item.status) ? item.status : 'pending';
+
+    return {
+      id,
+      uid: sanitizeSwapText(item.uid, 128),
+      studentId: sanitizeSwapText(item.studentId, 32),
+      studentName: sanitizeSwapText(item.studentName, 100),
+      studentRole: sanitizeSwapText(item.studentRole, 20),
+      swapType: item.swapType === 'cover' ? 'cover' : 'swap',
+      weekNum: Number.isInteger(weekNum) && weekNum >= 1 && weekNum <= 4 ? weekNum : 0,
+      shiftId,
+      shiftName: sanitizeSwapText(item.shiftName, 100),
+      targetStudentId: sanitizeSwapText(item.targetStudentId, 32),
+      targetStudentName: sanitizeSwapText(item.targetStudentName, 100),
+      targetStudentRole: sanitizeSwapText(item.targetStudentRole, 20),
+      reason: sanitizeSwapText(item.reason, 500),
+      status,
+      createdAt: sanitizeSwapText(item.createdAt, 64),
+      adminNote: sanitizeSwapText(item.adminNote, 500),
+      approvedAt: sanitizeSwapText(item.approvedAt, 64),
+      rejectedAt: sanitizeSwapText(item.rejectedAt, 64),
+      cancelledAt: sanitizeSwapText(item.cancelledAt, 64)
+    };
+  }
+
   function mergeSwapRequests(localList, remoteList) {
     const byId = new Map();
     (Array.isArray(localList) ? localList : []).forEach(item => {
-      if (item && item.id) byId.set(String(item.id), Object.assign({}, item));
+      const safe = sanitizeSwapRequestRecord(item);
+      if (safe) byId.set(safe.id, safe);
     });
     (Array.isArray(remoteList) ? remoteList : []).forEach(item => {
-      if (!item || !item.id) return;
-      const id = String(item.id);
-      const existing = byId.get(id);
+      const safe = sanitizeSwapRequestRecord(item);
+      if (!safe) return;
+      const existing = byId.get(safe.id);
       if (!existing) {
-        byId.set(id, Object.assign({}, item));
+        byId.set(safe.id, safe);
         return;
       }
       const localHandled = existing.status === 'approved' || existing.status === 'rejected';
-      const remoteHandled = item.status === 'approved' || item.status === 'rejected';
+      const remoteHandled = safe.status === 'approved' || safe.status === 'rejected';
       if (localHandled && !remoteHandled) return;
-      byId.set(id, Object.assign({}, existing, item, { id: existing.id || item.id }));
+      byId.set(safe.id, Object.assign({}, existing, safe, { id: existing.id || safe.id }));
     });
     return Array.from(byId.values())
+      .map(sanitizeSwapRequestRecord)
+      .filter(Boolean)
       .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
       .slice(0, 200);
   }
@@ -3232,6 +3280,7 @@
     updateSwapRequest,
     mergeRegistrationRequests,
     mergeSwapRequests,
+    sanitizeSwapRequestRecord,
     // Cán bộ: xoá ràng buộc phiên cũ của MSSV để sinh viên đổi máy đăng ký lại
     releaseMssvOwner,
 

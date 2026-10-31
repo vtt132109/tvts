@@ -1623,6 +1623,16 @@ runTest('6.15: Google login phải tự kéo dữ liệu Cloud trước khi làm
     'Sau authenticateSuccess phải gọi pullFromCloud để máy mới nhận dữ liệu mới nhất');
 });
 
+runTest('3.15b: Bảng đổi ca admin không chèn weekNum/id chưa escape vào HTML', () => {
+  assert.ok(/Tuần \$\{escapeHtml\(req\.weekNum\)\}/.test(adminJs),
+    'weekNum phải được escape trước khi render');
+  assert.ok(!/onclick="window\.adminApproveSwap\('\$\{/.test(adminJs),
+    'Không được nhúng id yêu cầu vào inline onclick');
+  assert.ok(adminJs.includes('data-swap-action="approve"')
+    && adminJs.includes('data-swap-action="reject"'),
+  'Phải dùng data-attribute + event delegation cho nút duyệt/từ chối');
+});
+
 runTest('3.16: Gán ca thủ công ngay trên lưới, KHÔNG có nút "xếp thủ công" riêng', () => {
   assert.ok(/function ensureBlankMonthSchedule\s*\(/.test(adminJs),
     'Thiếu ensureBlankMonthSchedule để tạo khung 4 tuần × 10 ca');
