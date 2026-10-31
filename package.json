@@ -5,8 +5,12 @@
   "description": "Hệ thống quản lý & xếp lịch trực Ban Tư Vấn Tuyển Sinh HCM-UTE (web tĩnh, không phụ thuộc thư viện ngoài)",
   "scripts": {
     "test": "node tests/run_all_tests.js",
+    "test:e2e": "playwright test",
     "check": "node scripts/clean_code.js",
     "verify": "node scripts/clean_code.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
   },
   "engines": {
     "node": ">=18"

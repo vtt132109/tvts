@@ -1402,6 +1402,9 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
   });
   assert(unknown.mergedCount === 0 && unknown.students.length === 1,
     '11.4: Không tự thêm MSSV lạ vào danh sách CTV');
+  assert(unknown.pendingClaims && unknown.pendingClaims.length === 1
+    && unknown.pendingClaims[0].mssv === 'SV999',
+  '11.4b: MSSV lạ phải vào hàng chờ duyệt thay vì tự động thêm');
 
   // Dữ liệu yêu cầu đến từ client sinh viên -> phải lọc trước khi gộp.
   env.window.SchedulerEngine = { SHIFTS: [{ id: 'T2_S' }, { id: 'T3_C' }] };

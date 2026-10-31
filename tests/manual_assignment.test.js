@@ -70,6 +70,7 @@ global.setInterval = () => 1;
 global.clearInterval = () => {};
 
 global.window = {
+  __TVTS_AUTH_TEST__: true,
   addEventListener: () => {}, dispatchEvent: () => {},
   matchMedia: () => ({ matches: false }),
   localStorage: LS, sessionStorage: SS,
@@ -921,6 +922,58 @@ runTest('Giao diện Quản Lý Sinh Viên: có ô thống kê số CTV đã đ�
   assert.ok(html.includes('Sinh viên đã đăng ký ca tháng'), 'Phải có nhãn thống kê đăng ký');
   assert.ok(js.includes('renderStudentRegistrationSummary'),
     'Phải có hàm cập nhật thống kê đăng ký tháng');
+});
+
+runTest('Yêu cầu MSSV mới: chờ duyệt, duyệt thì thêm CTV và xóa khỏi hàng chờ', () => {
+  seed();
+  const claim = {
+    mssv: '2999999',
+    fullName: 'Người Mới Chờ Duyệt',
+    monthKey: '2026-10',
+    shifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] },
+    availableShifts: ['T2_S'],
+    submittedAt: '2026-10-30T10:00:00.000Z',
+    uid: 'anon-uid'
+  };
+  LS.setItem('ts_scheduler_claim_requests_v1', JSON.stringify([claim]));
+  mockEl('pending-claim-box');
+  H.loadData();
+  H.renderPendingClaims();
+
+  const box = els['pending-claim-box'];
+  assert.strictEqual(box.style.display, 'block', 'Có yêu cầu phải hiện hộp chờ duyệt');
+  assert.ok(box.innerHTML.includes('Người Mới Chờ Duyệt'), 'Phải hiện họ tên người gửi');
+  assert.ok(box.innerHTML.includes('data-claim-action="approve"'), 'Phải có nút duyệt');
+  assert.ok(box.innerHTML.includes('data-claim-action="reject"'), 'Phải có nút từ chối');
+
+  H.approvePendingClaim('2999999');
+  const students = H.getState().students;
+  assert.ok(students.some(s => s.studentId === '2999999'),
+    'Duyệt phải thêm MSSV mới vào danh sách CTV');
+  assert.strictEqual(JSON.parse(LS.getItem('ts_scheduler_claim_requests_v1') || '[]').length, 0,
+    'Sau khi duyệt phải xóa khỏi hàng chờ');
+});
+
+runTest('Yêu cầu MSSV mới: từ chối thì ẩn khỏi hàng chờ và ghi danh sách từ chối', () => {
+  seed();
+  LS.setItem('ts_scheduler_claim_requests_v1', JSON.stringify([{
+    mssv: '2888888',
+    fullName: 'Người Bị Từ Chối',
+    monthKey: '2026-10',
+    shifts: { 1: ['T2_S'], 2: [], 3: [], 4: [] },
+    availableShifts: ['T2_S'],
+    submittedAt: '2026-10-30T10:00:00.000Z'
+  }]));
+  mockEl('pending-claim-box');
+  H.loadData();
+  H.rejectPendingClaim('2888888');
+
+  assert.strictEqual(JSON.parse(LS.getItem('ts_scheduler_claim_requests_v1') || '[]').length, 0,
+    'Từ chối phải xóa khỏi hàng chờ');
+  assert.ok(JSON.parse(LS.getItem('ts_scheduler_claim_rejected_v1') || '[]').includes('2888888'),
+    'Phải ghi MSSV vào danh sách đã từ chối');
+  assert.ok(!H.getState().students.some(s => s.studentId === '2888888'),
+    'Không được thêm MSSV bị từ chối vào danh sách');
 });
 
 runTest('Xóa tuần: chỉ xóa người trong tuần đang xem, giữ tuần khác và sổ tay tuần khác', () => {
