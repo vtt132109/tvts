@@ -694,6 +694,8 @@
       lockAdminDashboard();
     }
 
+    window.addEventListener('pagehide', persistLocalStateOnExit);
+
     // Lắng nghe sự kiện đồng bộ giữa các tab
     window.addEventListener('storage', (e) => {
       if (!state.isAuthenticated) return;
@@ -1152,6 +1154,27 @@
     if (elements.dashboardContainer) elements.dashboardContainer.style.display = 'none';
     // Mỗi lần hiện màn xác thực, cập nhật xem máy này có mã khôi phục không.
     try { renderRecoveryAvailability(); } catch (e) { /* phần tử chưa sẵn sàng */ }
+  }
+
+  /**
+   * Lưới an toàn cuối cùng: nếu một thao tác quên gọi save, đóng tab/F5 vẫn
+   * giữ dữ liệu đang có trong bộ nhớ xuống localStorage. Không đẩy Cloud ở đây
+   * vì pagehide không đủ thời gian cho request mạng.
+   */
+  function persistLocalStateOnExit() {
+    if (!state.isAuthenticated) return;
+    try {
+      if (Array.isArray(state.students)) {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(state.students));
+      }
+      if (state.monthSchedule) {
+        localStorage.setItem(STORAGE_KEYS.MONTH_SCHEDULE, JSON.stringify(state.monthSchedule));
+        localStorage.setItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE, JSON.stringify(state.monthSchedule));
+      }
+      if (state.currentSchedule) {
+        localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
+      }
+    } catch (e) { /* hết dung lượng: không chặn trang đóng */ }
   }
 
   function updateAdminUserHeader() {
@@ -6460,8 +6483,8 @@ window.adminDeleteStudent = async function(studentId) {
       elements.btnConfirmImport.disabled = false;
       elements.btnConfirmImport.style.opacity = '1';
       elements.btnConfirmImport.innerHTML = isForm
-        ? `<span>☁️ Nhập Google Form &amp; Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`
-        : `<span>☁️ Xác Nhận Nạp &amp; Lưu Lên Cloud (${candidates.length} Sinh Viên)</span>`;
+        ? `<span>☁️ Nhập Google Form &amp; Tự Lưu (${candidates.length} Sinh Viên)</span>`
+        : `<span>☁️ Xác Nhận Nạp &amp; Tự Lưu (${candidates.length} Sinh Viên)</span>`;
     }
   }
 
@@ -6518,23 +6541,27 @@ window.adminDeleteStudent = async function(studentId) {
           role: c.role || 'new',
           availableShifts: c.availableShifts,
           monthlyAvailableShifts: monthlyShifts,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          // Bắt buộc: nếu thiếu updatedAt, lần F5/kéo Cloud sau có thể bị
+          // request cũ ghi đè ca rảnh vừa nhập.
+          updatedAt: Date.now()
         });
         addedCount++;
       }
     });
 
+    // Mọi file nhập đều gắn ca rảnh với tháng đang mở. Nếu chỉ đặt khoá này
+    // cho Google Form, lần F5 sau khi nhập CSV danh sách có thể bị
+    // resetAvailabilityIfNewMonth xoá sạch ca vừa nhập.
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.AVAILABILITY_MONTH,
+        `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`
+      );
+    } catch (e) {}
+
     saveStudents(true);
-    if (isFormImport) {
-      // Ca rảnh của form thuộc đúng tháng đang mở; đánh dấu tháng để lần
-      // chuyển kỳ sau không hiểu nhầm dữ liệu của tháng cũ.
-      try {
-        localStorage.setItem(
-          STORAGE_KEYS.AVAILABILITY_MONTH,
-          `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`
-        );
-      } catch (e) {}
-    } else {
+    if (!isFormImport) {
       // File danh sách CTV có thể đổi vai trò/ca rảnh -> cần xếp lại.
       runFullSchedule();
     }
@@ -6555,7 +6582,7 @@ window.adminDeleteStudent = async function(studentId) {
         showToast(`Đã lưu cục bộ! Lỗi kết nối Cloud: ${cloudErr.message}`, 'warning', 4000);
       }
     } else {
-      showToast(`Đã nhập ${candidates.length} CTV${isFormImport ? ' từ Google Form cho ' + monthLabel : ''} (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success', 4000);
+      showToast(`Đã tự lưu ${candidates.length} CTV${isFormImport ? ' từ Google Form cho ' + monthLabel : ''} (Thêm mới: ${addedCount}, Cập nhật: ${updatedCount})!`, 'success', 4000);
     }
   }
 

@@ -97,6 +97,40 @@ test('admin: xóa người khỏi ca và giữ trống sau reload', async ({ pag
   )).toBeNull();
 });
 
+test('admin: nhập CSV tự lưu và giữ ca rảnh sau reload', async ({ page }) => {
+  await seed(page, {
+    local: fixtures.adminLocal,
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  // Mô phỏng khoá tháng ca rảnh còn cũ trước khi nhập file.
+  await page.evaluate(() => {
+    localStorage.setItem('ts_scheduler_availability_month_v1', '2026-09');
+  });
+  await page.click('#btn-tab-students');
+  await page.click('#btn-open-import-modal');
+  const csv = [
+    'Họ và Tên,Mã Số Sinh Viên,Số Điện Thoại,Các Ca Rảnh (cách nhau bởi dấu phẩy)',
+    'Nguyễn Văn An,2102001,0901000001,"T2_S, T3_S"'
+  ].join('\n');
+  await page.setInputFiles('#input-import-file', {
+    name: 'import.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv)
+  });
+  await page.waitForTimeout(500);
+  await page.click('#btn-confirm-import');
+  await page.waitForTimeout(700);
+  await page.reload();
+  await page.waitForTimeout(700);
+  const weekly = await page.evaluate(() => {
+    const student = window.adminTestHelper.getState().students
+      .find(s => s.studentId === '2102001');
+    return student && student.monthlyAvailableShifts && student.monthlyAvailableShifts[1];
+  });
+  expect(weekly).toEqual(['T2_S', 'T3_S']);
+});
+
 test('admin: sửa ca rảnh theo tuần và giữ thay đổi sau reload', async ({ page }) => {
   await seed(page, {
     local: fixtures.adminLocal,
