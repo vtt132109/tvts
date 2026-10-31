@@ -303,7 +303,6 @@
     if (!Array.isArray(students)) return [];
     const seenIds = new Set();
     const warn = (msg) => { if (Array.isArray(normalizeWarnings)) normalizeWarnings.push(msg); };
-    const badRoles = [];
 
     const normalized = students.filter(Boolean).map((s, idx) => {
       // id falsy (0, '', null) phải coi như THIẾU, không âm thầm rơi về stu_N
@@ -344,12 +343,8 @@
         avail = [];
       }
 
-      // Vai trò chỉ chấp nhận 'old' | 'new' (không phân biệt hoa thường, và chấp
-      // nhận cả tên hiển thị tiếng Việt). Trước đây mọi giá trị lạ đều bị
-      // âm thầm đổi thành 'old' (Chính Thức) — khiến một Tập sự gõ sai
-      // "NEW" bị nâng quyền, đồng thời phá vỡ luật 1 Cũ + 1 Mới cho toàn danh sách.
-      // Nay: chuẩn hoá + LUÔN ghi cảnh báo, kể cả khi thiếu hoàn toàn.
-      let role = null;
+      // Giữ trường role để tương thích dữ liệu cũ; từ nay không dùng để xếp ca.
+      let role = 'new';
       if (typeof s.role === 'string') {
         const r = s.role.trim().toLowerCase();
         if (r === 'old' || r === 'new') {
@@ -363,21 +358,8 @@
         role = s.role ? 'old' : 'new';
       }
 
-      if (role === null) {
-        const raw = s.role === undefined || s.role === null || s.role === ''
-          ? '(thiếu)' : JSON.stringify(s.role);
-        badRoles.push(`"${s.fullName || id}": ${raw}`);
-        // Mặc định là 'new' (Tập sự) — KHÔNG tự nâng quyền lên Chính Thức.
-        role = 'new';
-      }
-
       return { ...s, id, role, availableShifts: avail };
     });
-
-    if (badRoles.length > 0) {
-      warn(`Phân loại vai trò không hợp lệ hoặc thiếu, đã tạm xếp là "Tập Sự" cho: ${badRoles.join(', ')}. `
-        + 'Vui lòng sửa lại trong Bảng Quản Lý Sinh Viên.');
-    }
 
     return normalized;
   }
@@ -569,6 +551,194 @@
     return result;
   }
 
+  /**
+   * Xếp ca KHÔNG phân biệt vai trò: mỗi ca nhận đủ `capacity` người bất kỳ
+   * (1 hoặc 2), chỉ dựa trên ca rảnh, công bằng lũy kế và ràng buộc
+   * một người không trực 2 ca cùng ngày.
+   */
+  function scheduleAnyRoleShifts(allStudents, shiftIds, capacity, priorityStudentIds, historicalCounts, blockedDays, initialCounts) {
+    const cap = capacity === 1 ? 1 : 2;
+    const safeMembers = Array.isArray(allStudents) ? allStudents.filter(Boolean) : [];
+    const ids = Array.isArray(shiftIds) ? shiftIds.slice() : [];
+    const safeHist = historicalCounts || {};
+    const baseCounts = initialCounts || {};
+    const blocked = blockedDays || {};
+    const result = { assignments: {}, counts: {}, unassigned: [], shortShifts: {}, warnings: [] };
+    if (safeMembers.length === 0) {
+      ids.forEach(id => result.unassigned.push(id));
+      result.warnings.push('Danh sách sinh viên rỗng. Không có ca trực nào được phân bổ.');
+      return result;
+    }
+
+    const availMap = new Map();
+    safeMembers.forEach(m => {
+      availMap.set(m.id, new Set(m.availableShifts || []));
+      result.counts[m.id] = 0;
+    });
+    const assignedDays = {};
+    safeMembers.forEach(m => {
+      assignedDays[m.id] = new Set(Array.isArray(blocked[m.id]) ? blocked[m.id] : []);
+    });
+
+    const shifts = SHIFTS.filter(s => ids.includes(s.id));
+    const candidatesFor = (shift) => safeMembers.filter(m => {
+      const set = availMap.get(m.id);
+      return set && set.has(shift.id);
+    });
+    const sortedShifts = [...shifts].sort(
+      (a, b) => candidatesFor(a).length - candidatesFor(b).length
+    );
+
+    for (const shift of sortedShifts) {
+      const dayKey = String(shift.id).split('_')[0];
+      const candidates = candidatesFor(shift);
+      const chosen = [];
+      const chosenIds = new Set();
+
+      for (let slot = 0; slot < cap; slot++) {
+        let best = null;
+        let bestScore = Infinity;
+        let fallback = null;
+        let fallbackScore = Infinity;
+
+        for (const cand of candidates) {
+          if (chosenIds.has(cand.id)) continue;
+          const current = result.counts[cand.id] || 0;
+          const base = baseCounts[cand.id] || 0;
+          const hist = safeHist[cand.id] || 0;
+          // Cân bằng tổng ca cả tháng > ca trong tuần > số ca rảnh.
+          const score = ((hist + base + current) * 5000)
+            + (current * 1000)
+            + (cand.availableShifts?.length || 0);
+          const sameDay = assignedDays[cand.id] && assignedDays[cand.id].has(dayKey);
+          if (!sameDay) {
+            if (score < bestScore) { bestScore = score; best = cand; }
+          } else if (score < fallbackScore) {
+            fallbackScore = score;
+            fallback = cand;
+          }
+        }
+
+        const picked = best || fallback;
+        if (!picked) break;
+        if (!best) {
+          result.warnings.push(
+            `Ca ${shift.id}: không còn CTV rảnh khác ngày — buộc xếp ${picked.fullName || picked.id} dù đã có ca cùng ngày.`
+          );
+        }
+        chosen.push(picked);
+        chosenIds.add(picked.id);
+        result.counts[picked.id] = (result.counts[picked.id] || 0) + 1;
+        assignedDays[picked.id].add(dayKey);
+      }
+
+      if (chosen.length > 0) result.assignments[shift.id] = chosen;
+      if (chosen.length < cap) {
+        result.unassigned.push(shift.id);
+        result.shortShifts[shift.id] = chosen.length;
+      }
+    }
+
+    if (result.unassigned.length > 0) {
+      result.warnings.push(
+        `Có ${result.unassigned.length} ca chưa đủ ${cap} người (${result.unassigned.join(', ')}).`
+      );
+    }
+    return result;
+  }
+
+  /** Xếp toàn bộ ca của một tuần theo mô hình không phân biệt vai trò. */
+  function solveWeeklyScheduleAnyRole(allStudents, priorityStudentIds, historicalCounts, capacity) {
+    const cap = capacity === 1 ? 1 : 2;
+    const normalizeWarnings = [];
+    const safeStudents = normalizeStudents(allStudents, normalizeWarnings);
+    const warnings = [...normalizeWarnings];
+    if (safeStudents.length === 0) {
+      warnings.push('Danh sách sinh viên rỗng. Không có ca trực nào được phân bổ.');
+    }
+
+    const flexible = scheduleAnyRoleShifts(
+      safeStudents,
+      SHIFTS.map(s => s.id),
+      cap,
+      priorityStudentIds,
+      historicalCounts,
+      {},
+      {}
+    );
+
+    const scheduleTable = {};
+    let full = 0;
+    let partial = 0;
+    let empty = 0;
+
+    SHIFTS.forEach(shift => {
+      const members = flexible.assignments[shift.id] || [];
+      const oldMember = members[0] || null;
+      const newMember = cap === 2 ? (members[1] || null) : null;
+      const memberCount = members.length;
+      let status = 'empty';
+      if (memberCount >= cap) status = 'full';
+      else if (memberCount > 0) status = 'partial';
+      scheduleTable[shift.id] = {
+        shiftId: shift.id,
+        shiftInfo: shift,
+        capacity: cap,
+        oldMember,
+        newMember,
+        thirdMember: null,
+        status
+      };
+      if (status === 'full') full++;
+      else if (status === 'partial') partial++;
+      else empty++;
+    });
+
+    const studentStats = {};
+    safeStudents.forEach(s => {
+      studentStats[s.id] = {
+        studentId: s.id,
+        fullName: s.fullName,
+        role: s.role,
+        assignedCount: 0,
+        registeredCount: (s.availableShifts || []).length
+      };
+    });
+    Object.values(scheduleTable).forEach(slot => {
+      [slot.oldMember, slot.newMember].forEach(member => {
+        if (member && studentStats[member.id]) studentStats[member.id].assignedCount += 1;
+      });
+    });
+    const unassignedMembers = safeStudents.filter(
+      s => (studentStats[s.id]?.assignedCount || 0) === 0
+    );
+
+    warnings.push(...flexible.warnings);
+    if (unassignedMembers.length > 0) {
+      warnings.push(`Có ${unassignedMembers.length} CTV chưa được xếp ca nào trong tuần này.`);
+    }
+
+    return {
+      success: true,
+      timestamp: Date.now(),
+      scheduleTable,
+      summary: {
+        totalShifts: SHIFTS.length,
+        fullShifts: full,
+        partialShifts: partial,
+        emptyShifts: empty,
+        totalStudents: safeStudents.length,
+        oldStudentsCount: safeStudents.filter(s => s.role === 'old').length,
+        newStudentsCount: safeStudents.filter(s => s.role === 'new').length,
+        unassignedStudentsCount: unassignedMembers.length,
+        peoplePerShift: cap
+      },
+      studentStats,
+      unassignedMembers,
+      warnings
+    };
+  }
+
   /** Toàn bộ ca trong tháng là 1 người, trừ các ca đặc biệt 3 người. */
   function solveWeeklyScheduleSingle(allStudents, priorityStudentIds, historicalCounts, thirdShifts) {
     const normalizeWarnings = [];
@@ -730,10 +900,20 @@
   }
 
   /**
-   * Bọc tương thích: không truyền options -> giữ nguyên thuật toán 2 người cũ.
-   * options = { peoplePerShift: 1|2, thirdShifts: ['T2_S', ...] }
+   * Bọc tương thích:
+   * - options.anyRole = true -> mỗi ca nhận 1/2 người bất kỳ, không chia Cũ/Mới.
+   * - Không truyền options -> giữ thuật toán 2 người cũ (tương thích dữ liệu cũ).
+   * options = { peoplePerShift: 1|2, anyRole: true, thirdShifts: ['T2_S', ...] }
    */
   function solveWeeklySchedule(allStudents, priorityStudentIds = [], historicalCounts = {}, options) {
+    if (options && options.anyRole) {
+      return solveWeeklyScheduleAnyRole(
+        allStudents,
+        priorityStudentIds,
+        historicalCounts,
+        options.peoplePerShift === 1 ? 1 : 2
+      );
+    }
     if (options && options.peoplePerShift === 1) {
       return solveWeeklyScheduleSingle(allStudents, priorityStudentIds, historicalCounts, options.thirdShifts);
     }
@@ -889,16 +1069,21 @@
       });
     });
 
+    const anyRoleMode = !!(options && options.anyRole);
     if (safeStudents.length < 2) {
-      monthWarnings.push('Tổng số sinh viên < 2 người, không thể hoàn thiện đủ các ca trực chuẩn (1 Cũ + 1 Mới).');
+      monthWarnings.push(anyRoleMode
+        ? 'Tổng số sinh viên < 2 người, không thể xếp đủ 2 người cho mỗi ca.'
+        : 'Tổng số sinh viên < 2 người, không thể hoàn thiện đủ các ca trực chuẩn (1 Cũ + 1 Mới).');
     }
-    const totalOld = safeStudents.filter(s => s.role === 'old').length;
-    const totalNew = safeStudents.filter(s => s.role === 'new').length;
-    if (totalOld === 0) {
-      monthWarnings.push('Toàn bộ chu kỳ thiếu nhóm Người Cũ. Tất cả các ca trực chỉ có Người Mới.');
-    }
-    if (totalNew === 0) {
-      monthWarnings.push('Toàn bộ chu kỳ thiếu nhóm Người Mới. Tất cả các ca trực chỉ có Người Cũ.');
+    if (!anyRoleMode) {
+      const totalOld = safeStudents.filter(s => s.role === 'old').length;
+      const totalNew = safeStudents.filter(s => s.role === 'new').length;
+      if (totalOld === 0) {
+        monthWarnings.push('Toàn bộ chu kỳ thiếu nhóm Người Cũ. Tất cả các ca trực chỉ có Người Mới.');
+      }
+      if (totalNew === 0) {
+        monthWarnings.push('Toàn bộ chu kỳ thiếu nhóm Người Mới. Tất cả các ca trực chỉ có Người Cũ.');
+      }
     }
     if (unassignedMonthMembers.length > 0) {
       monthWarnings.push(`Có ${unassignedMonthMembers.length} sinh viên chưa được phân bổ ca nào trong cả chu kỳ ${numWeeks} tuần do đăng ký quá ít ca hoặc trùng ca cao điểm.`);
@@ -978,6 +1163,7 @@
     getShiftName,
     MonthCalendarHelper,
     solveWeeklySchedule,
+    solveWeeklyScheduleAnyRole,
     solveMultiWeekSchedule,
     // Bí danh tương thích
     runAutoSchedule,

@@ -456,8 +456,6 @@
       cbStudentSelectAll: document.getElementById('cb-student-select-all'),
       bulkStudentActions: document.getElementById('bulk-student-actions'),
       bulkSelectedCount: document.getElementById('bulk-selected-count'),
-      btnBulkRoleOld: document.getElementById('btn-bulk-role-old'),
-      btnBulkRoleNew: document.getElementById('btn-bulk-role-new'),
       btnBulkClearShifts: document.getElementById('btn-bulk-clear-shifts'),
       btnBulkDeleteStudents: document.getElementById('btn-bulk-delete-students'),
       filterButtons: document.querySelectorAll('.filter-btn'),
@@ -2594,7 +2592,10 @@ function runFullSchedule() {
     // 1/2 người mỗi ca + danh sách ca đặc biệt 3 người của tháng đang mở.
     const capacityConfig = getMonthCapacity(curM, curY, state.monthSchedule);
     const monthResult = monthEngine
-      ? monthEngine(state.students, curY, curM, { peoplePerShift: capacityConfig.peoplePerShift })
+      ? monthEngine(state.students, curY, curM, {
+        peoplePerShift: capacityConfig.peoplePerShift,
+        anyRole: true
+      })
       : null;
 
     // Áp lại các ô quản trị viên đã chỉnh tay. Trước đây mọi thao tác gọi
@@ -2716,18 +2717,42 @@ function runFullSchedule() {
     updateShiftCapacityButtonLabel();
   }
 
-  /** Nhãn nút luôn cho biết mức nền của ĐÚNG tháng đang mở. */
+  /** Cập nhật bộ chọn 1/2 người/ca theo ĐÚNG tháng đang mở. */
   function updateShiftCapacityButtonLabel() {
     const m = state.currentMonth || 10;
     const y = state.currentYear || 2026;
     const cfg = getMonthCapacity(m, y);
-    const label = document.getElementById('btn-shift-capacity-label');
-    if (label) label.textContent = `Số người/ca: ${cfg.peoplePerShift}`;
-    const btn = document.getElementById('btn-shift-capacity');
-    if (btn) {
-      btn.title = `Tháng ${String(m).padStart(2, '0')}/${y}: auto xếp ${cfg.peoplePerShift} người/ca. `
-        + 'Bấm để đổi cho riêng tháng này.';
+    [1, 2].forEach(value => {
+      const btn = document.getElementById(`btn-month-capacity-${value}`);
+      if (!btn) return;
+      const active = cfg.peoplePerShift === value;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const group = document.getElementById('month-capacity-control');
+    if (group) {
+      group.title = `Tháng ${String(m).padStart(2, '0')}/${y}: đang xếp ${cfg.peoplePerShift} người/ca.`;
     }
+  }
+
+  /** Đổi nhanh 1/2 người/ca ngay trên bảng phân công tháng. */
+  function setMonthCapacityQuick(value) {
+    const peoplePerShift = value === 1 ? 1 : 2;
+    const m = state.currentMonth || 10;
+    const y = state.currentYear || 2026;
+    if (getMonthCapacity(m, y).peoplePerShift === peoplePerShift) {
+      updateShiftCapacityButtonLabel();
+      return;
+    }
+    saveMonthCapacity(m, y, { peoplePerShift });
+    runFullSchedule();
+    renderAll();
+    showToast(
+      `Đã đặt ${peoplePerShift} người/ca cho tháng ${String(m).padStart(2, '0')}/${y} `
+        + 'và xếp lại lịch (giữ nguyên ca gán tay).',
+      'success',
+      6500
+    );
   }
 
   /**
@@ -2949,6 +2974,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       }
     }
 
+    const brandNewMonth = !allMonths[targetKey];
     if (allMonths[targetKey]) {
       state.monthSchedule = allMonths[targetKey];
       state.twoWeekSchedule = allMonths[targetKey];
@@ -2990,6 +3016,16 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     auditLog('MONTH_SWITCH',
       `Chuyển kỳ trực sang ${pad2(targetMonth)}/${targetYear}`
       + (availabilityReset.reset ? ` — reset ca rảnh của ${availabilityReset.cleared} CTV` : ''));
+
+    // Tháng hoàn toàn mới: mở ngay bảng chọn 1/2 người/ca để cán bộ quyết định
+    // trước khi nhập liệu. Nếu bỏ qua, mức mặc định (2 người/ca) vẫn được giữ.
+    if (brandNewMonth) {
+      setTimeout(() => {
+        if (state.currentMonth === targetMonth && state.currentYear === targetYear) {
+          openShiftCapacityModal(targetMonth, targetYear, { isNewMonth: true });
+        }
+      }, 350);
+    }
   }
 
   function goToNextMonth() {
@@ -3299,7 +3335,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
         message: `Toàn bộ ${state.students.length} CTV sẽ bị xóa khỏi hệ thống. `
           + 'Sau khi xóa, không ai đăng nhập được vào Cổng Đăng Ký nữa.',
         losses: [
-          `${state.students.length} hồ sơ CTV (cả Chính Thức lẫn Tập Sự)`,
+          `${state.students.length} hồ sơ CTV`,
           `${totalShifts} lượt ca rảnh đã đăng ký`,
           'Toàn bộ bảng phân công ca trực',
           'Các đề xuất đổi ca đang chờ duyệt',
@@ -3418,44 +3454,6 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       if (e.target && e.target.classList.contains('cb-student-row')) {
         updateBulkStudentActions();
       }
-    });
-
-    elements.btnBulkRoleOld?.addEventListener('click', () => {
-      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
-      if (selectedIds.length === 0) {
-        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
-        return;
-      }
-      state.students.forEach(s => {
-        if (selectedIds.includes(s.id)) {
-          s.role = 'old';
-          s.updatedAt = Date.now();
-        }
-      });
-      saveStudents();
-      runFullSchedule();
-      renderAll();
-      showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Chính Thức!`, 'success');
-      auditLog('ROLE_CHANGE', `Chuyển ${selectedIds.length} CTV sang Chính Thức`);
-    });
-
-    elements.btnBulkRoleNew?.addEventListener('click', () => {
-      const selectedIds = Array.from(document.querySelectorAll('.cb-student-row:checked')).map(cb => cb.dataset.id);
-      if (selectedIds.length === 0) {
-        showToast('Vui lòng chọn ít nhất 1 sinh viên!', 'warning');
-        return;
-      }
-      state.students.forEach(s => {
-        if (selectedIds.includes(s.id)) {
-          s.role = 'new';
-          s.updatedAt = Date.now();
-        }
-      });
-      saveStudents();
-      runFullSchedule();
-      renderAll();
-      showToast(`Đã chuyển ${selectedIds.length} sinh viên sang Tập Sự!`, 'success');
-      auditLog('ROLE_CHANGE', `Chuyển ${selectedIds.length} CTV sang Tập Sự`);
     });
 
 elements.btnBulkClearShifts?.addEventListener('click', async () => {
@@ -3759,7 +3757,7 @@ function renderStudentTable() {
       elements.studentTableBody.innerHTML = rosterEmpty
         ? `
         <tr>
-          <td colspan="8">
+          <td colspan="7">
             <div class="empty-state">
               <div class="empty-state-icon">📥</div>
               <h3>Danh sách CTV chưa được nạp</h3>
@@ -3771,7 +3769,7 @@ function renderStudentTable() {
       `
         : `
         <tr>
-          <td colspan="8">
+          <td colspan="7">
             <div class="empty-state">
               <div class="empty-state-icon">🔍</div>
               <h3>Không tìm thấy CTV nào khớp bộ lọc</h3>
@@ -3788,11 +3786,6 @@ function renderStudentTable() {
     const combinedStats = state.twoWeekSchedule?.combinedStats || {};
 
     elements.studentTableBody.innerHTML = filtered.map((s, index) => {
-      const isOld = s.role === 'old';
-      const roleBadge = isOld 
-        ? `<span class="badge badge-role-old">🎓 Chính Thức</span>` 
-        : `<span class="badge badge-role-new">🌱 Tập Sự</span>`;
-      
       const currentAssigned = assignedCounts[s.id]?.assignedCount || 0;
       const totalTwoWeeks = combinedStats[s.id]?.totalCount || currentAssigned;
       
@@ -3810,7 +3803,6 @@ function renderStudentTable() {
             <div style="font-size: 0.75rem; color: var(--text-muted);">${s.phone ? 'SĐT: ' + escapeHtml(s.phone) : 'Chưa có SĐT'}</div>
           </td>
           <td><code style="font-weight: 700; color: var(--primary);">${escapeHtml(s.studentId)}</code></td>
-          <td>${roleBadge}</td>
           <td>
             <div class="shift-tag-list">${shiftTags}</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">
@@ -3934,8 +3926,8 @@ function renderStudentTable() {
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
               ${unassigned.map(m => `
-                <span class="badge ${m.role === 'old' ? 'badge-old' : 'badge-new'}" style="font-size: 0.78rem;">
-                  ${m.role === 'old' ? '🎓' : '🌱'} ${escapeHtml(m.fullName)} (${escapeHtml(m.studentId)})
+                <span class="badge badge-new" style="font-size: 0.78rem;">
+                  👤 ${escapeHtml(m.fullName)} (${escapeHtml(m.studentId)})
                 </span>
               `).join('')}
             </div>
@@ -3976,19 +3968,15 @@ function renderStudentTable() {
       ? [newMem, thirdMem].filter(Boolean).length
       : [thirdMem].filter(Boolean).length;
 
-    const roleName = (member) => (member && member.role === 'old' ? 'Chính Thức' : 'Tập Sự');
-    const roleIcon = (member) => (member && member.role === 'old' ? '🎓' : '🌱');
-
     const memberCard = (member, openRole, opts) => {
       const o = opts || {};
       if (!member) {
         return `<div class="duty-member-card empty-member" onclick="${open(openRole)}" style="cursor:pointer;" title="${escapeHtml(o.emptyTitle || '')}"><span>${escapeHtml(o.emptyLabel || '+ Chưa có')}</span></div>`;
       }
-      const mismatch = o.expectedRole && member.role && member.role !== o.expectedRole;
       return `
-        <div class="duty-member-card ${o.className || 'role-old'}" title="${escapeHtml(o.title || roleName(member))}">
+        <div class="duty-member-card ${o.className || 'role-old'}" title="${escapeHtml(o.title || '')}">
           <div class="member-info">
-            <span class="member-role-tag">${escapeHtml(o.tag || `${roleIcon(member)} ${roleName(member)}`)}${mismatch ? ' · ⚠️ trái vai trò' : ''}</span>
+            <span class="member-role-tag">${escapeHtml(o.tag || '👤 Người trực')}</span>
             <span class="member-name">${escapeHtml(member.fullName)}</span>
             <span class="member-mssv">MSSV: ${escapeHtml(member.studentId)}</span>
           </div>
@@ -4000,26 +3988,25 @@ function renderStudentTable() {
     let statusLabel = 'Trống';
     let body = '';
     let nextExtraRole = null;
-    let mismatch = false;
 
     if (base === 1) {
       body = memberCard(oldMem, 'single', {
-        className: oldMem && oldMem.role === 'new' ? 'role-new' : 'role-old',
-        tag: `👤 Người trực chính · ${roleName(oldMem)}`,
+        className: 'role-old',
+        tag: '👤 Người trực chính',
         title: 'Ca 1 người — người trực chính',
         emptyLabel: '+ Chọn người trực chính',
         emptyTitle: 'Nhấn để chọn người trực chính'
       });
       body += memberCard(newMem, 'new', {
         className: 'role-third',
-        tag: `👥 Người thêm thứ 2 · ${roleName(newMem)}`,
+        tag: '👥 Người thêm thứ 2',
         title: 'Người thêm thứ 2 (gán tay)',
         emptyLabel: '+ Thêm người thứ 2',
         emptyTitle: 'Nhấn để thêm người thứ 2 vào ca'
       });
       body += memberCard(thirdMem, 'third', {
         className: 'role-third',
-        tag: `👥 Người thêm thứ 3 · ${roleName(thirdMem)}`,
+        tag: '👥 Người thêm thứ 3',
         title: 'Người thêm thứ 3 (gán tay)',
         emptyLabel: '+ Thêm người thứ 3',
         emptyTitle: 'Nhấn để thêm người thứ 3 vào ca'
@@ -4034,18 +4021,17 @@ function renderStudentTable() {
       nextExtraRole = !newMem ? 'new' : (!thirdMem ? 'third' : null);
     } else {
       body = memberCard(oldMem, 'old', {
-        expectedRole: 'old', className: 'role-old', tag: '🎓 Chính Thức',
-        title: 'Chính Thức - Có kinh nghiệm', emptyLabel: '+ Chưa có Chính Thức',
-        emptyTitle: 'Nhấn để gán Chính Thức'
+        className: 'role-old', tag: '👤 Người trực 1',
+        title: 'Người trực thứ nhất', emptyLabel: '+ Chọn người trực 1',
+        emptyTitle: 'Nhấn để chọn người trực 1'
       });
       body += memberCard(newMem, 'new', {
-        expectedRole: 'new', className: 'role-new', tag: '🌱 Tập Sự',
-        title: 'Tập Sự', emptyLabel: '+ Chưa có Tập Sự',
-        emptyTitle: 'Nhấn để gán Tập Sự'
+        className: 'role-new', tag: '👤 Người trực 2',
+        title: 'Người trực thứ hai', emptyLabel: '+ Chọn người trực 2',
+        emptyTitle: 'Nhấn để chọn người trực 2'
       });
       body += memberCard(thirdMem, 'third', {
-        className: 'role-third',
-        tag: `👥 Người thứ 3 (thêm) · ${roleName(thirdMem)}`,
+        className: 'role-third', tag: '👥 Người thêm thứ 3',
         title: 'Người thứ 3 xếp thêm (thủ công)',
         emptyLabel: '+ Thêm người thứ 3',
         emptyTitle: 'Nhấn để thêm người thứ 3 vào ca'
@@ -4058,14 +4044,9 @@ function renderStudentTable() {
         statusLabel = 'Thiếu 1 bạn';
       }
       nextExtraRole = !thirdMem ? 'third' : null;
-      mismatch = (oldMem && oldMem.role && oldMem.role !== 'old')
-        || (newMem && newMem.role && newMem.role !== 'new');
     }
 
-    let statusPill = `<span class="shift-status-pill ${statusClass}">${statusLabel}</span>`;
-    if (mismatch) {
-      statusPill += ` <span class="shift-status-pill warning" title="Ca này đang có người trái vai trò do xếp thủ công">⚠️ Trái vai trò</span>`;
-    }
+    const statusPill = `<span class="shift-status-pill ${statusClass}">${statusLabel}</span>`;
     const addButton = nextExtraRole
       ? `<button type="button" class="btn btn-secondary btn-sm" onclick="${open(nextExtraRole)}" style="margin-top:0.35rem;font-size:0.72rem;font-weight:700;width:100%;" title="Thêm người vào ca này (tối đa 3 người)">➕ Thêm người</button>`
       : '';
@@ -4082,11 +4063,13 @@ function renderStudentTable() {
   }
 
   function renderFairness() {
-    if (!elements.fairnessListOld || !elements.fairnessListNew) return;
+    if (!elements.fairnessListOld) return;
 
     const stats = state.currentSchedule?.studentStats || {};
-    const oldMembers = state.students.filter(s => s.role === 'old');
-    const newMembers = state.students.filter(s => s.role === 'new');
+    // Không còn chia Chính Thức/Tập Sự: tất cả CTV được theo dõi chung.
+    const allMembers = state.students
+      .filter(Boolean)
+      .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'vi'));
 
     function renderList(members, container, roleColor) {
       if (members.length === 0) {
@@ -4115,8 +4098,8 @@ function renderStudentTable() {
       }).join('');
     }
 
-    renderList(oldMembers, elements.fairnessListOld, '#6366f1');
-    renderList(newMembers, elements.fairnessListNew, '#10b981');
+    renderList(allMembers, elements.fairnessListOld, '#6366f1');
+    if (elements.fairnessListNew) elements.fairnessListNew.innerHTML = '';
   }
 
   /**
@@ -4236,11 +4219,10 @@ function renderStudentTable() {
           ? 'Người thêm thứ 3 (gán tay)'
           : 'Người trực chính (1 người/ca)')
       : (role === 'old'
-        ? 'Chính Thức'
+        ? 'Người trực 1'
         : role === 'new'
-          ? 'Tập Sự'
-          : 'Người thứ 3 (gán tay)');
-    const isRoleFixed = base === 2 && (role === 'old' || role === 'new');
+          ? 'Người trực 2'
+          : 'Người thêm thứ 3 (gán tay)');
 
     if (elements.modalSlotTitle) {
       elements.modalSlotTitle.textContent = `[Tuần ${effectiveWeek}] ${shiftInfo.dayName} (${shiftInfo.period}: ${shiftInfo.time})`;
@@ -4248,11 +4230,7 @@ function renderStudentTable() {
 
     if (elements.modalRoleBadge) {
       elements.modalRoleBadge.textContent = roleTitle;
-      elements.modalRoleBadge.className = base === 2 && role === 'old'
-        ? 'badge badge-role-old'
-        : base === 2 && role === 'new'
-          ? 'badge badge-role-new'
-          : 'badge';
+      elements.modalRoleBadge.className = 'badge';
     }
 
     const eligibleStudents = state.students.filter(Boolean);
@@ -4266,12 +4244,10 @@ function renderStudentTable() {
     let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
 
     // Xếp thủ công: liệt kê TOÀN BỘ CTV, kể cả người chưa đăng ký ca nào.
-    // Ưu tiên: đang được gán > đúng vai trò (chỉ vị trí Cũ/Mới) > có rảnh ca này.
+    // Không phân biệt vai trò; chỉ ưu tiên người đang gán và người có rảnh ca này.
     const rankStudent = (s) => {
       const isAvailable = (s.availableShifts || []).includes(shiftId) ? 1 : 0;
-      return (currentAssigned?.id === s.id ? 4 : 0)
-        + (isRoleFixed && s.role === role ? 2 : 0)
-        + isAvailable;
+      return (currentAssigned?.id === s.id ? 4 : 0) + isAvailable;
     };
     eligibleStudents.sort((a, b) => {
       const diff = rankStudent(b) - rankStudent(a);
@@ -4282,11 +4258,7 @@ function renderStudentTable() {
     eligibleStudents.forEach((s, idx) => {
       const isAvailable = (s.availableShifts || []).includes(shiftId);
       const isSelected = currentAssigned?.id && currentAssigned.id === s.id;
-      const roleLabel = s.role === 'old' ? 'Chính Thức' : 'Tập Sự';
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
-      const mismatchLabel = isRoleFixed && s.role !== role
-        ? ` · ⚠️ Trái vai trò (${roleLabel})`
-        : '';
       const selectedLabel = isSelected ? ' · Đang gán' : '';
 
       // value = CHỈ SỐ trong danh sách ứng viên, không phải student.id.
@@ -4294,7 +4266,7 @@ function renderStudentTable() {
       // "undefined") khiến thao tác chọn người bị hiểu là "để trống".
       selectHtml += `
         <option value="${idx}" ${isSelected ? 'selected' : ''}>
-          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${mismatchLabel}${selectedLabel}
+          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${selectedLabel}
         </option>
       `;
     });
@@ -4404,27 +4376,9 @@ function renderStudentTable() {
       || 1;
 
     // XẾP THỦ CÔNG: admin được phép gán bất kỳ CTV nào, kể cả chưa đăng ký
-    // rảnh, trái vai trò hoặc đã có ca cùng ngày. Chỉ cảnh báo + xác nhận,
-    // không chặn cứng — yêu cầu vận hành thực tế của Ban Điều Hành.
+    // rảnh hoặc đã có ca cùng ngày. Chỉ cảnh báo, không chặn cứng.
     const warnings = [];
-    const isRoleFixed = base === 2 && (role === 'old' || role === 'new');
-    const slotLabel = base === 1
-      ? (role === 'new'
-        ? 'Người thêm thứ 2 (gán tay)'
-        : role === 'third'
-          ? 'Người thêm thứ 3 (gán tay)'
-          : 'Người trực chính')
-      : (role === 'old'
-        ? 'Chính Thức'
-        : role === 'new'
-          ? 'Tập Sự'
-          : 'Người thứ 3 (gán tay)');
     if (newStudent) {
-      const roleLabel = newStudent.role === 'old' ? 'Chính Thức' : 'Tập Sự';
-      if (isRoleFixed && newStudent.role !== role) {
-        warnings.push(`${newStudent.fullName} là ${roleLabel}, nhưng vị trí đang chọn là ${slotLabel}.`);
-      }
-
       const declared = newStudent.monthlyAvailableShifts
         ? (newStudent.monthlyAvailableShifts[realWeekNumber]
           || newStudent.monthlyAvailableShifts[String(realWeekNumber)])
@@ -4527,13 +4481,11 @@ function renderStudentTable() {
     const persistedMonth = parseInt((state.monthSchedule && state.monthSchedule.month) || state.currentMonth, 10) || state.currentMonth;
     const persistedYear = parseInt((state.monthSchedule && state.monthSchedule.year) || state.currentYear, 10) || state.currentYear;
     const monthLabelSaved = `Tháng ${String(persistedMonth).padStart(2, '0')}/${persistedYear}`;
-    const roleLabelSaved = role === 'old'
-      ? 'Chính Thức'
-      : role === 'new'
-        ? 'Tập Sự'
-        : role === 'third'
-          ? 'Người thứ 3 (thủ công)'
-          : 'Người trực duy nhất';
+    const roleLabelSaved = role === 'third'
+      ? 'Người thêm thứ 3'
+      : base === 1
+        ? (role === 'new' ? 'Người thêm thứ 2' : 'Người trực chính')
+        : (role === 'old' ? 'Người trực 1' : 'Người trực 2');
 
     showToast(
       `✅ Đã lưu ${monthLabelSaved} · Tuần ${realWeekNumber} · ca ${shiftId} (${roleLabelSaved})`
@@ -5319,16 +5271,19 @@ window.adminDeleteStudent = async function(studentId) {
     setTimeout(() => openImportModal('google_form'), 100);
   };
 
-  function openShiftCapacityModal() {
-    const month = state.currentMonth || 10;
-    const year = state.currentYear || 2026;
+  function openShiftCapacityModal(monthArg, yearArg, opts) {
+    const month = parseInt(monthArg, 10) || state.currentMonth || 10;
+    const year = parseInt(yearArg, 10) || state.currentYear || 2026;
     const cfg = getMonthCapacity(month, year);
     const modal = document.getElementById('modal-shift-capacity');
     if (!modal) return;
 
+    const isNewMonth = !!(opts && opts.isNewMonth);
     const label = document.getElementById('shift-capacity-month-label');
     if (label) {
-      label.textContent = `Tháng ${String(month).padStart(2, '0')}/${year} — áp dụng cho cả 4 tuần`;
+      label.textContent = isNewMonth
+        ? `Tháng ${String(month).padStart(2, '0')}/${year} chưa có lịch — chọn 1 hoặc 2 người/ca`
+        : `Tháng ${String(month).padStart(2, '0')}/${year} — áp dụng cho cả 4 tuần`;
     }
     modal.querySelectorAll('input[name="shiftCapacityMode"]').forEach(radio => {
       radio.checked = Number(radio.value) === cfg.peoplePerShift;
@@ -5380,7 +5335,8 @@ window.adminDeleteStudent = async function(studentId) {
   window.adminCloseShiftCapacityModal = closeShiftCapacityModal;
 
   function bindShiftCapacityEvents() {
-    document.getElementById('btn-shift-capacity')?.addEventListener('click', openShiftCapacityModal);
+    document.getElementById('btn-month-capacity-1')?.addEventListener('click', () => setMonthCapacityQuick(1));
+    document.getElementById('btn-month-capacity-2')?.addEventListener('click', () => setMonthCapacityQuick(2));
     document.getElementById('btn-shift-capacity-close')?.addEventListener('click', closeShiftCapacityModal);
     document.getElementById('btn-shift-capacity-cancel')?.addEventListener('click', closeShiftCapacityModal);
     document.getElementById('btn-shift-capacity-save')?.addEventListener('click', saveShiftCapacityFromModal);
@@ -5391,10 +5347,10 @@ window.adminDeleteStudent = async function(studentId) {
 
   function downloadImportTemplateCsv() {
     const csvContent = '\uFEFF' + [
-      'Họ và Tên,Mã Số Sinh Viên,Số Điện Thoại,Phân Loại (Người cũ/Người mới),Các Ca Rảnh (cách nhau bởi dấu phẩy)',
-      'Nguyễn Văn A,2102001,0912345678,Người cũ,"T2_S, T2_C, T3_S, T4_C, T5_S, T6_C"',
-      'Trần Thị Bích,2302002,0987654321,Người mới,"T2_S, T3_S, T4_S, T5_S, T6_S"',
-      'Lê Hoàng Cường,2102003,0934567890,Người cũ,"T2_S, T3_C, T4_S, T4_C, T5_S, T6_S"'
+      'Họ và Tên,Mã Số Sinh Viên,Số Điện Thoại,Các Ca Rảnh (cách nhau bởi dấu phẩy)',
+      'Nguyễn Văn A,2102001,0912345678,"T2_S, T2_C, T3_S, T4_C, T5_S, T6_C"',
+      'Trần Thị Bích,2302002,0987654321,"T2_S, T3_S, T4_S, T5_S, T6_S"',
+      'Lê Hoàng Cường,2102003,0934567890,"T2_S, T3_C, T4_S, T4_C, T5_S, T6_S"'
     ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -5734,7 +5690,7 @@ window.adminDeleteStudent = async function(studentId) {
     }
 
     if (!stats.roleColumnFound && candidates.length > 0) {
-      warnings.push('Không tìm thấy cột vai trò (Cũ/Mới). Tất cả được mặc định là Tập Sự (Người mới).');
+      warnings.push('Không tìm thấy cột vai trò — hệ thống không dùng vai trò để xếp ca, mọi CTV được xếp như nhau.');
     }
     if (stats.ignoredRows > 0) {
       const shown = ignoredLineNumbers.join(', ');
@@ -6079,10 +6035,6 @@ window.adminDeleteStudent = async function(studentId) {
       const statusBadge = c.isExisting 
         ? `<span class="badge" style="background:#fef3c7; color:#92400e;">🔄 Ghi đè</span>`
         : `<span class="badge" style="background:#d1fae5; color:#065f46;">🌱 Thêm mới</span>`;
-      const roleBadge = c.role === 'old'
-        ? `<span class="badge badge-role-old" style="font-size:0.7rem;">🎓 Chính Thức</span>`
-        : `<span class="badge badge-role-new" style="font-size:0.7rem;">🌱 Tập Sự</span>`;
-
       let shiftCell = `<strong style="color:var(--primary);">${c.availableShifts.length}</strong> ca`;
       if (isForm && c.monthlyAvailableShifts) {
         const w1 = (c.monthlyAvailableShifts[1] || []).length;
@@ -6099,7 +6051,6 @@ window.adminDeleteStudent = async function(studentId) {
           <td><strong>${escapeHtml(c.fullName)}</strong></td>
           <td><code>${escapeHtml(c.studentId)}</code></td>
           <td>${escapeHtml(c.phone || '-')}</td>
-          <td>${roleBadge}</td>
           <td>${shiftCell}</td>
           <td>${statusBadge}</td>
         </tr>
@@ -7427,16 +7378,14 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
           `"BẢNG CHẤM CÔNG CỘNG TÁC VIÊN BAN TƯ VẤN TUYỂN SINH - ${monthLabel}"`,
           `"Xuất ngày: ${new Date().toLocaleDateString('vi-VN')}"`,
           '',
-          '"STT","MSSV","Họ và Tên","Phân Loại","Số Ca Trực VP","Số Sự Kiện","Công Sự Kiện","Tổng Công Quy Đổi"'
+          '"STT","MSSV","Họ và Tên","Số Ca Trực VP","Số Sự Kiện","Công Sự Kiện","Tổng Công Quy Đổi"'
         ];
 
         items.forEach((item, idx) => {
-          const roleLabel = item.role === 'old' ? 'Người Cũ' : 'Người Mới';
           rows.push([
           escapeCsvCell(idx + 1),
           escapeCsvCell(item.studentMssv),
           escapeCsvCell(item.fullName),
-          escapeCsvCell(roleLabel),
           escapeCsvCell(item.officeShiftsCount),
           escapeCsvCell(item.eventCount),
           escapeCsvCell(item.eventWorkUnits),
@@ -7449,13 +7398,11 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
       if (format === 'html') {
         const rowsHtml = items.map((item, idx) => {
-          const roleLabel = item.role === 'old' ? 'Người Cũ' : 'Người Mới';
           return `
             <tr>
               <td>${idx + 1}</td>
               <td>${escapeHtml(item.studentMssv)}</td>
               <td>${escapeHtml(item.fullName)}</td>
-              <td>${escapeHtml(roleLabel)}</td>
               <td>${item.officeShiftsCount}</td>
               <td>${item.eventCount}</td>
               <td>${item.eventWorkUnits}</td>
@@ -7471,7 +7418,6 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
                 <th>STT</th>
                 <th>MSSV</th>
                 <th>Họ và Tên</th>
-                <th>Phân Loại</th>
                 <th>Trực VP</th>
                 <th>Sự Kiện</th>
                 <th>Công SK</th>
@@ -8052,8 +7998,6 @@ async function handleDeleteWebBackup(backupId) {
             </div>
             <div style="display: flex; gap: 0.4rem;">
               <button type="button" class="btn btn-secondary btn-sm payroll-role-filter active" data-role="all" style="font-weight: 700;">Tất cả (${totalStudents})</button>
-              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="old" style="font-weight: 700;">🎓 Chính Thức</button>
-              <button type="button" class="btn btn-secondary btn-sm payroll-role-filter" data-role="new" style="font-weight: 700;">🌱 Tập Sự</button>
             </div>
           </div>
 
@@ -8065,7 +8009,6 @@ async function handleDeleteWebBackup(backupId) {
                   <th style="width: 50px; text-align: center; padding: 0.65rem 0.5rem;">STT</th>
                   <th style="width: 110px; padding: 0.65rem 0.75rem;">MSSV</th>
                   <th style="padding: 0.65rem 0.75rem;">Họ và Tên</th>
-                  <th style="width: 110px; text-align: center; padding: 0.65rem 0.5rem;">Phân Loại</th>
                   <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Trực VP (ca)</th>
                   <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Sự Kiện (lần)</th>
                   <th style="width: 100px; text-align: center; padding: 0.65rem 0.5rem;">Công SK</th>
@@ -8144,7 +8087,7 @@ async function handleDeleteWebBackup(backupId) {
     if (!list || list.length === 0) {
       return `
         <tr>
-          <td colspan="9" style="text-align: center; padding: 2rem; color: #64748b;">
+          <td colspan="8" style="text-align: center; padding: 2rem; color: #64748b;">
             Không tìm thấy dữ liệu chấm công phù hợp.
           </td>
         </tr>
@@ -8152,10 +8095,6 @@ async function handleDeleteWebBackup(backupId) {
     }
 
     return list.map((item, idx) => {
-      const roleBadge = item.role === 'old'
-        ? `<span class="badge badge-role-old" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🎓 Chính Thức</span>`
-        : `<span class="badge badge-role-new" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🌱 Tập Sự</span>`;
-
       const officeDetails = item.officeShiftDetails && item.officeShiftDetails.length > 0
         ? item.officeShiftDetails.join(', ')
         : 'Chưa có ca';
@@ -8174,7 +8113,6 @@ async function handleDeleteWebBackup(backupId) {
           <td style="text-align: center; font-weight: 600; color: #64748b; padding: 0.6rem 0.5rem;">${idx + 1}</td>
           <td style="font-weight: 700; color: #334155; font-size: 0.86rem; padding: 0.6rem 0.75rem;">${escapeHtml(item.studentMssv || '—')}</td>
           <td style="font-weight: 700; color: #0f172a; font-size: 0.9rem; padding: 0.6rem 0.75rem;">${escapeHtml(item.fullName)}</td>
-          <td style="text-align: center; padding: 0.6rem 0.5rem;">${roleBadge}</td>
           <td style="text-align: center; font-weight: 600; color: #3730a3; padding: 0.6rem 0.5rem;">${item.officeShiftsCount}</td>
           <td style="text-align: center; font-weight: 600; color: #92400e; padding: 0.6rem 0.5rem;">${item.eventCount}</td>
           <td style="text-align: center; font-weight: 600; color: #b45309; padding: 0.6rem 0.5rem;">${item.eventWorkUnits}</td>
@@ -8213,13 +8151,11 @@ async function handleDeleteWebBackup(backupId) {
     const studentsHtml = students.length > 0
       ? students.map(st => {
           const isChecked = assignedIds.has(st.id) || (st.studentId && assignedIds.has(st.studentId));
-          const roleLabel = st.role === 'old' ? '🎓 Người cũ' : '🌱 Người mới';
           return `
             <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 0.84rem;">
               <input type="checkbox" class="event-student-cb" value="${escapeHtml(st.id)}" ${isChecked ? 'checked' : ''} style="cursor: pointer;">
               <span style="font-weight: 600; color: #1e293b;">${escapeHtml(st.fullName)}</span>
               <span style="color: #64748b; font-size: 0.78rem;">(${escapeHtml(st.studentId || '')})</span>
-              <span style="margin-left: auto; font-size: 0.72rem; color: ${st.role === 'old' ? '#7e22ce' : '#c2410c'}; font-weight: 600;">${roleLabel}</span>
             </label>
           `;
         }).join('')
@@ -8421,6 +8357,7 @@ async function handleDeleteEvent(id) {
     switchAdminMonth,
     getMonthCapacity,
     saveMonthCapacity,
+    setMonthCapacityQuick,
     // Dùng cho kiểm thử giao diện: dựng lại lưới tháng / lưới tuần.
     renderMasterMonthGrid,
     renderTimetable,
@@ -8719,11 +8656,6 @@ async function handleDeleteEvent(id) {
     }
 
     tbody.innerHTML = filtered.map((item, idx) => {
-      const isOld = item.role === 'old';
-      const roleBadge = isOld 
-        ? '<span class="badge badge-role-old" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🎓 Chính Thức</span>'
-        : '<span class="badge badge-role-new" style="font-size: 0.72rem; padding: 0.15rem 0.5rem;">🌱 Tập Sự</span>';
-
       return `
         <tr>
           <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
@@ -8733,7 +8665,6 @@ async function handleDeleteEvent(id) {
           <td>
             <code style="font-weight: 600; color: var(--primary); font-size: 0.85rem;">${escapeHtml(item.studentMssv || '-')}</code>
           </td>
-          <td style="text-align: center;">${roleBadge}</td>
           <td style="text-align: center;">
             <span class="badge-office-shifts">
               🏢 ${item.officeShiftsCount || 0} ca
@@ -8784,7 +8715,6 @@ async function handleDeleteEvent(id) {
         <td style="text-align: center; border: 1px solid #000; padding: 5px;">${idx + 1}</td>
         <td style="border: 1px solid #000; padding: 5px;">${escapeHtml(item.fullName)}</td>
         <td style="text-align: center; border: 1px solid #000; padding: 5px; mso-number-format: '\\@';">${escapeHtml(item.studentMssv)}</td>
-        <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.role === 'old' ? 'Người Cũ' : 'Người Mới'}</td>
         <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.officeShiftsCount || 0}</td>
         <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.eventCount || 0}</td>
         <td style="text-align: center; border: 1px solid #000; padding: 5px;">${item.eventWorkUnits || 0}</td>
@@ -8808,7 +8738,7 @@ async function handleDeleteEvent(id) {
         <table style="width: 100%;">
           <thead>
             <tr>
-              <th colspan="8" style="font-size: 14pt; height: 35px; background: #ffffff; text-align: center; border: none; font-weight: bold;">
+              <th colspan="7" style="font-size: 14pt; height: 35px; background: #ffffff; text-align: center; border: none; font-weight: bold;">
                 BẢNG CHẤM CÔNG CỘNG TÁC VIÊN TUYỂN SINH - ${escapeHtml(monthLabel.toUpperCase())}
               </th>
             </tr>
@@ -8816,7 +8746,6 @@ async function handleDeleteEvent(id) {
               <th>STT</th>
               <th>Họ và Tên</th>
               <th>MSSV</th>
-              <th>Phân Loại</th>
               <th>Ca Trực VP (4 Tuần)</th>
               <th>Số Buổi Sự Kiện</th>
               <th>Công Sự Kiện</th>
@@ -8859,7 +8788,7 @@ async function handleDeleteEvent(id) {
     const eventListEl = document.getElementById('payroll-detail-event-list');
 
     if (nameEl) nameEl.textContent = `👤 Chi Tiết Công Trực: ${item.fullName}`;
-    if (metaEl) metaEl.textContent = `MSSV: ${item.studentMssv || '-'} • ${item.role === 'old' ? '🎓 Chính Thức' : '🌱 Tập Sự'}`;
+    if (metaEl) metaEl.textContent = `MSSV: ${item.studentMssv || '-'} • Cộng tác viên`;
     if (officeCountEl) officeCountEl.textContent = `${item.officeShiftsCount || 0} ca`;
     if (eventCountEl) eventCountEl.textContent = `${item.eventCount || 0} sự kiện (${item.eventWorkUnits || 0} công)`;
 
@@ -9146,7 +9075,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
 
     const schedule = state.currentSchedule.scheduleTable;
     let csvContent = '\uFEFF';
-    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Cũ (Kinh Nghiệm),MSSV Người Cũ,Người Mới / Người Thêm,MSSV Người Mới / Người Thêm,Người Thứ 3 (Gán Tay),MSSV Người Thứ 3,Mức Nền (Người/Ca),Trạng Thái Ca\r\n';
+    csvContent += 'STT,Thứ,Buổi,Khung Giờ,Người Trực 1,MSSV Người Trực 1,Người Trực 2 / Người Thêm,MSSV Người Trực 2 / Người Thêm,Người Thứ 3 (Gán Tay),MSSV Người Thứ 3,Mức Nền (Người/Ca),Trạng Thái Ca\r\n';
 
     SHIFTS.forEach((shift, index) => {
       const slot = schedule[shift.id];

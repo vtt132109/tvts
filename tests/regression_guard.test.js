@@ -1190,7 +1190,7 @@ runTest('8.1f: Ô nhập MSSV/PIN có inputmode numeric trên di động', () =>
 group('GROUP 9: Scheduler cảnh báo dữ liệu bất thường');
 // -----------------------------------------------------------------------------
 
-runTest('8.1: Role không hợp lệ/thiếu phải cảnh báo và KHÔNG tự nâng quyền', () => {
+runTest('8.1: Role không hợp lệ/thiếu được chuẩn hoá, không ảnh hưởng xếp ca', () => {
   const global = {};
   loadScheduler(global);
   const S = global.SchedulerEngine;
@@ -1201,14 +1201,12 @@ runTest('8.1: Role không hợp lệ/thiếu phải cảnh báo và KHÔNG tự 
     { id: 'c', fullName: 'C', role: 123, availableShifts: S.SHIFTS.map(x => x.id) }
   ];
   const res = S.runMonthSchedule(bad, 2026, 10);
-  const joined = res.warnings.join(' | ');
-  assert.ok(/không hợp lệ|thiếu/i.test(joined),
-    `Phải cảnh báo role không hợp lệ. Warnings: ${joined}`);
-  assert.ok(/"tas"/.test(joined), 'Cảnh báo phải nêu rõ giá trị sai');
-  assert.ok(/\(thiếu\)/.test(joined), 'Phải báo rõ khi role bị THIẾU hoàn toàn');
+  assert.ok(res && res.weeks && res.weeks.length === 4,
+    'Role lạ/thiếu không được làm hỏng lịch');
+  assert.ok(!res.warnings.some(w => /vai trò|role/i.test(w)),
+    'Không còn cảnh báo vai trò vì xếp ca không phân biệt vai trò');
 
-  // Điểm mấu chốt: KHÔNG được tự động nâng lên "Chính Thức" (quyền cao hơn).
-  // Mặc định phải là "Tập Sự". summary nằm ở cấp tuần.
+  // Dữ liệu vai trò vẫn được chuẩn hoá nội bộ, nhưng không dùng để xếp ca.
   const w0 = res.weeks[0].summary;
   assert.strictEqual(w0.newStudentsCount, 3,
     'Role sai/thiếu phải mặc định là Tập Sự, KHÔNG phải Chính Thức');
@@ -1633,8 +1631,8 @@ runTest('3.16: Gán ca thủ công ngay trên lưới, KHÔNG có nút "xếp th
   assert.ok(/\(SHIFTS \|\| \[\]\)\.forEach/.test(fn[0]),
     'Phải tạo đủ các ca từ SchedulerEngine.SHIFTS');
   assert.ok(/oldMember: null/.test(fn[0]) && /newMember: null/.test(fn[0]),
-    'Khung mới phải có ô Chính thức/Tập sự trống');
-  assert.ok(/Chưa có Chính Thức/.test(adminJs) && /Chưa có Tập Sự/.test(adminJs),
+    'Khung mới phải có 2 vị trí trống cho mỗi ca');
+  assert.ok(/Chọn người trực 1/.test(adminJs) && /Chọn người trực 2/.test(adminJs),
     'Ô ca trống phải bấm được để mở modal gán tay');
   assert.ok(/promptImportRosterIfEmpty/.test(adminJs) && /Chưa có CTV nào/.test(adminJs),
     'Khi danh sách CTV rỗng phải hướng dẫn nhập CSV/kéo Cloud thay vì mở modal trống');
