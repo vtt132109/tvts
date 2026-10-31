@@ -348,6 +348,60 @@ runTest('2.5: Di chuyển lùi lại Tháng 12/2026 bằng adminGoToPrevMonth', 
     `Active month phải quay lại 12/2026, thực tế: ${JSON.stringify(active)}`);
 });
 
+runTest('2.6: Tháng mới chưa cấu hình tự xếp 2 người/ca, không kế thừa tháng trước', async () => {
+  // Tháng 12 đang xem là lịch 1 người/ca. Chuyển sang tháng 2/2027 chưa có
+  // lịch + chưa có cấu hình: auto phải dùng mặc định 2 người/ca, KHÔNG được
+  // lấy mức 1 người/ca của tháng 12.
+  const makeSlots = () => {
+    const table = {};
+    ['T2', 'T3', 'T4', 'T5', 'T6'].forEach(day => {
+      ['S', 'C'].forEach(period => {
+        const id = `${day}_${period}`;
+        table[id] = {
+          shiftId: id,
+          shiftInfo: { id, dayKey: day, dayName: day, period: period === 'S' ? 'Sáng' : 'Chiều', time: '' },
+          capacity: 1, oldMember: null, newMember: null, thirdMember: null, status: 'empty'
+        };
+      });
+    });
+    return table;
+  };
+  const allShifts = ['T2_S', 'T2_C', 'T3_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T5_C', 'T6_S', 'T6_C'];
+  const seedStudents = [
+    { id: 'cap_old_1', studentId: '2102001', fullName: 'Old One', role: 'old', availableShifts: allShifts },
+    { id: 'cap_new_1', studentId: '2211005', fullName: 'New One', role: 'new', availableShifts: allShifts },
+    { id: 'cap_new_2', studentId: '2311007', fullName: 'New Two', role: 'new', availableShifts: allShifts }
+  ];
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify(seedStudents));
+
+  const decSingle = {
+    month: 12,
+    year: 2026,
+    weeks: [1, 2, 3, 4].map(w => ({ weekNumber: w, scheduleTable: makeSlots() }))
+  };
+  mockLocalStorage.setItem('ts_scheduler_month_result', JSON.stringify(decSingle));
+  window.adminTestHelper.loadData();
+  assert.strictEqual(
+    window.adminTestHelper.getState().monthSchedule.weeks[0].scheduleTable.T2_S.capacity,
+    1,
+    'Dữ liệu chuẩn bị: tháng 12 phải đang là 1 người/ca'
+  );
+
+  mockLocalStorage.removeItem('ts_scheduler_shift_capacity_v1');
+  await window.adminSwitchMonth(2, 2027, false);
+
+  const state = window.adminTestHelper.getState();
+  assert.strictEqual(state.currentMonth, 2, 'Phải chuyển sang tháng 2/2027');
+  assert.strictEqual(state.currentYear, 2027);
+  assert.ok(state.monthSchedule, 'Tháng mới phải có lịch');
+  const slots = Object.values(state.monthSchedule.weeks[0].scheduleTable);
+  assert.ok(slots.length > 0, 'Tháng mới phải có lịch');
+  slots.forEach(slot => {
+    assert.strictEqual(slot.capacity, 2,
+      `Ca ${slot.shiftId} của tháng mới phải là 2 người/ca, thực tế ${slot.capacity}`);
+  });
+});
+
 // GROUP 3: Kiểm thử Đóng Gói Cloud Sync với ALL_MONTHS
 console.log('\n▶ [GROUP 3] Kiểm Thử Đồng Bộ Cloud với ALL_MONTHS & ACTIVE_MONTH:');
 

@@ -729,11 +729,41 @@ runTest('Tháng 2 người/ca: vẫn gán tay thêm được người thứ 3, a
     'Auto phải giữ người thứ 3 đã gán tay');
 });
 
+runTest('Cấu hình số người/ca chỉ áp dụng đúng tháng, không kế thừa tháng trước', () => {
+  seed();
+  H.loadData();
+
+  // Lịch tháng 10 kiểu 1 người/ca, nhưng tháng 11 chưa có cấu hình.
+  const octSingle = {
+    month: 10,
+    year: 2026,
+    weeks: [{
+      weekNumber: 1,
+      scheduleTable: {
+        T2_S: { shiftId: 'T2_S', capacity: 1, oldMember: { id: 's_1' }, newMember: null, thirdMember: null }
+      }
+    }]
+  };
+
+  assert.strictEqual(H.getMonthCapacity(11, 2026, octSingle).peoplePerShift, 2,
+    'Tháng mới chưa cấu hình phải mặc định 2 người/ca, không lấy mức 1 của tháng 10');
+  assert.strictEqual(H.getMonthCapacity(10, 2026, octSingle).peoplePerShift, 1,
+    'Lịch đúng tháng 10 vẫn dùng được để suy ra mức 1 người/ca');
+
+  H.saveMonthCapacity(11, 2026, { peoplePerShift: 1 });
+  assert.strictEqual(H.getMonthCapacity(11, 2026, octSingle).peoplePerShift, 1,
+    'Cấu hình đã lưu cho tháng 11 phải thắng lịch tháng 10');
+  assert.strictEqual(H.getMonthCapacity(12, 2026).peoplePerShift, 2,
+    'Tháng 12 chưa cấu hình phải quay về mặc định 2 người/ca');
+});
+
 runTest('Giao diện: có nút Số người/ca, modal chỉ chọn mức nền, thêm người theo từng ca', () => {
   const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8');
   assert.ok(html.includes('id="btn-shift-capacity"'), 'Phải có nút Số người/ca');
+  assert.ok(html.includes('id="btn-shift-capacity-label"'), 'Nút phải hiện mức nền của tháng đang mở');
   assert.ok(html.includes('id="modal-shift-capacity"'), 'Phải có modal cấu hình');
+  assert.ok(html.includes('không dính sang tháng sau'), 'Modal phải nói rõ cấu hình theo từng tháng');
   assert.ok(html.includes('➕ Thêm người'), 'Modal phải hướng dẫn thêm người theo từng ca');
   assert.ok(!html.includes('shift-capacity-third-list'), 'Không còn danh sách ca 3 người cố định');
   assert.ok(js.includes('saveMonthCapacity'), 'Phải có hàm lưu cấu hình tháng');
