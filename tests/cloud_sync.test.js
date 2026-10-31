@@ -1446,6 +1446,23 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
   );
   assert(keepLocal[0].status === 'rejected',
     '11.7: Không để bản pending trên Cloud ghi đè kết quả đã duyệt trên máy');
+
+  // Dữ liệu swap từ client là không tin cậy: chặn XSS qua weekNum/shiftId
+  // và cắt độ dài chuỗi trước khi render.
+  const dirty = csm.sanitizeSwapRequestRecord({
+    id: 'swap_dirty',
+    weekNum: '<img src=x onerror=alert(1)>',
+    shiftId: '<script>alert(1)</script>',
+    reason: 'x'.repeat(700),
+    status: 'not-a-status',
+    studentName: 'A'.repeat(300)
+  });
+  assert(dirty && dirty.weekNum === 0, '11.8: weekNum lạ phải bị ép về 0');
+  assert(dirty.shiftId === '', '11.9: shiftId lạ phải bị loại');
+  assert(dirty.status === 'pending', '11.10: status lạ phải về pending');
+  assert(dirty.reason.length === 500, '11.11: reason phải bị cắt độ dài');
+  assert(dirty.studentName.length === 100, '11.12: tên phải bị cắt độ dài');
+  assert(!JSON.stringify(dirty).includes('<img'), '11.13: không được giữ payload HTML trong weekNum');
 }
 
 {
@@ -1726,6 +1743,13 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && emailWriteRule.includes("sign_in_provider === 'google.com'")
     && /isBoolean/.test((staffEmails['$emailKey'] || {})['.validate'] || ''),
   '12.14: /staff_emails chỉ cho cán bộ Google đã xác thực cấp/thu quyền, giá trị phải là boolean');
+  assert(!/root\.child\('staff'\)|root\.child\('staff_emails'\)/.test(emailWriteRule),
+    '12.14b: Chỉ chủ sở hữu được ghi /staff_emails; staff khác không được tự cấp quyền');
+
+  const swapValidate = ((r.tvts_requests.swaps || {})['$swapId'] || {})['.validate'] || '';
+  assert(/weekNum/.test(swapValidate) && /isNumber/.test(swapValidate)
+    && /shiftId/.test(swapValidate) && /matches/.test(swapValidate),
+  '12.15: Rules phải validate weekNum 1..4 và shiftId chuẩn để chặn XSS/dữ liệu rác');
 
   // 12.14b: KHÔNG được có điều khoản "bootstrap" cho phép người Google bất kỳ
   // tự ghi email của mình vào allow-list khi /staff_emails chưa tồn tại.

@@ -2180,6 +2180,16 @@
         console.warn('[Admin] Không kiểm tra được tháng của ca rảnh:', e);
       }
 
+      // Nếu tháng đã có cấu hình 1/2 người/ca, chuẩn hoá lịch theo cấu hình
+      // ngay khi nạp để lưới/KPI/cổng sinh viên không lệch nhau.
+      if (state.monthSchedule) {
+        const key = `${state.currentYear}-${String(state.currentMonth).padStart(2, '0')}`;
+        if (readShiftCapacityMap()[key]) {
+          normalizeConfiguredMonthCapacity(state.monthSchedule);
+          saveSchedule(false, { skipPush: true });
+        }
+      }
+
       // Nhãn nút phải khớp cấu hình của tháng ngay khi dữ liệu được nạp/kéo về.
       updateShiftCapacityButtonLabel();
     } catch (err) {
@@ -2363,6 +2373,13 @@
     try {
       localStorage.setItem(STORAGE_KEYS.SHIFT_CAPACITY, JSON.stringify(map));
     } catch (e) {}
+    // Áp ngay cấu hình vào lịch đang có để số liệu không lệch trước khi
+    // người dùng bấm xếp lại tự động.
+    if (state.monthSchedule
+      && state.currentMonth === m && state.currentYear === y) {
+      normalizeConfiguredMonthCapacity(state.monthSchedule);
+      saveSchedule(false, { skipPush: true });
+    }
     if (window.CloudSyncManager && typeof window.CloudSyncManager.triggerAutoPush === 'function') {
       window.CloudSyncManager.triggerAutoPush();
     }
@@ -3998,8 +4015,54 @@ function renderStudentTable() {
   }
 
   function getSlotBaseCapacity(shiftId, slot) {
-    const cfg = getMonthCapacity(state.currentMonth || 10, state.currentYear || 2026);
-    return cfg.peoplePerShift === 1 ? 1 : 2;
+    const m = state.currentMonth || 10;
+    const y = state.currentYear || 2026;
+    const stored = readShiftCapacityMap()[`${y}-${String(m).padStart(2, '0')}`];
+    if (stored && typeof stored === 'object') {
+      return stored.peoplePerShift === 1 ? 1 : 2;
+    }
+    // Chưa có cấu hình tháng: tôn trọng capacity đã lưu của từng ô để
+    // admin và cổng sinh viên không hiển thị lệch nhau.
+    if (slot && slot.capacity === 1) return 1;
+    if (slot && (slot.capacity === 2 || slot.capacity === 3)) return 2;
+    return getMonthCapacity(m, y).peoplePerShift === 1 ? 1 : 2;
+  }
+
+  /**
+   * Khi tháng đã có cấu hình 1/2 người/ca, đồng bộ capacity + trạng thái
+   * của mọi ô theo cấu hình đó và tính lại summary. Tránh cảnh KPI/lưới/
+   * cổng sinh viên mỗi nơi hiển thị một kiểu.
+   */
+  function normalizeConfiguredMonthCapacity(schedule) {
+    if (!schedule || !Array.isArray(schedule.weeks)) return false;
+    const m = parseInt(schedule.month, 10) || state.currentMonth || 10;
+    const y = parseInt(schedule.year, 10) || state.currentYear || 2026;
+    const stored = readShiftCapacityMap()[`${y}-${String(m).padStart(2, '0')}`];
+    if (!stored || typeof stored !== 'object') return false;
+    const capacity = stored.peoplePerShift === 1 ? 1 : 2;
+    let changed = false;
+
+    schedule.weeks.forEach(week => {
+      if (!week || !week.scheduleTable) return;
+      Object.values(week.scheduleTable).forEach(slot => {
+        if (!slot) return;
+        if (slot.capacity !== capacity) {
+          slot.capacity = capacity;
+          changed = true;
+        }
+        const status = capacity === 1
+          ? (slot.oldMember ? 'full' : ([slot.newMember, slot.thirdMember].some(Boolean) ? 'partial' : 'empty'))
+          : ((slot.oldMember && slot.newMember)
+            ? 'full'
+            : ((slot.oldMember || slot.newMember) ? 'partial' : 'empty'));
+        if (slot.status !== status) {
+          slot.status = status;
+          changed = true;
+        }
+      });
+      try { recomputeWeekStats(week); } catch (e) {}
+    });
+    return changed;
   }
 
   /**
@@ -6223,6 +6286,20 @@ window.adminDeleteStudent = async function(studentId) {
     elements.btnCloseSwapMgmtFooter?.addEventListener('click', closeSwapMgmtModal);
     elements.btnRefreshSwaps?.addEventListener('click', renderSwapRequestsTable);
 
+    // Không nhúng id yêu cầu vào inline onclick (có thể bị phá chuỗi).
+    // Dùng data-attribute + event delegation, id lấy lại qua dataset.
+    elements.tbodyManageSwaps?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-swap-action]');
+      if (!btn) return;
+      const swapId = btn.getAttribute('data-swap-id');
+      if (!swapId) return;
+      if (btn.getAttribute('data-swap-action') === 'approve') {
+        handleApproveSwap(swapId);
+      } else if (btn.getAttribute('data-swap-action') === 'reject') {
+        handleRejectSwap(swapId);
+      }
+    });
+
     elements.modalManageSwaps?.addEventListener('click', (e) => {
       if (e.target === elements.modalManageSwaps) closeSwapMgmtModal();
     });
@@ -6303,10 +6380,10 @@ window.adminDeleteStudent = async function(studentId) {
         statusBadge = '<span class="swap-status-pill swap-status-pending">⏳ Chờ Duyệt</span>';
         actionButtons = `
           <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
-            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem;" onclick="window.adminApproveSwap('${escapeHtml(req.id)}')" title="Phê duyệt và tự động đổi lịch 1-click">
+            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem;" data-swap-action="approve" data-swap-id="${escapeHtml(req.id)}" title="Phê duyệt và tự động đổi lịch 1-click">
               ✓ Duyệt
             </button>
-            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; color: #ef4444;" onclick="window.adminRejectSwap('${escapeHtml(req.id)}')" title="Từ chối yêu cầu này">
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.76rem; padding: 0.25rem 0.55rem; color: #ef4444;" data-swap-action="reject" data-swap-id="${escapeHtml(req.id)}" title="Từ chối yêu cầu này">
               ✕
             </button>
           </div>
@@ -6325,7 +6402,7 @@ window.adminDeleteStudent = async function(studentId) {
             <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(req.studentId)}</span>
           </td>
           <td>
-            <span class="badge" style="background: var(--primary-light); color: var(--primary); font-weight: 800; font-size: 0.72rem;">Tuần ${req.weekNum}</span><br>
+            <span class="badge" style="background: var(--primary-light); color: var(--primary); font-weight: 800; font-size: 0.72rem;">Tuần ${escapeHtml(req.weekNum)}</span><br>
             <span style="font-size: 0.82rem; font-weight: 600;">${escapeHtml(req.shiftName)}</span>
           </td>
           <td>
@@ -8422,6 +8499,7 @@ async function handleDeleteEvent(id) {
     renderStudentTable,
     renderStudentRegistrationSummary,
     getRegisteredShiftCount,
+    normalizeConfiguredMonthCapacity,
     getState: () => ({ ...state })
   };
 

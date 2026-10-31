@@ -98,9 +98,9 @@ Firebase Console → **Realtime Database → Rules** → dán toàn bộ file `d
 
 - `tvts_production_data`: chỉ tài khoản có UID trong `/staff` hoặc email trong `/staff_emails` được đọc/ghi.
 - `tvts_public`: mọi người được đọc; chỉ cán bộ trong `/staff` hoặc `/staff_emails` được ghi.
-- `tvts_requests`: sinh viên ẩn danh chỉ ghi yêu cầu gắn với `uid` của mình; cán bộ đọc toàn bộ. Ca rảnh được **gộp tự động** (không duyệt từng yêu cầu); đề xuất đổi ca vẫn chờ cán bộ duyệt.
+- `tvts_requests`: sinh viên ẩn danh chỉ ghi yêu cầu gắn với `uid` của mình; cán bộ đọc toàn bộ. Ca rảnh được **gộp tự động** (không duyệt từng yêu cầu); đề xuất đổi ca vẫn chờ cán bộ duyệt. Yêu cầu đổi ca phải có `weekNum` số nguyên 1–4 và `shiftId` đúng dạng `T2_S`…`T6_C`; client vẫn lọc/escape toàn bộ trường trước khi render.
 - `staff`: mỗi tài khoản đã đăng nhập chỉ được đọc đúng `staff/<uid>` của mình, đủ để app xác minh quyền cán bộ mà không mở cả danh sách `/staff`. Ghi vào `/staff` chỉ làm được trong Firebase Console (Rules đặt `.write: false`).
-- `staff_emails`: mỗi tài khoản Google chỉ được đọc đúng key email của mình; UID staff được đọc cả danh sách để quản trị. Ghi vào `/staff_emails` chỉ làm được trong Firebase Console (`.write: false`). Giá trị phải là boolean `true`; key email viết thường và thay tất cả dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`. Rules chỉ chấp nhận token Google đã xác thực email (`email_verified === true` và `sign_in_provider === 'google.com'`), không nhận email/password hay token chưa xác thực.
+- `staff_emails`: mỗi tài khoản Google chỉ được đọc đúng key email của mình; UID staff được đọc cả danh sách để quản trị. **Chỉ email chủ sở hữu `vutientai10@gmail.com` được ghi** `/staff_emails`; staff khác không thể tự cấp quyền. Giá trị phải là boolean `true`; key email viết thường và thay tất cả dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`. Rules chỉ chấp nhận token Google đã xác thực email (`email_verified === true` và `sign_in_provider === 'google.com'`), không nhận email/password hay token chưa xác thực.
 
 Kiểm tra lại bằng lệnh ở mục 1: `tvts_production_data` phải nhận **401/403 thay vì 200**.
 
