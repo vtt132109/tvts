@@ -342,7 +342,7 @@ runTest('Google Form tháng 11: ánh xạ ngày → tuần/mã ca, bỏ ngày th
   assert.strictEqual(two.role, 'new', 'Phải giữ vai trò hiện có của CTV');
 });
 
-runTest('Google Form: bỏ qua người đã có ca rảnh cập nhật SAU thời điểm form', () => {
+runTest('Google Form: file nhập mới thắng ca rảnh cũ dù updatedAt mới hơn', () => {
   seedFormStudents();
   const students = JSON.parse(mockLocalStorage.getItem('ts_scheduler_students'));
   students[0].monthlyAvailableShifts = { 1: ['T2_S'], 2: [], 3: [], 4: [] };
@@ -352,9 +352,11 @@ runTest('Google Form: bỏ qua người đã có ca rảnh cập nhật SAU th�
   global.window.adminTestHelper.loadData();
 
   const report = analyzeGoogleFormCsv(FORM_HEADER + '\n' + FORM_ROWS.join('\n'), { month: 11, year: 2026 });
-  assert.strictEqual(report.stats.skippedNewerRows, 1, 'Phải bỏ qua phản hồi cũ hơn dữ liệu đang có');
-  assert.ok(!report.candidates.some(c => c.studentId === '99000021'));
-  assert.strictEqual(report.candidates.length, 1);
+  const imported = report.candidates.find(c => c.studentId === '99000021');
+  assert.ok(imported, 'Phản hồi trong file mới phải được nhập dù dữ liệu cũ có updatedAt mới hơn');
+  assert.deepStrictEqual(imported.monthlyAvailableShifts[1], ['T4_S'],
+    'Ca rảnh phải lấy theo file mới, không giữ dữ liệu cũ');
+  assert.strictEqual(report.candidates.length, 2);
 });
 
 runTest('Google Form: chọn tháng không có ngày nào => báo lỗi rõ, không nhập rỗng', () => {
