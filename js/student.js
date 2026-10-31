@@ -198,6 +198,22 @@
       const raw = localStorage.getItem(STORAGE_KEYS.MONTH_SCHEDULE)
         || localStorage.getItem(STORAGE_KEYS.TWO_WEEK_SCHEDULE);
       if (raw) return JSON.parse(raw);
+
+      // Nhánh công khai có thể chỉ có allMonthSchedules + activeMonth
+      // (không kèm monthSchedule). Trước đây portal vì thế hiện "đang tổng
+      // hợp lịch" dù lịch tháng đã được công bố trong allMonthSchedules.
+      const activeRaw = localStorage.getItem(STORAGE_KEYS.ACTIVE_MONTH);
+      const allRaw = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
+      if (activeRaw && allRaw) {
+        const active = JSON.parse(activeRaw);
+        const all = JSON.parse(allRaw);
+        const month = parseInt(active && active.month, 10);
+        const year = parseInt(active && active.year, 10);
+        if (month && year && all && typeof all === 'object') {
+          const key = `${year}-${String(month).padStart(2, '0')}`;
+          if (all[key]) return all[key];
+        }
+      }
     } catch (e) {
       console.warn('[Portal] Không đọc được lịch tháng từ bộ nhớ:', e);
     }
@@ -2982,6 +2998,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
     // lịch tháng trước (chỉ đọc kho lưu trữ, không tự sinh).
     getMonthWeeksConfig: (month, year) => buildMonthWeeksConfig(month, year),
     getPrevMonthSchedule,
+    readMonthScheduleStore,
     renderReadOnlyShiftSlot,
     extractStudentShiftsFromSchedule,
     // #12: lịch sử ca trực nhiều tháng
