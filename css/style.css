@@ -697,6 +697,40 @@ select.form-input,
   font-weight: normal;
 }
 
+/* 4 bảng ca rảnh theo tuần trong modal sửa sinh viên.
+   .matrix-table mặc định min-width 600px (dành cho lưới lịch cuộn ngang).
+   Nếu giữ nguyên trong modal, mỗi bảng tràn khỏi thẻ ~300px và bị thẻ bên
+   cạnh che mất cột T4–T6, đồng thời đẩy modal có thanh cuộn ngang. */
+#weekly-availability-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+#weekly-availability-editor > div {
+  min-width: 0;
+}
+
+#weekly-availability-editor .matrix-table {
+  min-width: 0;
+}
+
+#weekly-availability-editor .matrix-table th,
+#weekly-availability-editor .matrix-table td {
+  padding: 0.45rem 0.25rem;
+}
+
+#weekly-availability-editor .matrix-table th:first-child,
+#weekly-availability-editor .matrix-table td:first-child {
+  width: 3.2rem;
+}
+
+@media (max-width: 720px) {
+  #weekly-availability-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Shift Slot Cell & Checkbox Button */
 .shift-slot {
   position: relative;

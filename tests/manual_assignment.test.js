@@ -217,6 +217,22 @@ runTest('Gán tay: sổ tay lưu theo THÁNG, không phải khoá phẳng theo t
   assert.strictEqual(map['2026-10']['1']['T2_S'].oldId, 's_1');
 });
 
+runTest('Chọn người: mỗi ứng viên hiển thị số ca đã xếp trong tháng', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  assignViaUi('T3_S', 'old', 1, 's_1');
+
+  global.window.adminOpenReassignModal('T4_S', 'old', 1);
+  const html = els['modal-candidate-select'].innerHTML;
+
+  assert.ok(/Nguyen Van A \(2102001\).*?2 ca tháng này/.test(html),
+    'Nguyen Van A phải hiển thị 2 ca tháng này, thực tế: ' + html);
+  assert.ok(/Tran Thi B \(2211005\).*?0 ca tháng này/.test(html),
+    'Tran Thi B phải hiển thị 0 ca tháng này, thực tế: ' + html);
+  assert.ok(!/undefined ca tháng này/.test(html), 'Không được hiển thị undefined');
+});
+
 // ============================================================================
 // GROUP 2: XẾP TỰ ĐỘNG PHẢI "NÉ" CA GÁN TAY
 // ============================================================================
@@ -960,6 +976,38 @@ runTest('Bảng CTV: đếm đúng số ca đã xếp trong cả tháng cho từ
   assert.strictEqual(counts.s_1, 4, 's_1 phải có 4 ca trong tháng');
   assert.strictEqual(counts.s_2, 3,
     's_2 phải có 3 ca, không nhân đôi khi vừa là người thêm vừa là người thứ 3 trong cùng ca');
+});
+
+runTest('Thống kê số ca: tính đủ cả tháng, không chỉ tuần đang xem', () => {
+  seed();
+  const s1 = { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A' };
+  const s2 = { id: 's_2', studentId: '2211005', fullName: 'Tran Thi B' };
+  const slot = (oldMember, newMember) => ({
+    capacity: 2, oldMember: oldMember || null, newMember: newMember || null,
+    thirdMember: null, status: 'full'
+  });
+  const schedule = {
+    month: 10,
+    year: 2026,
+    weeks: [
+      { weekNumber: 1, scheduleTable: { T2_S: slot(s1), T3_S: slot(s1, s2) } },
+      { weekNumber: 2, scheduleTable: { T2_S: slot(s1) } }
+    ]
+  };
+  LS.setItem('ts_scheduler_month_result', JSON.stringify(schedule));
+  H.loadData();
+  H.renderFairness();
+
+  const html = els['fairness-list-old'].innerHTML;
+  const counts = {};
+  html.split('<div class="fairness-item">').slice(1).forEach(chunk => {
+    const name = chunk.includes('Nguyen Van A') ? 's1'
+      : chunk.includes('Tran Thi B') ? 's2' : null;
+    const m = chunk.match(/>(\d+) ca</);
+    if (name && m) counts[name] = Number(m[1]);
+  });
+  assert.strictEqual(counts.s1, 3, 'Phải cộng dồn tuần 1 + tuần 2 = 3 ca, thực tế: ' + JSON.stringify(counts));
+  assert.strictEqual(counts.s2, 1, 'Tran Thi B phải có 1 ca trong tháng, thực tế: ' + JSON.stringify(counts));
 });
 
 runTest('Yêu cầu MSSV mới: chờ duyệt, duyệt thì thêm CTV và xóa khỏi hàng chờ', () => {
