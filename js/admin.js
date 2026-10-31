@@ -2181,6 +2181,9 @@
       } catch (e) {
         console.warn('[Admin] Không kiểm tra được tháng của ca rảnh:', e);
       }
+
+      // Nhãn nút phải khớp cấu hình của tháng ngay khi dữ liệu được nạp/kéo về.
+      updateShiftCapacityButtonLabel();
     } catch (err) {
       console.error(err);
       state.students = [];
@@ -2325,11 +2328,21 @@
       return { peoplePerShift: stored.peoplePerShift === 1 ? 1 : 2 };
     }
 
-    const sched = schedule
+    // Chỉ suy ra mức nền từ lịch CỦA ĐÚNG THÁNG NÀY. Trước đây lịch tháng cũ
+    // vẫn được truyền vào khi chuyển tháng, khiến tháng mới (chưa cấu hình)
+    // bị kế thừa nhầm mức 1 người/ca của tháng trước.
+    let sched = schedule
       || (state.monthSchedule
         && (!state.monthSchedule.month || state.monthSchedule.month === m)
         ? state.monthSchedule
         : null);
+    if (sched) {
+      const schedMonth = parseInt(sched.month, 10);
+      const schedYear = parseInt(sched.year, 10);
+      if ((schedMonth && schedMonth !== m) || (schedYear && schedYear !== y)) {
+        sched = null;
+      }
+    }
     if (sched && Array.isArray(sched.weeks)) {
       const slots = sched.weeks.flatMap(w => Object.values((w && w.scheduleTable) || {}));
       if (slots.length > 0) {
@@ -2608,6 +2621,7 @@ function runFullSchedule() {
     const weekIdx = Math.min(Math.max(1, state.viewWeek || 1), 4) - 1;
     state.currentSchedule = monthResult?.weeks?.[weekIdx] || monthResult?.week1 || monthResult;
     saveSchedule();
+    updateShiftCapacityButtonLabel();
   }
 
   function switchAdminWeek(w) {
@@ -2697,6 +2711,22 @@ function runFullSchedule() {
       if (btn && calWeeks[w - 1]) {
         btn.innerHTML = `Tuần ${w} <span style="font-size:0.75rem; opacity:0.85; margin-left:3px; font-weight:600;">(${calWeeks[w - 1].startDateStr} - ${calWeeks[w - 1].endDateStr})</span>`;
       }
+    }
+
+    updateShiftCapacityButtonLabel();
+  }
+
+  /** Nhãn nút luôn cho biết mức nền của ĐÚNG tháng đang mở. */
+  function updateShiftCapacityButtonLabel() {
+    const m = state.currentMonth || 10;
+    const y = state.currentYear || 2026;
+    const cfg = getMonthCapacity(m, y);
+    const label = document.getElementById('btn-shift-capacity-label');
+    if (label) label.textContent = `Số người/ca: ${cfg.peoplePerShift}`;
+    const btn = document.getElementById('btn-shift-capacity');
+    if (btn) {
+      btn.title = `Tháng ${String(m).padStart(2, '0')}/${y}: auto xếp ${cfg.peoplePerShift} người/ca. `
+        + 'Bấm để đổi cho riêng tháng này.';
     }
   }
 
@@ -8389,6 +8419,8 @@ async function handleDeleteEvent(id) {
     saveSchedule,
     runFullSchedule,
     switchAdminMonth,
+    getMonthCapacity,
+    saveMonthCapacity,
     // Dùng cho kiểm thử giao diện: dựng lại lưới tháng / lưới tuần.
     renderMasterMonthGrid,
     renderTimetable,
