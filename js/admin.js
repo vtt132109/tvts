@@ -4476,11 +4476,14 @@ function renderStudentTable() {
   function renderFairness() {
     if (!elements.fairnessListOld) return;
 
-    const stats = state.currentSchedule?.studentStats || {};
+    // Thống kê phải tính cho CẢ THÁNG (4 tuần). Trước đây lấy
+    // state.currentSchedule.studentStats nên chỉ phản ánh tuần đang xem.
+    const monthlyCounts = computeMonthlyAssignedCounts();
     // Không còn chia Chính Thức/Tập Sự: tất cả CTV được theo dõi chung.
     const allMembers = state.students
       .filter(Boolean)
       .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'vi'));
+    const maxAssigned = Math.max(1, ...allMembers.map(m => monthlyCounts[m.id] || 0));
 
     function renderList(members, container, roleColor) {
       if (members.length === 0) {
@@ -4489,8 +4492,8 @@ function renderStudentTable() {
       }
 
       container.innerHTML = members.map(m => {
-        const assigned = stats[m.id]?.assignedCount || 0;
-        const fillPercentage = Math.min(100, Math.round((assigned / 3) * 100));
+        const assigned = monthlyCounts[m.id] || 0;
+        const fillPercentage = Math.min(100, Math.round((assigned / maxAssigned) * 100));
 
         return `
           <div class="fairness-item">
@@ -4653,6 +4656,7 @@ function renderStudentTable() {
         : targetSlot?.[role === 'old' ? 'oldMember' : 'newMember'];
 
     let selectHtml = `<option value="">-- Để trống (Chưa gán) --</option>`;
+    const monthlyCounts = computeMonthlyAssignedCounts();
 
     // Xếp thủ công: liệt kê TOÀN BỘ CTV, kể cả người chưa đăng ký ca nào.
     // Không phân biệt vai trò; chỉ ưu tiên người đang gán và người có rảnh ca này.
@@ -4670,6 +4674,7 @@ function renderStudentTable() {
       const isAvailable = (s.availableShifts || []).includes(shiftId);
       const isSelected = currentAssigned?.id && currentAssigned.id === s.id;
       const availLabel = isAvailable ? '✓ Có rảnh ca này' : '⚠️ Không đăng ký rảnh';
+      const monthlyLabel = ` · ${monthlyCounts[s.id] || 0} ca tháng này`;
       const selectedLabel = isSelected ? ' · Đang gán' : '';
 
       // value = CHỈ SỐ trong danh sách ứng viên, không phải student.id.
@@ -4677,7 +4682,7 @@ function renderStudentTable() {
       // "undefined") khiến thao tác chọn người bị hiểu là "để trống".
       selectHtml += `
         <option value="${idx}" ${isSelected ? 'selected' : ''}>
-          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${selectedLabel}
+          ${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)}) - ${availLabel}${monthlyLabel}${selectedLabel}
         </option>
       `;
     });
@@ -8805,6 +8810,7 @@ async function handleDeleteEvent(id) {
     normalizeStudentIds,
     renderStudentTable,
     renderStudentRegistrationSummary,
+    renderFairness,
     getRegisteredShiftCount,
     computeMonthlyAssignedCounts,
     normalizeConfiguredMonthCapacity,

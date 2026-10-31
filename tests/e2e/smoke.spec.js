@@ -140,6 +140,25 @@ test('admin: sửa ca rảnh theo tuần và giữ thay đổi sau reload', asyn
   await page.click('#btn-tab-students');
   await page.locator('#admin-student-table-body button', { hasText: 'Sửa' }).first().click();
   await expect(page.locator('#weekly-availability-editor .admin-slot-cb')).toHaveCount(40);
+
+  const layout = await page.evaluate(() => {
+    const host = document.getElementById('weekly-availability-editor');
+    const body = document.querySelector('#student-form-modal .modal-body');
+    return {
+      bodyOverflowX: body.scrollWidth - body.clientWidth,
+      tablesClipped: [...host.children].some(card => {
+        const table = card.querySelector('table');
+        return table.getBoundingClientRect().right > card.getBoundingClientRect().right + 1;
+      }),
+      visibleDaysPerWeek: [...host.children].map(card =>
+        [...card.querySelectorAll('thead th')].map(th => th.textContent.trim()).join(',')
+      )
+    };
+  });
+  expect(layout.bodyOverflowX).toBeLessThanOrEqual(1);
+  expect(layout.tablesClipped).toBe(false);
+  layout.visibleDaysPerWeek.forEach(headers => expect(headers).toBe('Ca,T2,T3,T4,T5,T6'));
+
   const week1 = page.locator('#admin-cb-w1-T2_S');
   const week2 = page.locator('#admin-cb-w2-T2_S');
   await expect(week1).toBeChecked();
