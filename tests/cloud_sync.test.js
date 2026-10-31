@@ -850,8 +850,8 @@ console.log('\n▶ [GROUP 9] Dữ Liệu Công Khai Cho Sinh Viên (Không PII):
     '9.10: Lịch tháng phải được áp dụng');
   assert(JSON.parse(env.localStorage.getItem(K.ADMIN_USERS))[0].password === '0000',
     '9.11: applyPublicPayload KHÔNG được ghi đè tài khoản cán bộ');
-  assert(env.localStorage.getItem(K.AVAILABILITY_MONTH) === JSON.stringify('2026-10'),
-    '9.12: Không được ghi đè tháng ca rảnh đang có trên máy');
+  assert(env.localStorage.getItem(K.AVAILABILITY_MONTH) === '2026-10',
+    '9.12: Không được ghi đè tháng ca rảnh đang có trên máy (và chữa khoá về YYYY-MM)');
   assert(csm.getConfig().apiKey === 'AIza_FROM_PUBLIC',
     '9.13: Nhận Web API Key công khai từ Cloud');
 }
@@ -2917,6 +2917,30 @@ console.log('\n▶ [GROUP 20] Cấu Hình 1/2/3 Người Mỗi Ca:');
   '20.3: Nhánh công khai phải giữ người thứ 3 để sinh viên tra cứu');
   assert(!slot.thirdMember.phone,
     '20.4: Nhánh công khai phải lọc SĐT của người thứ 3');
+}
+
+// 21. Khoá tháng ca rảnh bị JSON bọc ngoặc kép (từng làm mất ca khi F5)
+{
+  const env = createMockEnvironment();
+  const csm = env.CloudSyncManager;
+  const K = csm.STORAGE_KEYS;
+
+  env.localStorage.setItem(K.AVAILABILITY_MONTH, '"2026-11"');
+  assert(csm.applyPayload({ availabilityMonth: '2026-11' }).success === true,
+    '21.1: applyPayload phải chấp nhận payload chỉ có khoá tháng ca rảnh');
+  assert(env.localStorage.getItem(K.AVAILABILITY_MONTH) === '2026-11',
+    '21.2: applyPayload phải chữa khoá tháng về chuỗi thô YYYY-MM');
+
+  env.localStorage.setItem(K.AVAILABILITY_MONTH, '"2026-11"');
+  const healed = csm.buildPayload();
+  assert(healed.availabilityMonth === '2026-11',
+    '21.3: buildPayload không được đẩy khoá tháng có ngoặc kép lên Cloud');
+
+  env.localStorage.setItem(K.AVAILABILITY_MONTH, '"2026-11"');
+  assert(csm.applyPublicPayload({ availabilityMonth: '2026-11' }).success === true,
+    '21.4: applyPublicPayload phải chấp nhận payload chỉ có khoá tháng');
+  assert(env.localStorage.getItem(K.AVAILABILITY_MONTH) === '2026-11',
+    '21.5: nhánh công khai cũng phải chữa khoá tháng về chuỗi thô');
 }
 
 // -----------------------------------------------------------------------------

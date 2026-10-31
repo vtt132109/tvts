@@ -978,6 +978,21 @@ runTest('Bảng CTV: đếm đúng số ca đã xếp trong cả tháng cho từ
     's_2 phải có 3 ca, không nhân đôi khi vừa là người thêm vừa là người thứ 3 trong cùng ca');
 });
 
+runTest('Khoá tháng ca rảnh bị JSON bọc ngoặc kép không được xoá ca khi tải lại', () => {
+  seed();
+  // Cloud cũ ghi key này bằng JSON.stringify -> localStorage là '"2026-10"'.
+  // Trước đây regex tháng không khớp nên loadData xoá sạch ca rảnh.
+  LS.setItem('ts_scheduler_availability_month_v1', '"2026-10"');
+  H.loadData();
+
+  const student = H.getState().students.find(s => s.id === 's_1');
+  assert.deepStrictEqual(student.monthlyAvailableShifts[1], ['T2_S'],
+    'Ca rảnh phải được giữ nguyên, thực tế: ' + JSON.stringify(student.monthlyAvailableShifts));
+  assert.deepStrictEqual(student.availableShifts, ['T2_S']);
+  assert.strictEqual(LS.getItem('ts_scheduler_availability_month_v1'), '2026-10',
+    'Khoá tháng phải được tự chữa về chuỗi thô YYYY-MM');
+});
+
 runTest('Thống kê số ca: tính đủ cả tháng, không chỉ tuần đang xem', () => {
   seed();
   const s1 = { id: 's_1', studentId: '2102001', fullName: 'Nguyen Van A' };

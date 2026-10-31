@@ -1467,8 +1467,17 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
   const fnSrc = src.slice(fnStart, fnEnd);
   const resetAvailabilityIfNewMonth = new Function(
     'state', 'saveStudents', 'STORAGE_KEYS', 'console', 'localStorage',
+    'readAvailabilityMonthKey', 'writeAvailabilityMonthKey',
     fnSrc + '\n return resetAvailabilityIfNewMonth;'
-  )(sandbox.state, sandbox.saveStudents, { AVAILABILITY_MONTH: 'kAvail' }, sandbox.console, sandbox.localStorage);
+  )(
+    sandbox.state, sandbox.saveStudents, { AVAILABILITY_MONTH: 'kAvail' }, sandbox.console, sandbox.localStorage,
+    () => {
+      const raw = store.get('kAvail');
+      if (!raw) return '';
+      return String(raw).replace(/^"|"$/g, '');
+    },
+    (value) => { store.set('kAvail', String(value)); return true; }
+  );
 
   const withShifts = (n) => Array.from({ length: n }, (_, i) => ({
     id: `s${i}`, fullName: `SV${i}`, role: i % 2 === 0 ? 'old' : 'new',
@@ -1562,15 +1571,17 @@ runTest('9.9: Khoá tháng ca rảnh phải đi kèm Cloud, không chỉ nằm �
   assert.ok(/AVAILABILITY_MONTH\s*:\s*'ts_scheduler_availability_month_v1'/.test(cloud),
     'cloud_sync.js phải khai báo STORAGE_KEYS.AVAILABILITY_MONTH với đúng tên khoá');
 
-  // cloud_sync.js: đẩy lên Cloud
-  assert.ok(/availabilityMonth\s*:\s*readKey\(STORAGE_KEYS\.AVAILABILITY_MONTH/.test(cloud),
-    'buildPayload() phải gửi availabilityMonth lên Cloud');
+  // cloud_sync.js: đẩy lên Cloud (chuẩn hoá để không đẩy `"2026-11"` có ngoặc kép)
+  assert.ok(/availabilityMonth\s*:\s*normalizeAvailabilityMonthKey\(\s*readKey\(STORAGE_KEYS\.AVAILABILITY_MONTH/.test(cloud),
+    'buildPayload() phải gửi availabilityMonth đã chuẩn hoá lên Cloud');
 
   // cloud_sync.js: kéo về từ Cloud (bắt buộc, nếu thiếu thì máy mới vẫn không có khoá)
   assert.ok(/payload\.availabilityMonth/.test(cloud),
     'applyPayload() phải đọc availabilityMonth từ Cloud');
-  assert.ok(/writeKey\(STORAGE_KEYS\.AVAILABILITY_MONTH,\s*payload\.availabilityMonth\)/.test(cloud),
-    'applyPayload() phải ghi availabilityMonth vào localStorage khi máy mới chưa có');
+  assert.ok(/readAvailabilityMonthRaw\(\)/.test(cloud),
+    'applyPayload() phải đọc khoá tháng hiện có để không ghi đè');
+  assert.ok(/writeAvailabilityMonthRaw\(payload\.availabilityMonth\)/.test(cloud),
+    'applyPayload() phải ghi availabilityMonth dạng chuỗi thô khi máy mới chưa có');
 
   // Nguyên tắc an toàn: không được xoá khi chưa có khoá
   const resetSrc = admin.slice(

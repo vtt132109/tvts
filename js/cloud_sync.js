@@ -29,6 +29,57 @@
     ACTIVE_MONTH: 'ts_scheduler_active_month_v1'
   };
 
+  /**
+   * Chuẩn hoá khoá tháng ca rảnh về 'YYYY-MM'.
+   * Bản cũ ghi key này bằng JSON.stringify nên có thể là `"2026-11"`; nếu đem
+   * so nguyên chuỗi, admin sẽ hiểu nhầm là tháng khác và xoá sạch ca rảnh.
+   */
+  function normalizeAvailabilityMonthKey(value) {
+    if (value === null || value === undefined) return '';
+    let text = String(value).trim();
+    if (!text) return '';
+    if ((text.startsWith('"') && text.endsWith('"'))
+      || (text.startsWith("'") && text.endsWith("'"))) {
+      try {
+        text = JSON.parse(text);
+      } catch (e) {
+        text = text.slice(1, -1);
+      }
+      text = String(text).trim();
+    }
+    const match = /^(\d{4})-(\d{1,2})$/.exec(text);
+    if (match) return `${match[1]}-${String(match[2]).padStart(2, '0')}`;
+    return text;
+  }
+
+  /** Đọc + tự chữa khoá tháng bị bọc ngoặc kép. */
+  function readAvailabilityMonthRaw() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
+      const normalized = normalizeAvailabilityMonthKey(raw);
+      if (normalized && normalized !== raw) {
+        try {
+          localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, normalized);
+        } catch (e) {}
+      }
+      return normalized;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /** Ghi khoá tháng dạng chuỗi thô, không JSON.stringify. */
+  function writeAvailabilityMonthRaw(value) {
+    const normalized = normalizeAvailabilityMonthKey(value);
+    if (!normalized) return false;
+    try {
+      localStorage.setItem(STORAGE_KEYS.AVAILABILITY_MONTH, normalized);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Cấu hình đồng bộ mặc định (Tích hợp sẵn Cơ sở dữ liệu Firebase của Ban Tuyển Sinh)
   const DEFAULT_CONFIG = {
     enabled: true,
@@ -1253,7 +1304,9 @@
       activeMonth: normalizeActiveMonth(readKey(STORAGE_KEYS.ACTIVE_MONTH, null)),
       // Khoá tháng ca rảnh: gửi lên Cloud để máy mới biết ca rảnh hiện tại thuộc
       // tháng nào, thay vì tự đoán "chưa đăng ký" rồi xoá nhầm ca rảnh thật.
-      availabilityMonth: readKey(STORAGE_KEYS.AVAILABILITY_MONTH, null),
+      availabilityMonth: normalizeAvailabilityMonthKey(
+        readKey(STORAGE_KEYS.AVAILABILITY_MONTH, null)
+      ) || null,
       // Cấu hình 1/2 người mỗi ca + các ca đặc biệt 3 người (theo tháng).
       shiftCapacity: readKey(STORAGE_KEYS.SHIFT_CAPACITY, {}),
       updatedAt: Date.now(),
@@ -1436,14 +1489,12 @@
       }
 
       // 4b. Khoá tháng ca rảnh — máy mới CẦN CÓ để không xoá nhầm ca rảnh thật.
+      // Ghi dạng chuỗi thô 'YYYY-MM'; trước đây writeKey JSON.stringify khiến
+      // key thành `"2026-11"` và lần F5 sau admin xoá sạch ca rảnh.
       if (typeof payload.availabilityMonth === 'string' && payload.availabilityMonth) {
-        let currentLocal = null;
-        try {
-          const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
-          if (raw) currentLocal = JSON.parse(raw);
-        } catch (e) {}
+        const currentLocal = readAvailabilityMonthRaw();
         if (!currentLocal) {
-          writeKey(STORAGE_KEYS.AVAILABILITY_MONTH, payload.availabilityMonth);
+          writeAvailabilityMonthRaw(payload.availabilityMonth);
         }
       }
 
@@ -1644,7 +1695,9 @@
       // khoá), nên chỉ công bố một bản để giảm một nửa dung lượng.
       allMonthSchedules: sanitizePublicData(readStorageJson(STORAGE_KEYS.ALL_MONTHS, {})),
       activeMonth: normalizeActiveMonth(readStorageJson(STORAGE_KEYS.ACTIVE_MONTH, null)),
-      availabilityMonth: readStorageJson(STORAGE_KEYS.AVAILABILITY_MONTH, null),
+      availabilityMonth: normalizeAvailabilityMonthKey(
+        readStorageJson(STORAGE_KEYS.AVAILABILITY_MONTH, null)
+      ) || null,
       swapStatuses,
       updatedAt: Date.now(),
       version: 'public-1.1'
@@ -1771,12 +1824,8 @@
 
       // Khoá tháng ca rảnh chỉ ghi khi máy chưa có — tránh xoá ca rảnh thật.
       if (typeof payload.availabilityMonth === 'string' && payload.availabilityMonth) {
-        let currentLocal = null;
-        try {
-          const raw = localStorage.getItem(STORAGE_KEYS.AVAILABILITY_MONTH);
-          if (raw) currentLocal = JSON.parse(raw);
-        } catch (e) {}
-        if (!currentLocal) writeKey(STORAGE_KEYS.AVAILABILITY_MONTH, payload.availabilityMonth);
+        const currentLocal = readAvailabilityMonthRaw();
+        if (!currentLocal) writeAvailabilityMonthRaw(payload.availabilityMonth);
       }
 
       if (Array.isArray(payload.events)) writeKey(STORAGE_KEYS.EVENTS, sanitizePublicData(payload.events));
@@ -3343,6 +3392,7 @@
     mergeRegistrationRequests,
     mergeSwapRequests,
     sanitizeSwapRequestRecord,
+    normalizeAvailabilityMonthKey,
     // Cán bộ: xoá ràng buộc phiên cũ của MSSV để sinh viên đổi máy đăng ký lại
     releaseMssvOwner,
 

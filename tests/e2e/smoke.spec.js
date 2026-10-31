@@ -131,6 +131,24 @@ test('admin: nhập CSV tự lưu và giữ ca rảnh sau reload', async ({ page
   expect(weekly).toEqual(['T2_S', 'T3_S']);
 });
 
+test('admin: khoá tháng dạng JSON không xoá ca rảnh khi tải lại', async ({ page }) => {
+  await seed(page, {
+    local: {
+      ...fixtures.adminLocal,
+      ts_scheduler_availability_month_v1: '"2026-10"'
+    },
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  await page.click('#btn-tab-students');
+  await page.locator('#admin-student-table-body button', { hasText: 'Sửa' }).first().click();
+  await expect(page.locator('#admin-cb-w1-T2_S')).toBeChecked();
+  await expect(page.locator('#admin-cb-w2-T2_S')).toBeChecked();
+  const key = await page.evaluate(() =>
+    localStorage.getItem('ts_scheduler_availability_month_v1'));
+  expect(key).toBe('2026-10');
+});
+
 test('admin: sửa ca rảnh theo tuần và giữ thay đổi sau reload', async ({ page }) => {
   await seed(page, {
     local: fixtures.adminLocal,
