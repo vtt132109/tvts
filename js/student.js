@@ -1546,6 +1546,9 @@ function paintSlotAvailability() {
       fullName: (existingStudent && existingStudent.fullName) || '',
       month: { month: activeM.month, year: activeM.year },
       shifts: cleanShifts,
+      // Firebase bỏ mảng rỗng: đăng ký 0 ca sẽ mất `shifts`. shiftCount giữ lại
+      // ý định "đã đăng ký và chọn 0 ca" để Rules chấp nhận và admin xoá ca cũ.
+      shiftCount: [1, 2, 3, 4].reduce((sum, w) => sum + cleanShifts[w].length, 0),
       availableShifts: [...(availableShifts || [])],
       submittedAt: new Date().toISOString(),
       status: 'registered'

@@ -1393,6 +1393,23 @@ console.log('\n▶ [GROUP 11] Gộp Yêu Cầu & Cập Nhật Trạng Thái:');
   assert(local[0].monthlyAvailableShifts[1][0] === 'OLD',
     '11.3: Không được sửa mảng đầu vào (tránh tác dụng phụ)');
 
+  const zero = csm.mergeRegistrationRequests(local, {
+    SV001: {
+      mssv: 'SV001',
+      submittedAt: '2026-10-23T10:00:00.000Z',
+      shiftCount: 0
+    }
+  });
+  assert(zero.mergedCount === 1
+    && [1, 2, 3, 4].every(w => (zero.students[0].monthlyAvailableShifts[w] || []).length === 0)
+    && zero.students[0].availableShifts.length === 0,
+  '11.3b: Đăng ký 0 ca (shifts bị Firebase bỏ) phải xoá ca rảnh cũ của CTV');
+  const noFlag = csm.mergeRegistrationRequests(local, {
+    SV001: { mssv: 'SV001', submittedAt: '2026-10-23T10:00:00.000Z' }
+  });
+  assert(noFlag.students[0].monthlyAvailableShifts[1][0] === 'OLD',
+    '11.3c: Bản ghi thiếu shifts mà không có shiftCount=0 KHÔNG được xoá ca cũ');
+
   const unknown = csm.mergeRegistrationRequests(local, {
     SV999: {
       mssv: 'SV999',
@@ -1797,6 +1814,8 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
 
   // Đăng ký: chặn kiểu dữ liệu/độ dài bất thường
   const regValidate = regRule['.validate'] || '';
+  assert(!/hasChildren\(\[[^\]]*'shifts'/.test(regValidate) && /shiftCount/.test(regValidate),
+    '12.17h: Đăng ký 0 ca hợp lệ: không bắt buộc node shifts (Firebase bỏ mảng rỗng), dùng shiftCount');
   assert(/status'\)\.isString\(\)/.test(regValidate) && /month\/year/.test(regValidate)
     && /fullName/.test(regValidate),
   '12.17g: Đăng ký phải validate kiểu status/month/fullName');

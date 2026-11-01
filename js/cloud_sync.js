@@ -2653,8 +2653,15 @@
       const reqStamp = reqStampRaw ? Math.min(reqStampRaw, Date.now() + 60 * 1000) : 0;
       const currentStamp = Number(current.updatedAt) || 0;
 
-      const safeShifts = sanitizeWeeklyAvailability(req.shifts);
-      const safeAvailable = sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
+      // Đăng ký 0 ca: Firebase bỏ mảng rỗng nên `shifts` biến mất. Cờ
+      // shiftCount === 0 nghĩa là sinh viên chủ động chọn không ca -> phải xoá
+      // ca cũ chứ không được coi là "không có thay đổi".
+      const isZeroRegistration = req.shiftCount !== undefined && Number(req.shiftCount) === 0;
+      const safeShifts = sanitizeWeeklyAvailability(req.shifts)
+        || (isZeroRegistration ? { 1: [], 2: [], 3: [], 4: [] } : null);
+      const safeAvailable = isZeroRegistration
+        ? []
+        : sanitizeShiftIdList(req.availableShifts, getCanonicalShiftIds());
 
       const hasWeeklyShifts = Boolean(safeShifts)
         && WEEK_KEYS.some(week => (safeShifts[week] || []).length > 0);
