@@ -1705,7 +1705,16 @@
 
     // Cùng nguyên tắc chống xoá nhầm như buildPayload: máy chưa có danh sách
     // thì không gửi khoá directory (PATCH sẽ giữ nguyên bản cũ trên Cloud).
-    if (directory.length > 0) payload.directory = directory;
+    if (directory.length > 0) {
+      payload.directory = directory;
+      // Chỉ mục MSSV hợp lệ để Rules chặn người lạ chiếm MSSV ngoài danh sách CTV.
+      // PATCH gộp theo khoá nên MSSV cũ không bị xoá khi danh sách thu nhỏ.
+      payload.mssvIndex = {};
+      directory.forEach(rec => {
+        const id = String(rec.studentId || rec.id || '').trim();
+        if (/^[A-Za-z0-9_-]{2,32}$/.test(id)) payload.mssvIndex[id] = true;
+      });
+    }
     return payload;
   }
 
@@ -2336,6 +2345,13 @@
     // (Rules cũng chỉ cho owner ghi status 'pending' khi tạo mới.)
     body.status = 'pending';
     body.createdAt = body.createdAt || new Date().toISOString();
+
+    // Rules yêu cầu studentId thuộc về uid người gửi: giữ chỗ MSSV trước khi ghi.
+    const swapId = String(body.studentId || '').trim();
+    if (swapId) {
+      const claim = await claimMssv(swapId, customCfg);
+      if (!claim.success) return claim;
+    }
 
     const res = await putRequestNode('swaps/' + encodeURIComponent(body.id), body, customCfg);
     if (res.success) {

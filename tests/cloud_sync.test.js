@@ -1783,6 +1783,24 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && /auth\.token\.email_verified === true/.test(ownerRule['.write'] || ''),
   '12.17b: Cán bộ Google được ghi đè/xoá mssv_owner để giải phóng MSSV cho thiết bị mới');
 
+  assert(/mssvIndex/.test(ownerRule['.write'] || ''),
+    '12.17c: Chỉ giữ chỗ được MSSV có trong chỉ mục roster công khai (chống chiếm MSSV lạ)');
+  assert(cloudJs.includes('payload.mssvIndex'),
+    '12.17d: Admin phải công bố mssvIndex cùng directory');
+
+  // Đổi ca: studentId phải thuộc uid người gửi
+  const swapCreateRule = (((r.tvts_requests || {}).swaps || {})['$swapId'] || {})['.write'] || '';
+  assert(/mssv_owner'\)\.child\(newData\.child\('studentId'\)\.val\(\)\)\.val\(\) === auth\.uid/.test(swapCreateRule),
+    '12.17e: Tạo đề xuất đổi ca phải chứng minh studentId thuộc về uid người gửi');
+  assert(/async function submitSwap[\s\S]{0,900}claimMssv\(/.test(cloudJs),
+    '12.17f: submitSwap phải giữ chỗ MSSV trước khi ghi đề xuất');
+
+  // Đăng ký: chặn kiểu dữ liệu/độ dài bất thường
+  const regValidate = regRule['.validate'] || '';
+  assert(/status'\)\.isString\(\)/.test(regValidate) && /month\/year/.test(regValidate)
+    && /fullName/.test(regValidate),
+  '12.17g: Đăng ký phải validate kiểu status/month/fullName');
+
   // Sinh viên không được tự duyệt đề xuất đổi ca
   const swapRule = ((r.tvts_requests || {}).swaps || {})['$swapId'] || {};
   const swapWrite = swapRule['.write'] || '';
