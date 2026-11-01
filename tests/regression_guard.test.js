@@ -34,6 +34,8 @@ const ALLOWED_TRACKED_FIXTURES = new Set(['tests/fixtures/roster_sample.csv']);
 const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
 const adminJs = readSrc('js/admin.js');
+// Bộ phân tích CSV đã tách khỏi admin.js (js/csv_import.js).
+const csvImportJs = readSrc('js/csv_import.js');
 const studentJs = readSrc('js/student.js');
 const schedulerJs = readSrc('js/scheduler.js');
 const cloudJs = readSrc('js/cloud_sync.js');
@@ -442,18 +444,18 @@ runTest('3.15: Nhập CSV phải tìm cột VAI TRÒ theo nội dung khi tiêu �
   // Trước đây khi không tìm thấy cột vai trò theo tiêu đề, code đoán cứng
   // là index 3 — cột đó là EMAIL. Đo thật trên file này: 58/58 người bị
   // nhận thành Tập Sự, 0 Chính Thức, nên luật 1 Cũ + 1 Mới không xếp được.
-  assert.ok(!/colIdx\.role\s*=\s*3/.test(adminJs),
+  assert.ok(!/colIdx\.role\s*=\s*3/.test(csvImportJs),
     'Không được đoán cứng cột vai trò là index 3 — phải dò theo nội dung');
-  assert.ok(/laVaiTro/.test(adminJs) || /laVaiTro\s*\(/.test(adminJs),
+  assert.ok(/laVaiTro/.test(csvImportJs) || /laVaiTro\s*\(/.test(csvImportJs),
     'Phải có hàm nhận diện giá trị vai trò để dò cột');
-  assert.ok(/colIdx\.role = -1/.test(adminJs),
+  assert.ok(/colIdx\.role = -1/.test(csvImportJs),
     'Thiếu cột vai trò phải để -1 để dò, không lấp cứng theo vị trí');
 });
 
 runTest('3.16: Nhập CSV KHÔNG được nhận nhầm chuỗi chứa "cu" là Chính Thức', () => {
   // PHẢI bỏ comment trước khi quét — dòng comment giải thích bug cũ cũng
   // chứa đúng chuỗi đang tìm, sẽ khớp nhầm (giống lỗi ở test 3.13).
-  const codeOnly = adminJs
+  const codeOnly = csvImportJs
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
     .map(l => l.replace(/(^|[^:])\/\/.*$/, '$1'))

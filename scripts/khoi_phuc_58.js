@@ -33,17 +33,11 @@ const sStart = schedJs.indexOf('const SHIFTS =');
 const sEnd = schedJs.indexOf('];', sStart) + 2;
 const SHIFTS = eval(schedJs.slice(sStart, sEnd).replace('const SHIFTS =', ''));
 
-// parseStudentsCsv tu admin.js — dung CHINH ham cua ung dung
-const start = adminJs.indexOf('function parseStudentsCsv');
-const retIdx = adminJs.indexOf('return candidates;', start);
-let depth = 0, end = retIdx;
-for (let i = retIdx; i < adminJs.length; i++) {
-  if (adminJs[i] === '{') depth++;
-  else if (adminJs[i] === '}') { depth--; if (depth < 0) { end = i + 1; break; } }
-}
-const body = adminJs.slice(start, end);
+// parseStudentsCsv tu js/csv_import.js — dung CHINH ham cua ung dung
 const fakeState = { importedCandidates: [], students: [] };
-const parseStudentsCsv = new Function('SHIFTS', 'state', body + '\nreturn parseStudentsCsv;')(SHIFTS, fakeState);
+const fakeWindow = { SchedulerEngine: { SHIFTS } };
+new Function('window', read('js/csv_import.js'))(fakeWindow);
+const parseStudentsCsv = fakeWindow.CsvImport.create({ state: fakeState }).parseStudentsCsv;
 
 const students = parseStudentsCsv(csv);
 

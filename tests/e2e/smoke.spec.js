@@ -472,3 +472,20 @@ test('admin: chưa xếp đủ Mới thì kết quả cảnh báo rõ người c
   await expect(page.locator('#schedule-coverage-summary')).toContainText('Chưa xếp đủ người Mới có đăng ký');
   await expect(page.locator('#toast-container')).toContainText('Chưa xếp đủ người Mới: 1/3');
 });
+
+test('admin: bộ phân tích CSV tách module nạp được trong trình duyệt và đọc đúng 6 CTV mẫu', async ({ page }) => {
+  const csv = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'fixtures', 'roster_sample.csv'), 'utf8');
+  await seed(page, { local: fixtures.adminLocal, session: fixtures.adminSession });
+  await page.goto('/admin.html');
+  await page.waitForTimeout(1500);
+  const result = await page.evaluate(text => ({
+    hasModule: !!(window.CsvImport && typeof window.CsvImport.create === 'function'),
+    report: (() => {
+      const r = window.csvImportTestHelper.analyzeStudentsCsv(text);
+      return { count: r.candidates.length, errors: r.errors.length };
+    })()
+  }), csv);
+  expect(result.hasModule).toBe(true);
+  expect(result.report).toEqual({ count: 6, errors: 0 });
+});

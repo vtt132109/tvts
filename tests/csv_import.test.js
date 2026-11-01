@@ -126,6 +126,7 @@ new Function('window', 'module', monthCalendarCode)(global.window, undefined);
 new Function('window', 'module', schedulerCode)(global.window, undefined);
 
 eval(readSrc('js/common.js'));
+eval(readSrc('js/csv_import.js'));
 eval(readSrc('js/admin.js'));
 
 assert.ok(global.window.csvImportTestHelper, 'admin.js phải export window.csvImportTestHelper');
