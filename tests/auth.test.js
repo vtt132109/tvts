@@ -143,6 +143,7 @@ eval(fs.readFileSync(path.resolve(__dirname, '../js/common.js'), 'utf8'));
 global.window.__TVTS_AUTH_TEST__ = true;
 
 // Chạy mã admin.js trong ngữ cảnh global đã mock
+eval(fs.readFileSync(path.resolve(__dirname, '..', 'js', 'payroll_events.js'), 'utf8'));
 eval(adminJsContent);
 
 const { AdminAuth } = global.window;

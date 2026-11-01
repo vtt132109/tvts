@@ -192,6 +192,7 @@ mockLocalStorage.setItem('ts_scheduler_admin_users', JSON.stringify([QA_MONTH_AD
 global.window.__TVTS_AUTH_TEST__ = true;
 
 const adminCode = fs.readFileSync(path.join(__dirname, '..', 'js', 'admin.js'), 'utf-8');
+eval(fs.readFileSync(path.resolve(__dirname, '..', 'js', 'payroll_events.js'), 'utf8'));
 eval(adminCode);
 
 console.log('================================================================');

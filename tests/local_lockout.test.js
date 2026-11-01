@@ -91,6 +91,7 @@ require(path.join(ROOT, 'js', 'scheduler.js'));
 require(path.join(ROOT, 'js', 'common.js'));
 require(path.join(ROOT, 'js', 'audit.js'));
 require(path.join(ROOT, 'js', 'store.js'));
+eval(fs.readFileSync(path.join(ROOT, 'js', 'payroll_events.js'), 'utf8'));
 eval(fs.readFileSync(path.join(ROOT, 'js', 'admin.js'), 'utf8'));
 
 const AdminAuth = global.window.AdminAuth;

@@ -21,7 +21,8 @@ const path = require('path');
 const nodeCrypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
-const adminSrc = fs.readFileSync(path.join(ROOT, 'js/admin.js'), 'utf8');
+const adminSrc = fs.readFileSync(path.join(ROOT, 'js/payroll_events.js'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(ROOT, 'js/admin.js'), 'utf8');
 const cloudSrc = fs.readFileSync(path.join(ROOT, 'js/cloud_sync.js'), 'utf8');
 
 let passed = 0;
