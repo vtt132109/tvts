@@ -3939,19 +3939,7 @@ function getRegisteredShiftCount(student) {
  * Chỉ fallback sang availableShifts cho dữ liệu cũ chưa có cấu trúc tuần.
  */
 function getDeclaredShiftsForWeek(student, weekNumber) {
-  if (!student) return [];
-  const weekly = student.monthlyAvailableShifts;
-  if (weekly && typeof weekly === 'object') {
-    const week = parseInt(weekNumber, 10) || 1;
-    const hasWeeklyStructure = [1, 2, 3, 4].some(
-      n => Array.isArray(weekly[n]) || Array.isArray(weekly[String(n)])
-    );
-    if (hasWeeklyStructure) {
-      const declared = weekly[week] || weekly[String(week)];
-      return Array.isArray(declared) ? declared : [];
-    }
-  }
-  return Array.isArray(student.availableShifts) ? student.availableShifts : [];
+  return window.SchedulerEngine.getAvailableShiftsForWeek(student, parseInt(weekNumber, 10) || 1);
 }
 
 /**

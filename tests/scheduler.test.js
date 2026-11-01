@@ -399,6 +399,59 @@ runTest('Random: kết quả phụ thuộc nguồn ngẫu nhiên, không ép v�
     .some(s => s.oldMember?.role === 'new' || s.newMember?.role === 'old')));
 });
 
+const availabilityModes = [
+  { peoplePerShift: 2 },
+  { peoplePerShift: 1 },
+  { peoplePerShift: 1, anyRole: true },
+  { peoplePerShift: 2, anyRole: true },
+  { peoplePerShift: 1, schedulingMode: 'random' },
+  { peoplePerShift: 2, schedulingMode: 'random' },
+  { peoplePerShift: 1, schedulingMode: 'new-first' }
+];
+
+runTest('Mọi chế độ: tuần null hoặc thiếu từ Firebase là 0 ca, không lấy ca T4_S của tuần khác', () => {
+  for (const weekly of [{ 1: null, 2: ['T4_S'], 4: null }, [null, null, ['T4_S']]]) {
+    const students = ['old', 'new'].map(role => ({
+      id: `sparse_${role}`, role, availableShifts: ['T4_S'], monthlyAvailableShifts: weekly
+    }));
+    const before = JSON.stringify(students);
+    for (const options of availabilityModes) {
+      const result = runMonthSchedule(students, 2026, 11, options);
+      result.weeks.forEach((week, i) => {
+        const assigned = Object.values(week.scheduleTable)
+          .flatMap(slot => [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean));
+        if (i === 1) assert.ok(assigned.length > 0, 'Tuần 2 có đăng ký T4_S vẫn phải được xếp');
+        else assert.strictEqual(assigned.length, 0, `Tuần ${i + 1} không đăng ký nhưng bị xếp; ${JSON.stringify(options)}`);
+      });
+    }
+    assert.strictEqual(JSON.stringify(students), before, 'Không sửa dữ liệu đăng ký đầu vào');
+  }
+});
+
+runTest('Mọi chế độ: cấu trúc tuần rỗng/null không được dùng danh sách gộp còn sót', () => {
+  for (const weekly of [{}, [], { 1: null, 2: null, 3: null, 4: null }]) {
+    const students = ['old', 'new'].map(role => ({
+      id: `empty_${role}`, role, availableShifts: ['T4_S'], monthlyAvailableShifts: weekly
+    }));
+    for (const options of availabilityModes) {
+      const result = runMonthSchedule(students, 2026, 11, options);
+      assert.strictEqual(result.uniqueAssignedCount, 0, JSON.stringify(options));
+    }
+  }
+});
+
+runTest('Dữ liệu cũ chưa có cấu trúc tuần vẫn dùng availableShifts, không xếp ngoài ca đã khai', () => {
+  const students = ['old', 'new'].map(role => ({ id: `legacy_${role}`, role, availableShifts: ['T4_C'] }));
+  for (const options of availabilityModes) {
+    const result = runMonthSchedule(students, 2026, 11, options);
+    result.weeks.forEach(week => {
+      assert.ok(week.scheduleTable.T4_C.oldMember || week.scheduleTable.T4_C.newMember);
+      assert.strictEqual(week.scheduleTable.T4_S.oldMember, null);
+      assert.strictEqual(week.scheduleTable.T4_S.newMember, null);
+    });
+  }
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');

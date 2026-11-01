@@ -333,3 +333,40 @@ test('admin: lọc ca đăng ký đúng tháng, kết hợp tìm kiếm và bỏ
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: 'test-results/registration-filter-mobile.png' });
 });
+
+test('admin: mọi chế độ chỉ xếp đúng ca rảnh từng tuần khi Cloud trả null/thiếu tuần', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const students = fixtures.students.map((s, i) => ({
+    ...s, role: i % 2 ? 'new' : 'old',
+    availableShifts: ['T4_S', 'T4_C'],
+    monthlyAvailableShifts: i === 0
+      ? { 1: ['T4_C'], 2: ['T4_C'], 3: ['T4_C'], 4: ['T4_C'] }
+      : [null, null, ['T4_S']]
+  }));
+  await seed(page, {
+    local: { ...fixtures.adminLocal, ts_scheduler_students: JSON.stringify(students) },
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  const mode = page.getByLabel('Chế độ xếp lịch của tháng');
+  for (const [capacity, modes] of [[2, ['balanced', 'any-role', 'random']], [1, ['any-role', 'new-first', 'random']]]) {
+    await page.click(`#btn-month-capacity-${capacity}`);
+    for (const value of modes) {
+      await mode.selectOption(value);
+      await page.click('#btn-admin-auto-schedule');
+      await expect(page.locator('#btn-admin-auto-schedule')).toBeEnabled();
+      const invalid = await page.evaluate(() => {
+        const state = window.adminTestHelper.getState();
+        return state.monthSchedule.weeks.flatMap((week, i) =>
+          Object.entries(week.scheduleTable).flatMap(([shift, slot]) =>
+            [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).filter(member => {
+              const student = state.students.find(s => s.id === member.id);
+              return !(student.monthlyAvailableShifts[i + 1] || []).includes(shift);
+            }).map(member => ({ week: i + 1, shift, id: member.id }))));
+      });
+      expect(invalid, `Sai ca ở ${capacity} người/ca, chế độ ${value}`).toEqual([]);
+    }
+  }
+  expect(errors).toEqual([]);
+});

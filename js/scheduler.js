@@ -292,6 +292,19 @@
     return result;
   }
 
+  /** Ca rảnh của đúng tuần. Firebase có thể bỏ tuần rỗng hoặc trả null.
+   * Có cấu trúc tháng thì tuần thiếu/null là 0 ca, không dùng hợp cả tháng.
+   * Chỉ dữ liệu cũ chưa có cấu trúc tháng mới dùng availableShifts.
+   */
+  function getAvailableShiftsForWeek(student, weekNumber) {
+    if (!student) return [];
+    const weekly = student.monthlyAvailableShifts;
+    if (weekly && typeof weekly === 'object') {
+      return Array.isArray(weekly[weekNumber]) ? weekly[weekNumber] : [];
+    }
+    return Array.isArray(student.availableShifts) ? student.availableShifts : [];
+  }
+
   /**
    * Chuẩn hóa danh sách sinh viên đầu vào, bảo đảm tính toàn vẹn dữ liệu.
    * Ghi nhận các trường hợp dữ liệu bất thường vào `normalizeWarnings`
@@ -1042,9 +1055,7 @@
       const newMembers = safeStudents.filter(s => s.role === 'new' && !alreadyAssigned.has(s.id)).map(s => ({
         ...s,
         availableShifts: Array.from({ length: numWeeks }, (_, i) => {
-          const weekShifts = s.monthlyAvailableShifts && s.monthlyAvailableShifts[i + 1];
-          return (Array.isArray(weekShifts) ? weekShifts : s.availableShifts)
-            .map(id => `${i + 1}:${id}`);
+          return getAvailableShiftsForWeek(s, i + 1).map(id => `${i + 1}:${id}`);
         }).flat()
       }));
       newMemberMatches = maxBipartiteMatch(newMembers, monthSlotIds);
@@ -1052,19 +1063,10 @@
 
     // Lặp qua từng tuần trong chu kỳ
     for (let w = 1; w <= numWeeks; w++) {
-      // Áp dụng ca rảnh riêng của tuần w nếu sinh viên có monthlyAvailableShifts (Section 9C api-contracts.md)
-      // Nếu không có, tự động fallback về s.availableShifts
-      const weekStudents = safeStudents.map(s => {
-        let shiftsForWeek = s.availableShifts || [];
-        if (s.monthlyAvailableShifts && (Array.isArray(s.monthlyAvailableShifts[w]) || Array.isArray(s.monthlyAvailableShifts[String(w)]))) {
-          const arr = s.monthlyAvailableShifts[w] || s.monthlyAvailableShifts[String(w)];
-          shiftsForWeek = arr;
-        }
-        return {
-          ...s,
-          availableShifts: shiftsForWeek
-        };
-      });
+      const weekStudents = safeStudents.map(s => ({
+        ...s,
+        availableShifts: getAvailableShiftsForWeek(s, w)
+      }));
 
       // Ưu tiên những bạn có ít ca lũy kế nhất trong các tuần trước (chống đói ca)
       const priorityIds = [...weekStudents]
@@ -1229,6 +1231,7 @@
     SHIFTS,
     SHIFT_MAP,
     getShiftName,
+    getAvailableShiftsForWeek,
     MonthCalendarHelper,
     solveWeeklySchedule,
     solveWeeklyScheduleAnyRole,
