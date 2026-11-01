@@ -313,6 +313,92 @@ runTest('Any-role 1 người/ca: chọn 1 người bất kỳ', () => {
   });
 });
 
+function seededRandom(seed) {
+  let value = seed >>> 0;
+  return () => { value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296; };
+}
+
+runTest('Ưu tiên Mới: dành 1 ca/tháng cho từng người Mới rồi xếp người Cũ, đúng ca rảnh từng tuần', () => {
+  const allShifts = SHIFTS.map(s => s.id);
+  const students = [
+    { id: 'new_flexible', role: 'new', availableShifts: allShifts },
+    { id: 'new_late', role: 'new', availableShifts: ['T2_S'],
+      monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: ['T2_S'] } },
+    ...Array.from({ length: 4 }, (_, i) => ({ id: `old_${i}`, role: 'old', availableShifts: allShifts }))
+  ];
+  const result = runMonthSchedule(students, 2026, 11, { peoplePerShift: 1, schedulingMode: 'new-first' });
+  const members = result.weeks.flatMap(w => Object.values(w.scheduleTable).map(s => s.oldMember));
+  assert.strictEqual(members.filter(s => s?.id === 'new_flexible').length, 1);
+  assert.strictEqual(members.filter(s => s?.id === 'new_late').length, 1);
+  assert.strictEqual(result.weeks[3].scheduleTable.T2_S.oldMember.id, 'new_late');
+  assert.strictEqual(members.filter(s => s?.role === 'old').length, 38);
+});
+
+runTest('Ưu tiên Mới: ghép lại ca linh hoạt để không bỏ sót người chỉ rảnh một ca', () => {
+  const students = [
+    { id: 'flex', role: 'new', availableShifts: ['T2_S', 'T3_S'] },
+    { id: 'scarce', role: 'new', availableShifts: ['T2_S'] },
+    { id: 'old', role: 'old', availableShifts: SHIFTS.map(s => s.id) }
+  ].map(s => ({ ...s, monthlyAvailableShifts: { 1: s.availableShifts, 2: [], 3: [], 4: [] } }));
+  const result = runMonthSchedule(students, 2026, 11, { peoplePerShift: 1, schedulingMode: 'new-first' });
+  assert.strictEqual(result.weeks[0].scheduleTable.T2_S.oldMember.id, 'scarce');
+  assert.strictEqual(result.weeks[0].scheduleTable.T3_S.oldMember.id, 'flex');
+  assert.ok(result.combinedStats.flex.totalCount >= 1);
+  assert.ok(result.combinedStats.scarce.totalCount >= 1);
+});
+
+function randomMonth(students, capacity, seed) {
+  const original = Math.random;
+  Math.random = seededRandom(seed);
+  try {
+    return runMonthSchedule(students, 2026, 11, { peoplePerShift: capacity, schedulingMode: 'random' });
+  } finally { Math.random = original; }
+}
+
+runTest('Random: đúng số người/ca, ca rảnh từng tuần, không phân biệt vai trò và không sửa đầu vào', () => {
+  const allShifts = SHIFTS.map(s => s.id);
+  for (const role of ['old', 'new']) {
+    const students = Array.from({ length: 8 }, (_, i) => ({
+      id: `random_${i}`, studentId: `90000${i}`, fullName: `CTV ${i}`, role,
+      availableShifts: allShifts,
+      monthlyAvailableShifts: { 1: allShifts, 2: i === 0 ? [] : allShifts, 3: allShifts, 4: allShifts }
+    }));
+    const before = JSON.stringify(students);
+    for (const capacity of [1, 2]) {
+      const result = randomMonth(students, capacity, 19);
+      result.weeks.forEach(week => {
+        const seen = new Set();
+        Object.entries(week.scheduleTable).forEach(([id, slot]) => {
+          const members = [slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean);
+          assert.strictEqual(members.length, capacity);
+          assert.strictEqual(slot.capacity, capacity);
+          assert.strictEqual(slot.status, 'full');
+          members.forEach(member => {
+            assert.ok(member.monthlyAvailableShifts[week.weekNumber].includes(id));
+            const key = `${member.id}@${id.split('_')[0]}`;
+            assert.ok(!seen.has(key), 'Không trùng người trong ca hoặc trùng ngày khi đủ người');
+            seen.add(key);
+          });
+        });
+      });
+    }
+    assert.strictEqual(JSON.stringify(students), before);
+  }
+});
+
+runTest('Random: kết quả phụ thuộc nguồn ngẫu nhiên, không ép vị trí Cũ/Mới', () => {
+  const students = Array.from({ length: 8 }, (_, i) => ({
+    id: `r_${i}`, role: i % 2 ? 'new' : 'old', availableShifts: SHIFTS.map(s => s.id)
+  }));
+  const signature = result => result.weeks.map(w => Object.values(w.scheduleTable)
+    .map(s => [s.oldMember?.id, s.newMember?.id]));
+  const first = randomMonth(students, 2, 1);
+  assert.deepStrictEqual(signature(first), signature(randomMonth(students, 2, 1)));
+  assert.notDeepStrictEqual(signature(first), signature(randomMonth(students, 2, 92)));
+  assert.ok(first.weeks.some(w => Object.values(w.scheduleTable)
+    .some(s => s.oldMember?.role === 'new' || s.newMember?.role === 'old')));
+});
+
 console.log('\n================================================================');
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('================================================================\n');

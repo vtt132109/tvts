@@ -205,3 +205,81 @@ test('student mobile: tải được trang, không tràn ngang', async ({ page }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   expect(overflow).toBe(false);
 });
+
+test('admin: chọn chế độ xếp lịch, giữ số người/ca và lựa chọn sau reload', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await seed(page, { local: fixtures.adminLocal, session: fixtures.adminSession });
+  await page.goto('/admin.html');
+  const mode = page.getByLabel('Chế độ xếp lịch của tháng');
+  const run = page.locator('#btn-admin-auto-schedule');
+  const slots = () => page.evaluate(() => window.adminTestHelper.getState()
+    .monthSchedule.weeks.flatMap(w => Object.values(w.scheduleTable)));
+
+  await expect(mode).toHaveValue('balanced');
+  await run.click();
+  await expect(run).toBeEnabled();
+  // Fixture toàn người Mới: chế độ cặp phải để trống vị trí Cũ.
+  for (const slot of await slots()) {
+    expect(slot.oldMember).toBeNull();
+    expect(slot.newMember.role).toBe('new');
+    expect(slot.status).toBe('partial');
+  }
+
+  for (const value of ['any-role', 'random']) {
+    await mode.selectOption(value);
+    await run.click();
+    await expect(run).toBeEnabled();
+    for (const slot of await slots()) {
+      expect(slot.capacity).toBe(2);
+      expect(slot.oldMember.role).toBe('new');
+      expect(slot.newMember.role).toBe('new');
+      expect(slot.status).toBe('full');
+    }
+  }
+  await page.click('#btn-month-capacity-1');
+  await expect(mode).toHaveValue('random');
+  for (const slot of await slots()) {
+    expect(slot.capacity).toBe(1);
+    expect(slot.oldMember).toBeTruthy();
+    expect(slot.newMember).toBeNull();
+  }
+  await page.reload();
+  await expect(mode).toHaveValue('random');
+  await expect(page.locator('#btn-month-capacity-1')).toHaveAttribute('aria-pressed', 'true');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mode.scrollIntoViewIfNeeded();
+  const bounds = await mode.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: 'test-results/scheduling-mode-mobile.png', fullPage: false });
+  expect(errors).toEqual([]);
+});
+
+test('admin: 1 người/ca ưu tiên mỗi người Mới một ca trong tháng, còn lại người Cũ', async ({ page }) => {
+  const students = fixtures.students.map((s, i) => ({ ...s, role: i < 2 ? 'new' : 'old' }));
+  await seed(page, {
+    local: { ...fixtures.adminLocal, ts_scheduler_students: JSON.stringify(students) },
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  await page.click('#btn-month-capacity-1');
+  const mode = page.getByLabel('Chế độ xếp lịch của tháng');
+  await expect(mode).toHaveValue('any-role');
+  await mode.selectOption('new-first');
+  await page.click('#btn-admin-auto-schedule');
+  await expect(page.locator('#btn-admin-auto-schedule')).toBeEnabled();
+  const roles = await page.evaluate(() => window.adminTestHelper.getState().monthSchedule.weeks
+    .flatMap(w => Object.values(w.scheduleTable).map(s => s.oldMember?.role)));
+  expect(roles.filter(role => role === 'new')).toHaveLength(2);
+  expect(roles.filter(role => role === 'old')).toHaveLength(38);
+  await page.reload();
+  await expect(mode).toHaveValue('new-first');
+  await mode.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/scheduling-mode-desktop.png', fullPage: false });
+  await page.click('#btn-month-capacity-2');
+  await expect(mode).toHaveValue('balanced');
+  const paired = await page.evaluate(() => window.adminTestHelper.getState().monthSchedule.weeks
+    .every(w => Object.values(w.scheduleTable).every(s => s.oldMember?.role === 'old' && s.newMember?.role === 'new')));
+  expect(paired).toBe(true);
+});

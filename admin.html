@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261031_2326">
+  <link rel="stylesheet" href="css/style.css?v=20261101_schedule_modes">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -147,7 +147,7 @@
   <!-- In ấn banner -->
   <div class="print-header-banner">
     <h1>BẢNG PHÂN CÔNG LỊCH TRỰC VĂN PHÒNG TƯ VẤN TUYỂN SINH</h1>
-    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Mỗi ca xếp 1 hoặc 2 người bất kỳ theo cấu hình tháng</p>
+    <p>Thời gian áp dụng: Thứ Hai đến Thứ Sáu | Mỗi ca xếp 1 hoặc 2 người theo cấu hình tháng</p>
   </div>
 
   <!-- ====================================================================
@@ -493,7 +493,7 @@
       <section class="schedule-hero-enterprise">
         <div class="hero-left">
           <h2>⚡ Điều Phối & Phân Bổ Lịch Trực</h2>
-          <p>Tự động xếp 1 hoặc 2 người bất kỳ mỗi ca theo cấu hình tháng, đảm bảo công bằng.</p>
+          <p>Xếp 1 hoặc 2 người mỗi ca theo chế độ và ca rảnh của tháng.</p>
         </div>
         <!--
           10 nút cũ nằm chung một hàng không nhóm nên không biết nút nào chính,
@@ -510,6 +510,15 @@
             <h3 class="hero-cluster-label" id="hero-cluster-primary-label">
               <span class="hero-cluster-dot" aria-hidden="true"></span>Hành động chính
             </h3>
+            <div class="form-group" style="margin-bottom: 0.75rem; min-width: 0;">
+              <label class="form-label" for="admin-scheduling-mode">Chế độ xếp lịch của tháng</label>
+              <select class="form-input" id="admin-scheduling-mode" aria-describedby="scheduling-mode-hint" style="width: 100%; min-width: 0;">
+                <option value="balanced">1 Mới + 1 Cũ</option>
+                <option value="any-role">Không phân biệt Cũ/Mới</option>
+                <option value="new-first" hidden disabled>Ưu tiên người Mới</option>
+                <option value="random">Random — ngẫu nhiên</option>
+              </select>
+            </div>
             <div class="action-group action-group--primary">
               <button class="btn btn-primary btn-hero-primary" id="btn-admin-auto-schedule" style="font-weight: 700;">
                 <span>⚡ TỰ ĐỘNG PHÂN BỔ LỊCH</span>
@@ -521,7 +530,7 @@
                 <span>📥 NHẬP GOOGLE FORM</span>
               </button>
             </div>
-            <p class="hero-cluster-hint">⚡ Tự động phân bổ là nút quyết định — bấm 1 lần, hệ thống tự xếp đủ 1 hoặc 2 người bất kỳ mỗi ca theo cấu hình tháng. Gán tay: bấm trực tiếp vào ô ca bên dưới, chọn bất kỳ CTV nào (kể cả người chưa đăng ký) — lựa chọn của bạn sẽ được giữ nguyên qua các lần xếp tự động.</p>
+            <p class="hero-cluster-hint" id="scheduling-mode-hint">Không phân biệt: cân bằng số ca giữa các CTV. Ưu tiên người Mới (1 người/ca): dành mỗi người Mới 1 ca/tháng, rồi ưu tiên người Cũ. Random: chọn ngẫu nhiên, không xét vai trò. Mọi chế độ đều theo ca rảnh và giữ nguyên các ô gán tay.</p>
           </section>
 
           <!-- NHÓM 2 · XUẤT & CHIA SẺ -->
@@ -790,7 +799,7 @@
               <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">👥 Số người/ca:</span>
               <div class="filter-group" id="month-capacity-control" role="group" aria-label="Số người mỗi ca của tháng đang mở">
                 <button type="button" class="filter-btn" data-month-capacity="1" id="btn-month-capacity-1" title="Mỗi ca tự động xếp 1 người">1 người</button>
-                <button type="button" class="filter-btn active" data-month-capacity="2" id="btn-month-capacity-2" title="Mỗi ca tự động xếp 2 người bất kỳ">2 người</button>
+                <button type="button" class="filter-btn active" data-month-capacity="2" id="btn-month-capacity-2" title="Mỗi ca tự động xếp 2 người theo chế độ đã chọn">2 người</button>
               </div>
             </div>
 
@@ -1495,7 +1504,7 @@
         </label>
         <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; margin-bottom: 0.75rem; cursor: pointer;">
           <input type="radio" name="shiftCapacityMode" value="2" style="accent-color: var(--primary);">
-          <span><strong>2 người/ca</strong> — Xếp tự động xếp 2 người bất kỳ; vẫn thêm tay được người thứ 3</span>
+          <span><strong>2 người/ca</strong> — Xếp 2 người theo chế độ đã chọn; vẫn thêm tay được người thứ 3</span>
         </label>
 
         <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 0.25rem;">
@@ -2205,17 +2214,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261031_2326"></script>
+  <script src="js/a11y_modal.js?v=20261101_schedule_modes"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261031_2326"></script>
-  <script src="js/month_calendar.js?v=20261031_2326"></script>
-  <script src="js/scheduler.js?v=20261031_2326"></script>
-  <script src="js/roster.js?v=20261031_2326"></script>
-  <script src="js/common.js?v=20261031_2326"></script>
-  <script src="js/audit.js?v=20261031_2326"></script>
-  <script src="js/store.js?v=20261031_2326"></script>
-  <script src="js/admin.js?v=20261031_2326"></script>
+  <script src="js/cloud_sync.js?v=20261101_schedule_modes"></script>
+  <script src="js/month_calendar.js?v=20261101_schedule_modes"></script>
+  <script src="js/scheduler.js?v=20261101_schedule_modes"></script>
+  <script src="js/roster.js?v=20261101_schedule_modes"></script>
+  <script src="js/common.js?v=20261101_schedule_modes"></script>
+  <script src="js/audit.js?v=20261101_schedule_modes"></script>
+  <script src="js/store.js?v=20261101_schedule_modes"></script>
+  <script src="js/admin.js?v=20261101_schedule_modes"></script>
 </body>
 </html>

@@ -1,5 +1,20 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
+### Chế độ xếp lịch theo tháng (cập nhật 01/11/2026)
+
+Trong Quản trị, chọn **Chế độ xếp lịch của tháng** rồi bấm **Tự động phân bổ lịch**:
+
+| Số người/ca | Chế độ |
+|---|---|
+| 1 người | Không phân biệt Cũ/Mới; Ưu tiên người Mới; Random |
+| 2 người | 1 Mới + 1 Cũ (mặc định); Không phân biệt Cũ/Mới; Random |
+
+- **Không phân biệt:** cân bằng số ca, không xét vai trò.
+- **Ưu tiên người Mới:** dành mỗi người Mới ít nhất 1 ca trong tháng nếu có đủ ca rảnh phù hợp, rồi ưu tiên người Cũ. Ghép ca trên cả tháng, không lặp quota mỗi tuần; ca đã gán tay được tính khi dành suất.
+- **Random:** chọn ngẫu nhiên trong những người đăng ký rảnh, không ưu tiên vai trò hay số ca đã có.
+- Các chế độ giữ nguyên ô gán tay. Khi thiếu người phù hợp, lịch hiển thị ô thiếu và cảnh báo. Lựa chọn được lưu theo tháng cùng cấu hình 1/2 người/ca và đồng bộ Cloud.
+
+
 [![CI Tests](https://img.shields.io/badge/CI%20Tests-549%2F549%20PASS-brightgreen.svg)](tests/run_all_tests.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)

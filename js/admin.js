@@ -2441,6 +2441,12 @@
    * Nếu chưa có cấu hình nhưng lịch đã có slot.capacity thì suy ra từ lịch
    * (máy khác vừa kéo về) để không tự hạ/vượt cấu hình.
    */
+  function normalizeSchedulingMode(mode, peoplePerShift) {
+    if (mode === 'random' || mode === 'any-role') return mode;
+    if (peoplePerShift === 1) return mode === 'new-first' ? 'new-first' : 'any-role';
+    return 'balanced';
+  }
+
   function getMonthCapacity(month, year, schedule) {
     const m = parseInt(month, 10) || state.currentMonth || 10;
     const y = parseInt(year, 10) || state.currentYear || 2026;
@@ -2448,7 +2454,10 @@
     const map = readShiftCapacityMap();
     const stored = map[key];
     if (stored && typeof stored === 'object') {
-      return { peoplePerShift: stored.peoplePerShift === 1 ? 1 : 2 };
+      return {
+        peoplePerShift: stored.peoplePerShift === 1 ? 1 : 2,
+        schedulingMode: normalizeSchedulingMode(stored.schedulingMode, stored.peoplePerShift)
+      };
     }
 
     // Chỉ suy ra mức nền từ lịch CỦA ĐÚNG THÁNG NÀY. Trước đây lịch tháng cũ
@@ -2470,10 +2479,10 @@
       const slots = sched.weeks.flatMap(w => Object.values((w && w.scheduleTable) || {}));
       if (slots.length > 0) {
         const hasSingle = slots.some(s => s && s.capacity === 1);
-        return { peoplePerShift: hasSingle ? 1 : 2 };
+        return { peoplePerShift: hasSingle ? 1 : 2, schedulingMode: hasSingle ? 'any-role' : 'balanced' };
       }
     }
-    return { peoplePerShift: 2 };
+    return { peoplePerShift: 2, schedulingMode: 'balanced' };
   }
 
   /** Lưu cấu hình số người/ca của tháng và phát auto-push (nếu Cloud bật). */
@@ -2482,8 +2491,10 @@
     const y = parseInt(year, 10) || state.currentYear || 2026;
     const key = `${y}-${String(m).padStart(2, '0')}`;
     const map = readShiftCapacityMap();
+    const schedulingMode = (config && config.schedulingMode) || (map[key] && map[key].schedulingMode);
     map[key] = {
-      peoplePerShift: config && config.peoplePerShift === 1 ? 1 : 2
+      peoplePerShift: config && config.peoplePerShift === 1 ? 1 : 2,
+      schedulingMode: normalizeSchedulingMode(schedulingMode, config && config.peoplePerShift)
     };
     try {
       localStorage.setItem(STORAGE_KEYS.SHIFT_CAPACITY, JSON.stringify(map));
@@ -2726,7 +2737,9 @@ function runFullSchedule() {
     const monthResult = monthEngine
       ? monthEngine(state.students, curY, curM, {
         peoplePerShift: capacityConfig.peoplePerShift,
-        anyRole: true
+        anyRole: capacityConfig.peoplePerShift === 1 || capacityConfig.schedulingMode === 'any-role',
+        schedulingMode: capacityConfig.schedulingMode,
+        manualSlots: getManualSlotBucket(readManualSlotMap(), curM, curY)
       })
       : null;
 
@@ -2854,6 +2867,20 @@ function runFullSchedule() {
     const m = state.currentMonth || 10;
     const y = state.currentYear || 2026;
     const cfg = getMonthCapacity(m, y);
+    const modeSelect = document.getElementById('admin-scheduling-mode');
+    if (modeSelect) {
+      modeSelect.value = cfg.schedulingMode;
+      const pairedOption = modeSelect.querySelector('option[value="balanced"]');
+      if (pairedOption) {
+        pairedOption.hidden = cfg.peoplePerShift === 1;
+        pairedOption.disabled = cfg.peoplePerShift === 1;
+      }
+      const newFirstOption = modeSelect.querySelector('option[value="new-first"]');
+      if (newFirstOption) {
+        newFirstOption.hidden = cfg.peoplePerShift !== 1;
+        newFirstOption.disabled = cfg.peoplePerShift !== 1;
+      }
+    }
     [1, 2].forEach(value => {
       const btn = document.getElementById(`btn-month-capacity-${value}`);
       if (!btn) return;
@@ -3405,6 +3432,15 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       triggerAutoSchedule(true);
     });
 
+    document.getElementById('admin-scheduling-mode')?.addEventListener('change', (e) => {
+      const cfg = getMonthCapacity(state.currentMonth, state.currentYear);
+      saveMonthCapacity(state.currentMonth, state.currentYear, {
+        ...cfg, schedulingMode: e.target.value
+      });
+      updateShiftCapacityButtonLabel();
+      showToast('Đã lưu chế độ cho tháng này. Bấm Tự động phân bổ lịch để áp dụng.', 'info');
+    });
+
 
     // Xóa bảng phân công ca trực (vẫn giữ nguyên danh sách sinh viên)
     elements.btnClearSchedule?.addEventListener('click', async () => {      if (!state.currentSchedule && !state.twoWeekSchedule && !state.monthSchedule) {
@@ -3724,9 +3760,11 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
         elements.btnAutoSchedule.innerHTML = originalText;
         elements.btnAutoSchedule.disabled = false;
         renderAll();
-        const msg = state.twoWeekSchedule 
-          ? `Đã xếp lịch luân phiên 2 tuần: ${state.twoWeekSchedule.uniqueAssignedCount}/${state.twoWeekSchedule.totalStudents} bạn có ca!`
-          : 'Đã hoàn tất phân bổ ca trực 1 cũ + 1 mới!';
+        const mode = getMonthCapacity(state.currentMonth, state.currentYear).schedulingMode;
+        const label = mode === 'random' ? 'ngẫu nhiên' : mode === 'new-first' ? 'ưu tiên người Mới' : 'tự động';
+        const msg = state.monthSchedule
+          ? `Đã xếp lịch ${label} 4 tuần: ${state.monthSchedule.uniqueAssignedCount}/${state.monthSchedule.totalStudents} bạn có ca!`
+          : 'Đã hoàn tất phân bổ ca trực!';
         showToast(msg, 'success');
         auditLog('SCHEDULE_RUN', `Xếp lịch tự động cho ${state.students.length} CTV`);
       }, 350);

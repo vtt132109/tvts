@@ -807,7 +807,7 @@ runTest('Tháng 2 người/ca: vẫn gán tay thêm được người thứ 3, a
     'Auto phải giữ người thứ 3 đã gán tay');
 });
 
-runTest('Xếp tự động 2 người/ca không phân biệt vai trò: toàn bộ là Tập Sự vẫn đủ ca', () => {
+runTest('Random 2 người/ca không phân biệt vai trò: toàn bộ là Tập Sự vẫn đủ ca', () => {
   LS.clear();
   SS.clear();
   const allShifts = ['T2_S', 'T2_C', 'T3_S', 'T3_C', 'T4_S', 'T4_C', 'T5_S', 'T5_C', 'T6_S', 'T6_C'];
@@ -819,7 +819,7 @@ runTest('Xếp tự động 2 người/ca không phân biệt vai trò: toàn b�
   LS.setItem('ts_scheduler_students', JSON.stringify(students));
   LS.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 10, year: 2026 }));
   LS.setItem('ts_scheduler_availability_month_v1', '2026-10');
-  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({ '2026-10': { peoplePerShift: 2 } }));
+  LS.setItem('ts_scheduler_shift_capacity_v1', JSON.stringify({ '2026-10': { peoplePerShift: 2, schedulingMode: 'random' } }));
   H.loadData();
   H.runFullSchedule();
 
@@ -832,6 +832,61 @@ runTest('Xếp tự động 2 người/ca không phân biệt vai trò: toàn b�
     assert.strictEqual(slot.newMember.role, 'new');
   });
   assert.strictEqual(sched.weeks[0].summary.fullShifts, 10, 'Phải đủ 10/10 ca, không bị chặn vì thiếu Chính Thức');
+});
+
+runTest('Chế độ thường: ca 2 người phải có 1 Cũ + 1 Mới, thiếu vai trò thì để trống', () => {
+  seed();
+  H.loadData();
+  H.runFullSchedule();
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.role, 'old');
+  assert.strictEqual(savedSlot(1, 'T2_S').newMember.role, 'new');
+  const onlyNew = STUDENTS.map(s => ({ ...s, role: 'new' }));
+  LS.setItem('ts_scheduler_students', JSON.stringify(onlyNew));
+  H.loadData();
+  H.runFullSchedule();
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember, null);
+  assert.strictEqual(savedSlot(1, 'T2_S').status, 'partial');
+  H.saveMonthCapacity(10, 2026, { peoplePerShift: 2, schedulingMode: 'any-role' });
+  H.runFullSchedule();
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.role, 'new');
+  assert.strictEqual(savedSlot(1, 'T2_S').newMember.role, 'new');
+  assert.strictEqual(savedSlot(1, 'T2_S').status, 'full');
+});
+
+runTest('Chế độ xếp lưu theo tháng, đổi 1/2 người vẫn giữ Random và ca gán tay', () => {
+  seed();
+  H.loadData();
+  assignViaUi('T2_S', 'old', 1, 's_1');
+  H.saveMonthCapacity(10, 2026, { peoplePerShift: 2, schedulingMode: 'random' });
+  H.setMonthCapacityQuick(1);
+  assert.strictEqual(H.getMonthCapacity(10, 2026).schedulingMode, 'random');
+  assert.strictEqual(H.getMonthCapacity(10, 2026).peoplePerShift, 1);
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.id, 's_1');
+  H.loadData();
+  assert.strictEqual(H.getMonthCapacity(10, 2026).schedulingMode, 'random');
+  assert.strictEqual(H.getMonthCapacity(11, 2026).schedulingMode, 'balanced');
+  assert.strictEqual(H.getMonthCapacity(11, 2026).peoplePerShift, 2);
+});
+
+runTest('Ưu tiên Mới: ca đã gán tay không chiếm mất suất một ca/tháng của người Mới', () => {
+  seed();
+  const all = window.SchedulerEngine.SHIFTS.map(s => s.id);
+  const students = [
+    { id: 'old_a', role: 'old', availableShifts: all },
+    { id: 'old_b', role: 'old', availableShifts: all },
+    { id: 'new_fixed', role: 'new', availableShifts: ['T3_S'] },
+    { id: 'new_free', role: 'new', availableShifts: ['T2_S', 'T4_S'],
+      monthlyAvailableShifts: { 1: ['T2_S', 'T4_S'], 2: [], 3: [], 4: [] } }
+  ].map((s, i) => ({ ...s, studentId: `280000${i}`, fullName: s.id }));
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  H.loadData();
+  H.saveMonthCapacity(10, 2026, { peoplePerShift: 1, schedulingMode: 'new-first' });
+  H.recordManualSlot(1, 'T2_S', { oldMember: students[0] }, 10, 2026);
+  H.recordManualSlot(1, 'T3_S', { oldMember: students[2] }, 10, 2026);
+  H.runFullSchedule();
+  assert.strictEqual(savedSlot(1, 'T2_S').oldMember.id, 'old_a');
+  assert.strictEqual(savedSlot(1, 'T3_S').oldMember.id, 'new_fixed');
+  assert.strictEqual(savedSlot(1, 'T4_S').oldMember.id, 'new_free');
 });
 
 runTest('Cấu hình tháng chuẩn hoá capacity mọi ô và tính lại KPI/summary', () => {

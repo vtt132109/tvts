@@ -556,10 +556,17 @@
    * (1 hoặc 2), chỉ dựa trên ca rảnh, công bằng lũy kế và ràng buộc
    * một người không trực 2 ca cùng ngày.
    */
-  function scheduleAnyRoleShifts(allStudents, shiftIds, capacity, priorityStudentIds, historicalCounts, blockedDays, initialCounts) {
+  function scheduleAnyRoleShifts(allStudents, shiftIds, capacity, priorityStudentIds, historicalCounts, blockedDays, initialCounts, options = {}) {
     const cap = capacity === 1 ? 1 : 2;
     const safeMembers = Array.isArray(allStudents) ? allStudents.filter(Boolean) : [];
     const ids = Array.isArray(shiftIds) ? shiftIds.slice() : [];
+    const random = options.schedulingMode === 'random';
+    const newFirst = cap === 1 && options.schedulingMode === 'new-first';
+    // Lịch tháng đã dành trước đúng một ca cho mỗi người Mới bằng matching.
+    // Khi gọi riêng một tuần, dành ca ngay trong tuần đó.
+    const reserved = newFirst ? (options.reservedNewAssignments
+      || maxBipartiteMatch(safeMembers.filter(m => m.role === 'new'), ids)) : {};
+    const reservedByStudent = new Map(Object.entries(reserved).map(([shift, id]) => [id, shift]));
     const safeHist = historicalCounts || {};
     const baseCounts = initialCounts || {};
     const blocked = blockedDays || {};
@@ -583,7 +590,9 @@
     const shifts = SHIFTS.filter(s => ids.includes(s.id));
     const candidatesFor = (shift) => safeMembers.filter(m => {
       const set = availMap.get(m.id);
-      return set && set.has(shift.id);
+      const reservedShift = reservedByStudent.get(m.id);
+      return set && set.has(shift.id) && (!reservedShift || reservedShift === shift.id
+        || reservedShift.split('_')[0] !== shift.dayKey);
     });
     const sortedShifts = [...shifts].sort(
       (a, b) => candidatesFor(a).length - candidatesFor(b).length
@@ -591,7 +600,20 @@
 
     for (const shift of sortedShifts) {
       const dayKey = String(shift.id).split('_')[0];
-      const candidates = candidatesFor(shift);
+      let candidates = candidatesFor(shift);
+      if (newFirst) {
+        const reservedMember = candidates.find(m => m.id === reserved[shift.id]);
+        if (reservedMember) {
+          candidates = [reservedMember];
+        } else {
+          const oldMembers = candidates.filter(m => m.role === 'old');
+          const freeOld = oldMembers.filter(m => !assignedDays[m.id].has(dayKey));
+          if (freeOld.length) candidates = freeOld;
+          else if (oldMembers.length && !candidates.some(m => !assignedDays[m.id].has(dayKey))) {
+            candidates = oldMembers;
+          }
+        }
+      }
       const chosen = [];
       const chosenIds = new Set();
 
@@ -606,8 +628,9 @@
           const current = result.counts[cand.id] || 0;
           const base = baseCounts[cand.id] || 0;
           const hist = safeHist[cand.id] || 0;
-          // Cân bằng tổng ca cả tháng > ca trong tuần > số ca rảnh.
-          const score = ((hist + base + current) * 5000)
+          // Random chọn đều trong nhóm ứng viên hợp lệ, không ưu tiên vai trò
+          // hay số ca. Vẫn tránh trùng ngày khi còn người rảnh khác.
+          const score = random ? Math.random() : ((hist + base + current) * 5000)
             + (current * 1000)
             + (cand.availableShifts?.length || 0);
           const sameDay = assignedDays[cand.id] && assignedDays[cand.id].has(dayKey);
@@ -648,7 +671,7 @@
   }
 
   /** Xếp toàn bộ ca của một tuần theo mô hình không phân biệt vai trò. */
-  function solveWeeklyScheduleAnyRole(allStudents, priorityStudentIds, historicalCounts, capacity) {
+  function solveWeeklyScheduleAnyRole(allStudents, priorityStudentIds, historicalCounts, capacity, options = {}) {
     const cap = capacity === 1 ? 1 : 2;
     const normalizeWarnings = [];
     const safeStudents = normalizeStudents(allStudents, normalizeWarnings);
@@ -664,7 +687,8 @@
       priorityStudentIds,
       historicalCounts,
       {},
-      {}
+      {},
+      options
     );
 
     const scheduleTable = {};
@@ -902,16 +926,21 @@
   /**
    * Bọc tương thích:
    * - options.anyRole = true -> mỗi ca nhận 1/2 người bất kỳ, không chia Cũ/Mới.
+   * - schedulingMode = 'random' -> chọn ngẫu nhiên, không xét vai trò/số ca.
+   * - schedulingMode = 'new-first' (1 người/ca) -> dành 1 ca/tháng/người Mới,
+   *   rồi ưu tiên người Cũ; reservedNewAssignments do bộ xếp tháng truyền vào.
    * - Không truyền options -> giữ thuật toán 2 người cũ (tương thích dữ liệu cũ).
    * options = { peoplePerShift: 1|2, anyRole: true, thirdShifts: ['T2_S', ...] }
    */
   function solveWeeklySchedule(allStudents, priorityStudentIds = [], historicalCounts = {}, options) {
-    if (options && options.anyRole) {
+    if (options && (options.anyRole || options.schedulingMode === 'random'
+      || options.schedulingMode === 'new-first')) {
       return solveWeeklyScheduleAnyRole(
         allStudents,
         priorityStudentIds,
         historicalCounts,
-        options.peoplePerShift === 1 ? 1 : 2
+        options.peoplePerShift === 1 ? 1 : 2,
+        options
       );
     }
     if (options && options.peoplePerShift === 1) {
@@ -958,7 +987,7 @@
     if (safeStudents.length === 0) {
       const emptyWeeks = [];
       for (let w = 1; w <= numWeeks; w++) {
-        const emptyWeek = solveWeeklySchedule([], [], {});
+        const emptyWeek = solveWeeklySchedule([], [], {}, options);
         emptyWeek.weekNumber = w;
         emptyWeek.calendarInfo = calendarWeeks[w - 1] || null;
         emptyWeeks.push(emptyWeek);
@@ -989,6 +1018,38 @@
 
     const weeks = [];
 
+    // Dành trước một ca trong CẢ THÁNG cho mỗi người Mới. Ghép cặp cực đại
+    // có thể dời người rảnh nhiều ca để nhường ca duy nhất của người khác.
+    // Không lặp lại quota này mỗi tuần; các ca còn lại ưu tiên người Cũ.
+    let newMemberMatches = null;
+    if (options && options.peoplePerShift === 1 && options.schedulingMode === 'new-first') {
+      const fixedSlots = new Set();
+      const alreadyAssigned = new Set();
+      const knownIds = new Set(safeStudents.map(s => s.id));
+      Object.entries(options.manualSlots || {}).forEach(([week, slots]) => {
+        if (!/^\d+$/.test(week) || Number(week) < 1 || Number(week) > numWeeks) return;
+        Object.entries(slots || {}).forEach(([shiftId, record]) => {
+          if (!SHIFT_MAP[shiftId] || !record) return;
+          const ids = [record.oldId, record.newId, record.thirdId].filter(Boolean);
+          // Cùng quy tắc với admin: bỏ ô tham chiếu người đã bị xoá.
+          if (ids.some(id => !knownIds.has(id))) return;
+          fixedSlots.add(`${Number(week)}:${shiftId}`);
+          ids.forEach(id => alreadyAssigned.add(id));
+        });
+      });
+      const monthSlotIds = Array.from({ length: numWeeks }, (_, i) =>
+        SHIFTS.map(s => `${i + 1}:${s.id}`)).flat().filter(id => !fixedSlots.has(id));
+      const newMembers = safeStudents.filter(s => s.role === 'new' && !alreadyAssigned.has(s.id)).map(s => ({
+        ...s,
+        availableShifts: Array.from({ length: numWeeks }, (_, i) => {
+          const weekShifts = s.monthlyAvailableShifts && s.monthlyAvailableShifts[i + 1];
+          return (Array.isArray(weekShifts) ? weekShifts : s.availableShifts)
+            .map(id => `${i + 1}:${id}`);
+        }).flat()
+      }));
+      newMemberMatches = maxBipartiteMatch(newMembers, monthSlotIds);
+    }
+
     // Lặp qua từng tuần trong chu kỳ
     for (let w = 1; w <= numWeeks; w++) {
       // Áp dụng ca rảnh riêng của tuần w nếu sinh viên có monthlyAvailableShifts (Section 9C api-contracts.md)
@@ -1015,7 +1076,13 @@
         })
         .map(s => s.id);
 
-      const weekSchedule = solveWeeklySchedule(weekStudents, priorityIds, historicalCounts, options);
+      const weekOptions = newMemberMatches ? {
+        ...options,
+        reservedNewAssignments: Object.fromEntries(Object.entries(newMemberMatches)
+          .filter(([key]) => key.startsWith(`${w}:`))
+          .map(([key, id]) => [key.split(':')[1], id]))
+      } : options;
+      const weekSchedule = solveWeeklySchedule(weekStudents, priorityIds, historicalCounts, weekOptions);
       weekSchedule.weekNumber = w;
       weekSchedule.calendarInfo = calendarWeeks[w - 1] || null;
       weeks.push(weekSchedule);
@@ -1069,7 +1136,8 @@
       });
     });
 
-    const anyRoleMode = !!(options && options.anyRole);
+    const anyRoleMode = !!(options && (options.anyRole || options.schedulingMode === 'random'
+      || options.schedulingMode === 'new-first'));
     if (safeStudents.length < 2) {
       monthWarnings.push(anyRoleMode
         ? 'Tổng số sinh viên < 2 người, không thể xếp đủ 2 người cho mỗi ca.'
