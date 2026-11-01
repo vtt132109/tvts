@@ -1465,9 +1465,10 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
   }
   assert.ok(fnEnd > fnStart, 'không cân bằng được ngoặc của hàm resetAvailabilityIfNewMonth');
   const fnSrc = src.slice(fnStart, fnEnd);
+  const archivedMonths = [];
   const resetAvailabilityIfNewMonth = new Function(
     'state', 'saveStudents', 'STORAGE_KEYS', 'console', 'localStorage',
-    'readAvailabilityMonthKey', 'writeAvailabilityMonthKey',
+    'readAvailabilityMonthKey', 'writeAvailabilityMonthKey', 'archiveAvailabilityMonth',
     fnSrc + '\n return resetAvailabilityIfNewMonth;'
   )(
     sandbox.state, sandbox.saveStudents, { AVAILABILITY_MONTH: 'kAvail' }, sandbox.console, sandbox.localStorage,
@@ -1476,7 +1477,8 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
       if (!raw) return '';
       return String(raw).replace(/^"|"$/g, '');
     },
-    (value) => { store.set('kAvail', String(value)); return true; }
+    (value) => { store.set('kAvail', String(value)); return true; },
+    (key) => { archivedMonths.push({ key, students: JSON.parse(JSON.stringify(sandbox.state.students)) }); }
   );
 
   const withShifts = (n) => Array.from({ length: n }, (_, i) => ({
@@ -1508,6 +1510,9 @@ runTest('9.8: Sang tháng mới phải xoá ca rảnh cũ, quay lại tháng cũ
   store.clear();
   store.set('kAvail', '2026-10');
   const r1 = resetAvailabilityIfNewMonth(11, 2026);
+  assert.strictEqual(archivedMonths[0].key, '2026-10', 'Lưu đúng tháng cũ trước khi reset');
+  assert.deepStrictEqual(archivedMonths[0].students[0].availableShifts, ['T2_S', 'T3_C'],
+    'Phải gửi dữ liệu chưa bị xoá tới bước lưu hồ sơ');
   assert.strictEqual(r1.reset, true, 'tháng vượt khoá tháng phải coi là sang tháng mới');
   assert.strictEqual(r1.cleared, 58, `phải xoá ca rảnh của cả 58 CTV, thực tế ${r1.cleared}`);
   sandbox.state.students.forEach((s) => {

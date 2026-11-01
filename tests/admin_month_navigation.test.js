@@ -444,5 +444,46 @@ runTest('3.2: applyPayload nạp thành công ALL_MONTHS từ Cloud xuống Loca
   assert(allMonthsRaw && allMonthsRaw.includes('Lịch T12 từ cloud'), 'LocalStorage phải nhận allMonths từ cloud');
 });
 
+runTest('4.1: Chuyển tháng lưu cả người không đăng ký dù tháng cũ chưa có lịch', async () => {
+  mockLocalStorage.clear();
+  const students = [
+    { id: 'month_reg', studentId: '290001', fullName: 'CTV Có Ca', role: 'old', availableShifts: ['T4_C'], monthlyAvailableShifts: { 1: ['T4_C'], 2: [], 3: [], 4: [] } },
+    { id: 'month_none', studentId: '290002', fullName: 'CTV Không Ca', role: 'new', availableShifts: [], monthlyAvailableShifts: { 1: [], 2: [], 3: [], 4: [] } }
+  ];
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify(students));
+  mockLocalStorage.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
+  mockLocalStorage.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  window.adminTestHelper.loadData();
+  await window.adminSwitchMonth(12, 2026, false);
+  const archive = JSON.parse(mockLocalStorage.getItem('ts_scheduler_all_months_v1'))['2026-11'];
+  assert.deepStrictEqual(archive.monthSnapshot.students, students);
+  const report = window.adminTestHelper.getMonthSnapshotReport(archive);
+  assert.strictEqual(report.registeredCount, 1);
+  assert.strictEqual(report.unregisteredCount, 1);
+  assert.strictEqual(report.students[1].assignedCount, 0);
+  assert.strictEqual(window.adminTestHelper.getMonthSnapshotReport({ month: 10, year: 2026, weeks: [] }), null,
+    'Không dùng roster tháng hiện tại để suy đoán hồ sơ lịch sử bị thiếu');
+  assert.deepStrictEqual(JSON.parse(mockLocalStorage.getItem('ts_scheduler_students'))[0].availableShifts, []);
+});
+
+runTest('4.2: Không xoá đăng ký tháng cũ khi không lưu được hồ sơ tháng', async () => {
+  mockLocalStorage.clear();
+  const student = { id: 'quota_st', fullName: 'CTV', studentId: '290003', role: 'new', availableShifts: ['T4_C'] };
+  mockLocalStorage.setItem('ts_scheduler_students', JSON.stringify([student]));
+  mockLocalStorage.setItem('ts_scheduler_active_month_v1', JSON.stringify({ month: 11, year: 2026 }));
+  mockLocalStorage.setItem('ts_scheduler_availability_month_v1', '2026-11');
+  window.adminTestHelper.loadData();
+  const original = mockLocalStorage.setItem;
+  mockLocalStorage.setItem = function(key, value) {
+    if (key === 'ts_scheduler_all_months_v1') throw new Error('QuotaExceededError');
+    return original.call(this, key, value);
+  };
+  try { await window.adminSwitchMonth(12, 2026, false); }
+  finally { mockLocalStorage.setItem = original; }
+  assert.strictEqual(mockLocalStorage.getItem('ts_scheduler_availability_month_v1'), '2026-11');
+  assert.deepStrictEqual(window.adminTestHelper.getState().students[0].availableShifts, ['T4_C']);
+  assert.strictEqual(window.adminTestHelper.getState().currentMonth, 11);
+});
+
 // Chạy toàn bộ hàng đợi test (tuần tự) rồi mới in tổng kết & thoát
 runAllTests();

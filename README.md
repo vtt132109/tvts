@@ -2,6 +2,8 @@
 
 ### Chế độ xếp lịch theo tháng (cập nhật 01/11/2026)
 
+**Hồ sơ tháng:** cạnh thanh chuyển tháng có nút **📋 Hồ sơ tháng** để xem danh sách CTV, số người đã/chưa đăng ký ca và số ca trực từng người. Trước khi sang tháng mới, hệ thống lưu cả danh sách và ca rảnh của tháng cũ, kể cả tháng chưa xếp lịch. Bảng chấm công và sao lưu của tháng cũ dùng danh sách đã chốt. Dữ liệu đi cùng kho lịch lên Cloud và được lưu dự phòng trong IndexedDB. Nếu không lưu được, hệ thống dừng chuyển tháng để giữ đăng ký cũ. Những tháng trước đây chưa lưu danh sách sẽ báo thiếu hồ sơ, không suy đoán người chưa đăng ký.
+
 Trong **Quản lý sinh viên**, khối thống kê đăng ký có bộ lọc **Tất cả / Đã đăng ký ca / Chưa đăng ký ca** kèm số lượng. Bộ lọc tính theo ca rảnh của tháng đang xem (0 ca là chưa đăng ký ca), kết hợp với tìm kiếm tên/MSSV.
 
 Trong Quản trị, chọn **Chế độ xếp lịch của tháng** rồi bấm **Tự động phân bổ lịch**:

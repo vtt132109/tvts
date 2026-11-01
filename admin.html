@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261101_weekly_availability">
+  <link rel="stylesheet" href="css/style.css?v=20261101_month_snapshot">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -779,6 +779,7 @@
             <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-manual-backup-month" title="Chủ động sao lưu snapshot cho tháng này ngay bây giờ" onclick="window.adminQuickBackupCurrentMonth && window.adminQuickBackupCurrentMonth()">
               <span>💾 Sao Lưu Tháng Này</span>
             </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-month-snapshot" onclick="window.adminOpenMonthSnapshot()">📋 Hồ sơ tháng</button>
           </div>
         </div>
         <div style="margin-top: 0.65rem; font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
@@ -877,8 +878,6 @@
             </div>
           </div>
 
-          <!-- Danh sách Dự bị / Ưu tiên cho Tuần 2 khi đông người -->
-          <div id="admin-standby-box" style="margin-top: 1.25rem; display: none;"></div>
         </div>
       </div>
 
@@ -2215,21 +2214,32 @@
     </div>
   </div>
 
+  <div class="modal-overlay modal-backdrop" id="modal-month-snapshot" role="dialog" aria-modal="true" aria-labelledby="month-snapshot-title" tabindex="-1" style="display: none;">
+    <div class="modal-content" style="width: 95vw; max-width: 1000px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 id="month-snapshot-title">Hồ sơ tháng</h3>
+        <button type="button" class="modal-close-btn" aria-label="Đóng hồ sơ tháng" onclick="window.adminCloseMonthSnapshot()">&times;</button>
+      </div>
+      <div class="modal-body" id="month-snapshot-content"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="window.adminCloseMonthSnapshot()">Đóng</button></div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container (Accessibility compliant) -->
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261101_weekly_availability"></script>
+  <script src="js/a11y_modal.js?v=20261101_month_snapshot"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261101_weekly_availability"></script>
-  <script src="js/month_calendar.js?v=20261101_weekly_availability"></script>
-  <script src="js/scheduler.js?v=20261101_weekly_availability"></script>
-  <script src="js/roster.js?v=20261101_weekly_availability"></script>
-  <script src="js/common.js?v=20261101_weekly_availability"></script>
-  <script src="js/audit.js?v=20261101_weekly_availability"></script>
-  <script src="js/store.js?v=20261101_weekly_availability"></script>
-  <script src="js/admin.js?v=20261101_weekly_availability"></script>
+  <script src="js/cloud_sync.js?v=20261101_month_snapshot"></script>
+  <script src="js/month_calendar.js?v=20261101_month_snapshot"></script>
+  <script src="js/scheduler.js?v=20261101_month_snapshot"></script>
+  <script src="js/roster.js?v=20261101_month_snapshot"></script>
+  <script src="js/common.js?v=20261101_month_snapshot"></script>
+  <script src="js/audit.js?v=20261101_month_snapshot"></script>
+  <script src="js/store.js?v=20261101_month_snapshot"></script>
+  <script src="js/admin.js?v=20261101_month_snapshot"></script>
 </body>
 </html>

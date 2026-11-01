@@ -418,7 +418,6 @@
       btnWeek2: document.getElementById('btn-admin-week-2'),
       timetableGrid: document.getElementById('admin-timetable-grid'),
       scheduleWarningsBox: document.getElementById('schedule-warnings-box'),
-      standbyBox: document.getElementById('admin-standby-box'),
       fairnessListOld: document.getElementById('fairness-list-old'),
       fairnessListNew: document.getElementById('fairness-list-new'),
 
@@ -2373,7 +2372,93 @@
     }
   }
 
+  function buildMonthSnapshot(month, year) {
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    return JSON.parse(JSON.stringify({
+      version: 1, capturedAt: Date.now(), month, year,
+      students: state.students || [],
+      regConfig: state.regConfig,
+      shiftCapacity: getMonthCapacity(month, year),
+      events: EventManager.getEvents(key)
+    }));
+  }
+
+  function captureMonthSnapshot(schedule) {
+    if (!schedule) return;
+    const month = schedule.month || state.currentMonth;
+    const year = schedule.year || state.currentYear;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const sourceKey = readAvailabilityMonthKey();
+    if (sourceKey && sourceKey !== key) return; // Đang xem lại tháng cũ: giữ bản chốt.
+    schedule.monthSnapshot = buildMonthSnapshot(month, year);
+  }
+
+  // Phải ghi thành công TRƯỚC khi xoá đăng ký để sang tháng mới, kể cả chưa xếp lịch.
+  function archiveAvailabilityMonth(key) {
+    const match = /^(\d{4})-(\d{2})$/.exec(key || '');
+    if (!match) throw new Error('Không xác định được tháng của dữ liệu đăng ký');
+    const year = Number(match[1]), month = Number(match[2]);
+    const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.ALL_MONTHS) || '{}');
+    const current = state.monthSchedule;
+    const schedule = current && current.month === month && current.year === year
+      ? current : (all[key] || { month, year, weeks: [] });
+    const archived = JSON.parse(JSON.stringify(schedule));
+    archived.monthSnapshot = buildMonthSnapshot(month, year);
+    all[key] = archived;
+    localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(all));
+    mirrorToIndexedDb(STORAGE_KEYS.ALL_MONTHS);
+    if (window.TvtsStore) window.TvtsStore.invalidateMonthArchive();
+    if (current === schedule) current.monthSnapshot = archived.monthSnapshot;
+  }
+
+  function getMonthSnapshotReport(schedule = state.monthSchedule) {
+    let snapshot = schedule && schedule.monthSnapshot;
+    const month = (schedule && schedule.month) || state.currentMonth;
+    const year = (schedule && schedule.year) || state.currentYear;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const sourceKey = readAvailabilityMonthKey();
+    if (!snapshot && (sourceKey === key || (!sourceKey && month === state.currentMonth && year === state.currentYear))) {
+      snapshot = buildMonthSnapshot(month, year);
+    }
+    if (!snapshot || !Array.isArray(snapshot.students)) return null;
+    const counts = {};
+    ((schedule && schedule.weeks) || []).forEach(week => {
+      Object.values((week && week.scheduleTable) || {}).forEach(slot => {
+        const ids = new Set([slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).map(s => s.id));
+        ids.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+      });
+    });
+    const students = snapshot.students.map(s => ({
+      ...s, registeredCount: getRegisteredShiftCount(s), assignedCount: counts[s.id] || 0
+    }));
+    const registeredCount = students.filter(s => s.registeredCount > 0).length;
+    return { ...snapshot, students, registeredCount, unregisteredCount: students.length - registeredCount };
+  }
+
+  window.adminOpenMonthSnapshot = function() {
+    const modal = document.getElementById('modal-month-snapshot');
+    if (!modal) return;
+    captureMonthSnapshot(state.monthSchedule);
+    const report = getMonthSnapshotReport();
+    document.getElementById('month-snapshot-title').textContent = `Hồ sơ tháng ${String(state.currentMonth).padStart(2, '0')}/${state.currentYear}`;
+    const content = document.getElementById('month-snapshot-content');
+    content.innerHTML = report ? `
+      <p>Tổng: <strong>${report.students.length} CTV</strong> · Đã đăng ký ca: <strong>${report.registeredCount}</strong> · Chưa đăng ký ca: <strong>${report.unregisteredCount}</strong></p>
+      <p style="color:var(--text-muted);">Thông tin riêng của tháng này. Số ca trực gồm các ca đã xếp và gán tay.</p>
+      <div class="data-table-container"><table class="data-table"><thead><tr><th>Họ và tên</th><th>MSSV</th><th>Ca rảnh đăng ký</th><th>Số ca trực</th><th>Đăng ký ca</th></tr></thead><tbody>
+      ${report.students.map(s => `<tr data-student-id="${escapeHtml(s.id)}"><td>${escapeHtml(s.fullName)}</td><td>${escapeHtml(s.studentId)}</td><td>${s.registeredCount}</td><td data-assigned-count>${s.assignedCount}</td><td>${s.registeredCount > 0 ? 'Đã đăng ký' : 'Chưa đăng ký'}</td></tr>`).join('')}
+      </tbody></table></div>` : '<p>Tháng này chưa có hồ sơ danh sách đăng ký được lưu. Không thể xác định ai chưa đăng ký từ bảng phân công cũ.</p>';
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  };
+
+  window.adminCloseMonthSnapshot = function() {
+    const modal = document.getElementById('modal-month-snapshot');
+    if (modal) { modal.style.display = 'none'; modal.classList.remove('active'); }
+  };
+
   function saveSchedule(syncImmediate = true, options) {
+    captureMonthSnapshot(state.monthSchedule);
     if (state.currentSchedule) {
       localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
     } else {
@@ -3010,6 +3095,13 @@ function resetAvailabilityIfNewMonth(month, year) {
     }
   }
 
+  try {
+    archiveAvailabilityMonth(storedMonth);
+  } catch (error) {
+    showToast('Không lưu được hồ sơ tháng cũ. Đã dừng chuyển tháng để bảo toàn đăng ký. Hãy xuất sao lưu hoặc giải phóng bộ nhớ rồi thử lại.', 'error', 10000);
+    return { reset: false, cleared: 0, monthKey, error: true };
+  }
+
   // Xoá ca rảnh của mọi CTV. `availableShifts` là dạng đã gộp 4 tuần, nên
   // phải xoá cả hai để không còn sót ở đường đọc nào.
   let cleared = 0;
@@ -3104,6 +3196,13 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
     // 2b. Sang tháng mới → xoá ca rảnh cũ, mọi CTV đăng ký lại từ đầu.
     // Quay lại xem tháng đã có lịch thì KHÔNG xoá (khoá tháng khớp).
     const availabilityReset = resetAvailabilityIfNewMonth(targetMonth, targetYear);
+    if (availabilityReset.error) {
+      state.currentMonth = oldMonth;
+      state.currentYear = oldYear;
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_MONTH, JSON.stringify({ month: oldMonth, year: oldYear }));
+      updateMonthNavigatorUI();
+      return false;
+    }
 
     // 3. Khôi phục lịch tháng mới nếu đã lưu trước đó, hoặc tự động phân bổ lịch cho tháng mới
     const targetKey = `${targetYear}-${pad2(targetMonth)}`;
@@ -3115,7 +3214,7 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       && typeof window.TvtsStore.getMonthSchedule === 'function') {
       try {
         const fromIdb = await window.TvtsStore.getMonthSchedule(targetMonth, targetYear);
-        if (fromIdb && Array.isArray(fromIdb.weeks) && fromIdb.weeks.length > 0) {
+        if (fromIdb && Array.isArray(fromIdb.weeks) && (fromIdb.weeks.length > 0 || fromIdb.monthSnapshot)) {
           allMonths[targetKey] = fromIdb;
           restoredFromIndexedDb = true;
         }
@@ -4387,37 +4486,6 @@ function renderStudentTable() {
 
     elements.timetableGrid.innerHTML = gridHtml;
 
-    // Hiển thị danh sách Dự bị / Ưu tiên cho Tuần 2
-    if (elements.standbyBox) {
-      const unassigned = state.currentSchedule?.unassignedMembers || [];
-      if (unassigned.length > 0 && state.viewWeek === 1) {
-        elements.standbyBox.style.display = 'block';
-        elements.standbyBox.innerHTML = `
-          <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: gap: 0.5rem;">
-              <h4 style="color: #166534; font-weight: 700; font-size: 0.95rem;">
-                📋 Danh Sách ${unassigned.length} Sinh Viên Dự Bị (Được Ưu Tiên 100% Xếp Vào Tuần 2):
-              </h4>
-              <button class="btn btn-primary btn-sm" id="btn-quick-switch-w2" style="font-size: 0.78rem;">
-                <span>Xem Lịch Tuần 2 →</span>
-              </button>
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
-              ${unassigned.map(m => `
-                <span class="badge badge-new" style="font-size: 0.78rem;">
-                  👤 ${escapeHtml(m.fullName)} (${escapeHtml(m.studentId)})
-                </span>
-              `).join('')}
-            </div>
-          </div>
-        `;
-        document.getElementById('btn-quick-switch-w2')?.addEventListener('click', () => {
-          elements.btnWeek2?.click();
-        });
-      } else {
-        elements.standbyBox.style.display = 'none';
-      }
-    }
   }
 
   function renderShiftSlotHtml(shiftId, slot) {
@@ -8051,6 +8119,7 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
   }
 
   function createWebBackup(customName) {
+    captureMonthSnapshot(state.monthSchedule);
     let swapList = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.SWAP_REQUESTS);
@@ -8083,6 +8152,8 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         if (raw) monthSched = JSON.parse(raw);
       } catch (e) {}
     }
+
+    if (monthSched && monthSched.monthSnapshot) studentList = monthSched.monthSnapshot.students || studentList;
 
     let schedRes = state.scheduleResult;
     if (!schedRes) {
@@ -8125,6 +8196,10 @@ window.dispatchEvent(new CustomEvent('ts:data-changed', { detail: { keys: [STORA
         ? `${monthSched.year}-${String(monthSched.month).padStart(2, '0')}`
         : `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`);
 
+    if (monthSched && monthSched.monthSnapshot) {
+      regCfg = monthSched.monthSnapshot.regConfig || regCfg;
+      eventList = monthSched.monthSnapshot.events || eventList;
+    }
     const payroll = PayrollCalculator.calculateMonthlyPayroll(studentList, monthSched, eventList, backupMonthKey);
     const totalWorkUnits = payroll.reduce((sum, item) => sum + (item.totalWorkUnits || 0), 0);
 
@@ -8911,6 +8986,7 @@ async function handleDeleteEvent(id) {
     runFullSchedule,
     switchAdminMonth,
     getMonthCapacity,
+    getMonthSnapshotReport,
     saveMonthCapacity,
     setMonthCapacityQuick,
     // Dùng cho kiểm thử giao diện: dựng lại lưới tháng / lưới tuần.
@@ -9080,6 +9156,7 @@ async function handleDeleteEvent(id) {
   window.adminViewMonthPayroll = function(backupId = null) {
     const modal = document.getElementById('modal-month-payroll');
     if (!modal) return;
+    if (!backupId) captureMonthSnapshot(state.monthSchedule);
 
     let students = state.students || [];
     let monthSchedule = state.monthSchedule;
@@ -9119,6 +9196,10 @@ async function handleDeleteEvent(id) {
       || (monthSchedule?.month && monthSchedule?.year
         ? `${monthSchedule.year}-${String(monthSchedule.month).padStart(2, '0')}`
         : `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`);
+    if (!backupId && monthSchedule && monthSchedule.monthSnapshot) {
+      students = monthSchedule.monthSnapshot.students || students;
+      events = monthSchedule.monthSnapshot.events || events;
+    }
     const payrollList = PayrollCalculator.calculateMonthlyPayroll(students, monthSchedule, events, payrollMonthKey);
 
     activePayrollData.list = payrollList;

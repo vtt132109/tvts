@@ -2947,6 +2947,24 @@ console.log('\n▶ [GROUP 20] Cấu Hình 1/2/3 Người Mỗi Ca:');
 // TỔNG KẾT
 // -----------------------------------------------------------------------------
 console.log('\n================================================================');
+{
+  const source = createMockEnvironment();
+  const K = source.CloudSyncManager.STORAGE_KEYS;
+  const record = { month: 11, year: 2026, weeks: [], monthSnapshot: {
+    students: [{ id: 'snapshot_1', studentId: '290001', fullName: 'CTV Test', phone: '0900000000', email: 'test@example.invalid', bankAccount: 'synthetic-bank', monthlyAvailableShifts: { 1: [] }, availableShifts: [] }]
+  } };
+  source.localStorage.setItem(K.ALL_MONTHS, JSON.stringify({ '2026-11': record }));
+  const payload = source.CloudSyncManager.buildPayload();
+  const target = createMockEnvironment();
+  target.CloudSyncManager.applyPayload(payload);
+  assert(JSON.parse(target.localStorage.getItem(K.ALL_MONTHS))['2026-11'].monthSnapshot.students.length === 1,
+    '22.1: Hồ sơ cả CTV không đăng ký ca đi qua Cloud và khôi phục trên máy khác');
+  const published = source.CloudSyncManager.buildPublicPayload().allMonthSchedules['2026-11'].monthSnapshot.students[0];
+  assert(published.fullName === 'CTV Test' && !published.phone && !published.email && !published.bankAccount,
+    '22.2: Hồ sơ tháng công khai không lộ SĐT/email/ngân hàng');
+  assert(JSON.parse(source.localStorage.getItem(K.ALL_MONTHS))['2026-11'].monthSnapshot.students[0].phone === '0900000000',
+    '22.3: Lọc nhánh công khai không làm mất dữ liệu hồ sơ gốc');
+}
 console.log(`📊 TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS ĐẠT CHUẨN (${Math.round((passedTests / totalTests) * 100)}%)`);
 console.log('================================================================\n');
 

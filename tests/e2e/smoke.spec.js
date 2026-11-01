@@ -370,3 +370,50 @@ test('admin: mọi chế độ chỉ xếp đúng ca rảnh từng tuần khi Cl
   }
   expect(errors).toEqual([]);
 });
+
+test('admin: hồ sơ tháng cũ giữ danh sách đăng ký và số ca từng người sau chuyển tháng/reload', async ({ page }) => {
+  const students = fixtures.students.map((s, i) => ({ ...s,
+    monthlyAvailableShifts: { 1: i === 0 ? ['T4_C'] : [], 2: [], 3: [], 4: [] },
+    availableShifts: i === 0 ? ['T4_C'] : []
+  }));
+  await seed(page, {
+    local: { ...fixtures.adminLocal, ts_scheduler_students: JSON.stringify(students) },
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  await page.evaluate(() => window.adminSwitchMonth(11, 2026, false));
+  const archive = await page.evaluate(() => JSON.parse(localStorage.getItem('ts_scheduler_all_months_v1'))['2026-10']);
+  expect(archive.monthSnapshot.students).toEqual(students);
+  await page.evaluate(() => {
+    const list = JSON.parse(localStorage.getItem('ts_scheduler_students'));
+    list.splice(1, 1);
+    list[0].fullName = 'Đổi tên tháng mới';
+    localStorage.setItem('ts_scheduler_students', JSON.stringify(list));
+    window.adminTestHelper.loadData();
+  });
+  await page.reload();
+  await page.evaluate(() => window.adminSwitchMonth(10, 2026, false));
+  await page.click('#btn-month-snapshot');
+  const dialog = page.locator('#modal-month-snapshot');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Đã đăng ký ca: 1');
+  await expect(dialog).toContainText('Chưa đăng ký ca: 5');
+  await expect(dialog.locator('tbody tr')).toHaveCount(6);
+  for (const student of students) {
+    const assigned = fixtures.schedule.weeks.reduce((sum, w) => sum + Object.values(w.scheduleTable)
+      .filter(s => [s.oldMember, s.newMember, s.thirdMember].some(m => m?.id === student.id)).length, 0);
+    const row = dialog.locator(`tr[data-student-id="${student.id}"]`);
+    await expect(row).toContainText(student.fullName);
+    await expect(row.locator('[data-assigned-count]')).toHaveText(String(assigned));
+  }
+  const current = await page.evaluate(() => JSON.parse(localStorage.getItem('ts_scheduler_students')));
+  expect(current).toHaveLength(5);
+  expect(current[0].fullName).toBe('Đổi tên tháng mới');
+  await expect(page.locator('#admin-standby-box')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/month-snapshot-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await dialog.locator('.modal-content').boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: 'test-results/month-snapshot-mobile.png' });
+});
