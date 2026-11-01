@@ -31,7 +31,7 @@ Repo đã chuyển sang mô hình **3 nhánh dữ liệu Firebase + 2 node cấp
 
 - **Cán bộ:** Google Login ngay trên màn hình xác thực admin + UID trong `/staff` hoặc email trong `/staff_emails`. Không còn mật khẩu Firebase dùng chung.
 - **Cấp quyền trước bằng email:** ngay trong app — `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email`. App ghi `staff_emails/<email đã mã hóa>: true`; người đó đăng nhập Google bằng đúng email là vào được, không cần UID trước. Có nút thu hồi (🗑️) trong danh sách.
-- **Tài khoản khởi động (bootstrap):** `database.rules.json` đã điền sẵn email Google của Trưởng ban. Nếu đổi người giữ quyền, sửa cả 10 chỗ trước khi Publish — người này cấp quyền được khi `/staff_emails` còn trống. Sau khi tự cấp quyền cho mình (hoặc thêm đồng nghiệp), mọi thao tác tiếp theo làm trong app.
+- **Tài khoản khởi động (bootstrap):** `database.rules.json` đã điền sẵn email Google của Trưởng ban. Nếu đổi người giữ quyền, chạy `node scripts/set_owner_email.js <email-mới>` để đổi cả 13 chỗ cùng lúc rồi Publish (test `12.22` canh mọi chỗ phải giống nhau). Chủ sở hữu là người duy nhất ghi được `/staff_emails`; mọi thao tác cấp quyền tiếp theo làm trong app.
 - **Sinh viên:** không có trang đăng nhập; tự tạo phiên **Anonymous** khi gửi yêu cầu.
 - **Web API Key** là mã công khai, được công bố trong `tvts_public/clientConfig`.
 
@@ -262,7 +262,7 @@ Nghĩa là: **khi `/staff_emails` chưa tồn tại, BẤT KỲ tài khoản Goo
 
 Xoá hẳn điều khoản đó. Quyền cấp phát nay chỉ còn:
 
-- email Trưởng ban hardcode trong Rules (10 chỗ), hoặc
+- email Trưởng ban hardcode trong Rules (13 chỗ), hoặc
 - UID trong `/staff`, hoặc
 - email đã có sẵn trong `/staff_emails`.
 
@@ -370,3 +370,19 @@ Checklist bắt buộc trước khi coi là đã xử lý:
    - Chỉ force-push khi chủ sở hữu đã đồng ý; sau đó thông báo cho mọi máy clone cũ.
 4. Bật CSP/SRI ở đợt hardening tiếp theo; hiện tại không thêm CSP `unsafe-inline` vì
    trang còn nhiều inline handler và sẽ không tạo ra bảo vệ thực chất.
+
+---
+
+## 12. Siết Rules đợt 4 — 2026-11-01
+
+Đã làm (có test `12.17c`–`12.17g`, `12.22`):
+
+- **Chiếm MSSV:** `tvts_requests/mssv_owner/<MSSV>` chỉ giữ chỗ được khi MSSV có trong
+  `tvts_public/mssvIndex` (admin công bố cùng `directory`). Chặn người lạ chiếm MSSV ngoài danh sách CTV.
+  Giới hạn còn lại: ai biết MSSV của bạn khác vẫn chiếm trước được; cán bộ gỡ bằng "Giải phóng MSSV".
+- **Đổi ca:** tạo `swaps/<id>` phải có `studentId` thuộc `mssv_owner` của uid người gửi; `submitSwap` giữ chỗ MSSV trước khi ghi.
+- **Đăng ký:** validate kiểu/độ dài `status`, `month.month`, `month.year`, `fullName`.
+- **Thứ tự triển khai:** deploy code -> admin đẩy dữ liệu công khai (tạo `mssvIndex`) -> mới Publish Rules.
+  Publish Rules trước sẽ chặn sinh viên chưa có `mssv_owner` cho tới khi có `mssvIndex`.
+- **Bộ nhớ agent:** `.antigravity/memory/` đã được gỡ khỏi git và thêm vào `.gitignore` (từng chứa PIN cán bộ).
+  **Lịch sử git vẫn còn bản cũ** — PIN đó phải coi là đã lộ và cần đổi; viết lại lịch sử theo mục 11.

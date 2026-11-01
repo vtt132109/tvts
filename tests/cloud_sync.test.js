@@ -1801,6 +1801,12 @@ console.log('\n▶ [GROUP 12] Cấu Hình Trang & Security Rules:');
     && /fullName/.test(regValidate),
   '12.17g: Đăng ký phải validate kiểu status/month/fullName');
 
+  // Email chủ sở hữu ghi cứng ở nhiều chỗ: tất cả phải giống hệt nhau
+  const ownerEmails = (rulesText.match(/auth\.token\.email\.toLowerCase\(\) === '([^']+)'/g) || [])
+    .map(m => m.replace(/^.*=== '/, '').replace(/'$/, ''));
+  assert(ownerEmails.length >= 13 && new Set(ownerEmails).size === 1,
+    '12.22: Mọi điều kiện email chủ sở hữu trong Rules phải giống hệt nhau (dùng scripts/set_owner_email.js để đổi)');
+
   // Sinh viên không được tự duyệt đề xuất đổi ca
   const swapRule = ((r.tvts_requests || {}).swaps || {})['$swapId'] || {};
   const swapWrite = swapRule['.write'] || '';
