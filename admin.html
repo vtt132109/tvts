@@ -18,7 +18,7 @@
   
   <!-- CSS Stylesheet -->
   <!-- v= bump: bắt buộc để trình duyệt tải lại stylesheet sau đợt sửa giao diện Admin -->
-  <link rel="stylesheet" href="css/style.css?v=20261101_schedule_modes">
+  <link rel="stylesheet" href="css/style.css?v=20261101_registration_filter">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
 
   <!-- Inline Critical Theme & Button Styles -->
@@ -965,6 +965,11 @@
             </div>
             <div id="student-reg-shifts" style="margin-left: auto; font-size: 0.82rem; font-weight: 600; color: #1e40af; text-align: right;">
               Tổng lượt ca rảnh: 0
+            </div>
+            <div class="filter-group" role="group" aria-label="Lọc theo đăng ký ca" style="width: 100%; flex-wrap: wrap; gap: 0.35rem;">
+              <button type="button" class="filter-btn active" data-registration-filter="all" aria-pressed="true">Tất cả</button>
+              <button type="button" class="filter-btn" data-registration-filter="registered" aria-pressed="false">Đã đăng ký ca</button>
+              <button type="button" class="filter-btn" data-registration-filter="unregistered" aria-pressed="false">Chưa đăng ký ca</button>
             </div>
           </div>
 
@@ -2214,17 +2219,17 @@
   <div class="toast-container" id="toast-container" aria-live="polite" role="status" aria-atomic="true"></div>
 
   <!-- Scripts -->
-  <script src="js/a11y_modal.js?v=20261101_schedule_modes"></script>
+  <script src="js/a11y_modal.js?v=20261101_registration_filter"></script>
   <!-- Firebase Auth: Google cho cán bộ -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="js/cloud_sync.js?v=20261101_schedule_modes"></script>
-  <script src="js/month_calendar.js?v=20261101_schedule_modes"></script>
-  <script src="js/scheduler.js?v=20261101_schedule_modes"></script>
-  <script src="js/roster.js?v=20261101_schedule_modes"></script>
-  <script src="js/common.js?v=20261101_schedule_modes"></script>
-  <script src="js/audit.js?v=20261101_schedule_modes"></script>
-  <script src="js/store.js?v=20261101_schedule_modes"></script>
-  <script src="js/admin.js?v=20261101_schedule_modes"></script>
+  <script src="js/cloud_sync.js?v=20261101_registration_filter"></script>
+  <script src="js/month_calendar.js?v=20261101_registration_filter"></script>
+  <script src="js/scheduler.js?v=20261101_registration_filter"></script>
+  <script src="js/roster.js?v=20261101_registration_filter"></script>
+  <script src="js/common.js?v=20261101_registration_filter"></script>
+  <script src="js/audit.js?v=20261101_registration_filter"></script>
+  <script src="js/store.js?v=20261101_registration_filter"></script>
+  <script src="js/admin.js?v=20261101_registration_filter"></script>
 </body>
 </html>

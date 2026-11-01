@@ -80,6 +80,7 @@
     importedCandidates: [],
     activeTab: 'tab-schedule-mgmt',
     roleFilter: 'all',
+    registrationFilter: 'all',
     searchQuery: '',
     reassignModalData: null,
     regConfig: {
@@ -3427,6 +3428,13 @@ async function switchAdminMonth(targetMonth, targetYear, autoBackup = true) {
       renderStudentTable();
     });
 
+    document.querySelectorAll('[data-registration-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.registrationFilter = btn.getAttribute('data-registration-filter');
+        renderStudentTable();
+      });
+    });
+
     // Tự động phân bổ lịch
     elements.btnAutoSchedule?.addEventListener('click', () => {
       triggerAutoSchedule(true);
@@ -4006,15 +4014,19 @@ function updateStudentModalShiftSummary() {
   });
 }
 
+function hasCurrentMonthAvailability() {
+  const key = `${state.currentYear || 2026}-${String(state.currentMonth || 10).padStart(2, '0')}`;
+  const storedMonth = readAvailabilityMonthKey();
+  return !storedMonth || storedMonth === key;
+}
+
 function renderStudentRegistrationSummary() {
   const countEl = document.getElementById('student-reg-count');
   if (!countEl) return;
 
   const month = state.currentMonth || 10;
   const year = state.currentYear || 2026;
-  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-  const storedMonth = readAvailabilityMonthKey();
-  const hasMonthData = !storedMonth || storedMonth === monthKey;
+  const hasMonthData = hasCurrentMonthAvailability();
   const students = Array.isArray(state.students) ? state.students : [];
 
   let registered = 0;
@@ -4033,6 +4045,15 @@ function renderStudentRegistrationSummary() {
   if (monthLabel) monthLabel.textContent = `${String(month).padStart(2, '0')}/${year}`;
   countEl.textContent = String(registered);
   if (totalEl) totalEl.textContent = String(students.length);
+  const counts = { all: students.length, registered, unregistered: students.length - registered };
+  const labels = { all: 'Tất cả', registered: 'Đã đăng ký ca', unregistered: 'Chưa đăng ký ca' };
+  document.querySelectorAll('[data-registration-filter]').forEach(btn => {
+    const filter = btn.getAttribute('data-registration-filter');
+    btn.textContent = `${labels[filter]} (${counts[filter]})`;
+    const active = state.registrationFilter === filter;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
   if (shiftsEl) {
     shiftsEl.textContent = hasMonthData
       ? `Tổng lượt ca rảnh: ${totalShifts}`
@@ -4195,6 +4216,14 @@ function renderStudentTable() {
     if (!elements.studentTableBody) return;
 
     let filtered = [...state.students];
+
+    if (state.registrationFilter !== 'all') {
+      const hasMonthData = hasCurrentMonthAvailability();
+      filtered = filtered.filter(student => {
+        const registered = hasMonthData && getRegisteredShiftCount(student) > 0;
+        return state.registrationFilter === 'registered' ? registered : !registered;
+      });
+    }
 
     if (state.roleFilter !== 'all') {
       filtered = filtered.filter(s => s.role === state.roleFilter);

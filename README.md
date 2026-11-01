@@ -2,6 +2,8 @@
 
 ### Chế độ xếp lịch theo tháng (cập nhật 01/11/2026)
 
+Trong **Quản lý sinh viên**, khối thống kê đăng ký có bộ lọc **Tất cả / Đã đăng ký ca / Chưa đăng ký ca** kèm số lượng. Bộ lọc tính theo ca rảnh của tháng đang xem (0 ca là chưa đăng ký ca), kết hợp với tìm kiếm tên/MSSV.
+
 Trong Quản trị, chọn **Chế độ xếp lịch của tháng** rồi bấm **Tự động phân bổ lịch**:
 
 | Số người/ca | Chế độ |

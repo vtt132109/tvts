@@ -283,3 +283,53 @@ test('admin: 1 người/ca ưu tiên mỗi người Mới một ca trong tháng,
     .every(w => Object.values(w.scheduleTable).every(s => s.oldMember?.role === 'old' && s.newMember?.role === 'new')));
   expect(paired).toBe(true);
 });
+
+test('admin: lọc ca đăng ký đúng tháng, kết hợp tìm kiếm và bỏ lọc', async ({ page }) => {
+  const students = fixtures.students.map(s => ({ ...s }));
+  students[0].monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: [] };
+  students[1].monthlyAvailableShifts = { 1: [], 2: [], 3: [], 4: ['T6_C'] };
+  students[1].availableShifts = [];
+  await seed(page, {
+    local: { ...fixtures.adminLocal, ts_scheduler_students: JSON.stringify(students) },
+    session: fixtures.adminSession
+  });
+  await page.goto('/admin.html');
+  await page.click('#btn-tab-students');
+  const filters = page.getByRole('group', { name: 'Lọc theo đăng ký ca' });
+  const registered = filters.getByRole('button', { name: 'Đã đăng ký ca' });
+  const unregistered = filters.getByRole('button', { name: 'Chưa đăng ký ca' });
+  const rows = page.locator('#admin-student-table-body tr').filter({ has: page.locator('.cb-student-row') });
+  const search = page.locator('#input-search-student');
+  await expect(registered).toContainText('(5)');
+  await expect(unregistered).toContainText('(1)');
+  await unregistered.click();
+  await expect(unregistered).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText(students[0].studentId);
+  await search.fill('khongkhop');
+  await expect(rows).toHaveCount(0);
+  await expect(page.locator('#admin-student-table-body')).toContainText('Không tìm thấy CTV');
+  await search.clear();
+  await registered.click();
+  await expect(rows).toHaveCount(5);
+  await search.fill(students[1].studentId);
+  await expect(rows).toHaveCount(1);
+  await filters.getByRole('button', { name: 'Tất cả' }).click();
+  await search.clear();
+  await expect(rows).toHaveCount(6);
+  await page.evaluate(() => {
+    localStorage.setItem('ts_scheduler_availability_month_v1', '2026-09');
+    window.adminTestHelper.renderStudentTable();
+  });
+  await expect(registered).toContainText('(0)');
+  await registered.click();
+  await expect(rows).toHaveCount(0);
+  await unregistered.click();
+  await expect(rows).toHaveCount(6);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await filters.scrollIntoViewIfNeeded();
+  const bounds = await filters.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: 'test-results/registration-filter-mobile.png' });
+});
