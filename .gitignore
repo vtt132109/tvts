@@ -51,3 +51,7 @@ full-stack-preset/
 
 # Video quay minh chứng thao tác (không cần đưa lên kho)
 *.webm
+
+# === BỘ NHỚ & NHẬT KÝ CỦA AGENT (có thể chứa thông tin nhạy cảm) ===
+# Từng có PIN cán bộ nằm trong taskboard. Giữ ở máy cục bộ, không đưa lên kho công khai.
+.antigravity/memory/
