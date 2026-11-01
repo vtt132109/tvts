@@ -1708,7 +1708,8 @@
     if (directory.length > 0) {
       payload.directory = directory;
       // Chỉ mục MSSV hợp lệ để Rules chặn người lạ chiếm MSSV ngoài danh sách CTV.
-      // PATCH gộp theo khoá nên MSSV cũ không bị xoá khi danh sách thu nhỏ.
+      // PATCH thay thế nguyên node con cấp 1, nên MSSV đã xoá khỏi danh sách
+      // cũng biến mất khỏi chỉ mục ở lần đẩy kế tiếp (giống `directory`).
       payload.mssvIndex = {};
       directory.forEach(rec => {
         const id = String(rec.studentId || rec.id || '').trim();

@@ -130,10 +130,11 @@ Firebase Console → Realtime Database → Data
 Xoá node: tvts_production_data/adminUsers
 ```
 
-Ứng dụng **không còn tài khoản mặc định** để tự dựng lại. Máy trống sẽ hiện
-**Thiết lập lần đầu** để tạo Trưởng ban mới (mật khẩu ≥ 8 ký tự, PIN 6 số). Nếu muốn
-giữ tài khoản cán bộ thật, đổi mật khẩu trên một máy sạch rồi đẩy lại Cloud: payload
-mới chỉ chứa **hash có muối**, không còn plaintext.
+Ứng dụng **không còn tài khoản mặc định** để tự dựng lại. **Cập nhật 2026-11-01:**
+`renderAuthMode()` trong `js/admin.js` hiện ẩn toàn bộ form tài khoản cục bộ, form PIN, nút
+tạo tài khoản và form "Thiết lập lần đầu"; màn đăng nhập admin **chỉ còn Google**. Mã
+của các form đó vẫn nằm trong file nhưng không hiển thị. Payload Cloud chỉ chứa
+**hash có muối**, không còn plaintext.
 
 ### Bước 4 — Bật Google + Anonymous (code đã hỗ trợ)
 
@@ -179,7 +180,7 @@ Bất kỳ ai cũng có thể:
 2. Hoặc đọc `localStorage` để lấy mật khẩu/PIN của người khác.
 
 Đây là giới hạn cố hữu của web tĩnh, **không phải bug có thể vá bằng vài dòng code**.
-**Trạng thái mới (2026-10-23):** dữ liệu Cloud đã được bảo vệ bằng Firebase Auth — Google cho cán bộ, Anonymous cho sinh viên, Rules 3 nhánh dữ liệu + `/staff`/`/staff_emails`. Tài khoản PIN nội bộ vẫn chỉ là lớp mở dashboard phía client và **không bảo vệ dữ liệu Cloud**.
+**Trạng thái mới (2026-10-23):** dữ liệu Cloud đã được bảo vệ bằng Firebase Auth — Google cho cán bộ, Anonymous cho sinh viên, Rules 3 nhánh dữ liệu + `/staff`/`/staff_emails`. Tài khoản PIN nội bộ (nay đã ẩn khỏi màn đăng nhập, xem mục 12) chỉ là lớp mở dashboard phía client và **không bảo vệ dữ liệu Cloud**.
 
 | Hướng | Cách làm | Đánh đổi |
 |---|---|---|
@@ -386,3 +387,6 @@ Checklist bắt buộc trước khi coi là đã xử lý:
   Publish Rules trước sẽ chặn sinh viên chưa có `mssv_owner` cho tới khi có `mssvIndex`.
 - **Bộ nhớ agent:** `.antigravity/memory/` đã được gỡ khỏi git và thêm vào `.gitignore` (từng chứa PIN cán bộ).
   **Lịch sử git vẫn còn bản cũ** — PIN đó phải coi là đã lộ và cần đổi; viết lại lịch sử theo mục 11.
+- **Đăng nhập admin:** chỉ Google (đối chiếu `renderAuthMode`). Các mô tả "Thiết lập lần đầu"/đăng nhập
+  PIN ở các mục cũ là lịch sử; không còn hiển thị.
+- **Đăng ký 0 ca:** client gửi `shiftCount`; Rules chấp nhận `shiftCount` thay cho `shifts` (Firebase bỏ mảng rỗng).
