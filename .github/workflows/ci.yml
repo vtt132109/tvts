@@ -1,14 +1,12 @@
 name: CI • Test Harness
 
-# Chạy bộ kiểm thử hồi quy trên mọi push / pull request.
+# Chạy bộ kiểm thử hồi quy cho pull request (và chạy tay khi cần).
 #
-# Tách khỏi static.yml (deploy) để một commit hỏng test vẫn không âm thầm
-# lên production, nhưng cũng không chặn deploy nếu hạ tầng CI gặp sự cố.
-# Muốn chặn deploy thật sự: thêm `needs: test` vào job deploy trong static.yml.
+# Push lên main KHÔNG chạy ở đây nữa: static.yml đã chạy đúng các bước này
+# (unit + clean_code + Playwright) và chặn deploy bằng `needs`, nên chạy thêm
+# ở đây chỉ tốn gấp đôi thời gian runner.
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
   workflow_dispatch:
 
