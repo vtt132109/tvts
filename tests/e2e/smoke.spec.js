@@ -417,3 +417,53 @@ test('admin: hồ sơ tháng cũ giữ danh sách đăng ký và số ca từng 
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: 'test-results/month-snapshot-mobile.png' });
 });
+
+test('admin: tag vai trò chỉ ở bảng CTV, kết quả ưu tiên báo đúng người Mới và giới hạn chỗ', async ({ page }) => {
+  const students = Array.from({ length: 58 }, (_, i) => {
+    const shifts = i < 14 || (i >= 28 && i < 56) ? fixtures.allShifts : [];
+    return { id: `s_${i + 1}`, studentId: `29${String(i).padStart(6, '0')}`, fullName: `CTV ${i + 1}`,
+      role: i < 28 ? 'old' : 'new', availableShifts: shifts,
+      monthlyAvailableShifts: { 1: shifts, 2: shifts, 3: shifts, 4: shifts } };
+  });
+  await seed(page, { local: { ...fixtures.adminLocal,
+    ts_scheduler_students: JSON.stringify(students),
+    ts_scheduler_shift_capacity_v1: JSON.stringify({ '2026-10': { peoplePerShift: 1, schedulingMode: 'new-first' } })
+  }, session: fixtures.adminSession });
+  await page.goto('/admin.html');
+  await page.click('#btn-admin-auto-schedule');
+  await expect(page.locator('#btn-admin-auto-schedule')).toBeEnabled();
+  const summary = page.locator('#schedule-coverage-summary');
+  await expect(summary).toContainText('Mới: 28/28');
+  await expect(summary).toContainText('40 chỗ trực cơ bản cho 42 người đăng ký');
+  await expect(summary).toContainText('Đã xếp đủ người Mới có đăng ký');
+  await summary.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/priority-coverage-summary.png' });
+  await expect(page.locator('#admin-timetable-grid .student-role-badge')).toHaveCount(0);
+  await page.click('#btn-tab-students');
+  await expect(page.locator('#admin-student-table-body [data-student-role="old"]')).toHaveCount(28);
+  await expect(page.locator('#admin-student-table-body [data-student-role="new"]')).toHaveCount(30);
+  await page.locator('.student-role-badge').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/admin-role-tags-desktop.png' });
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('.student-role-badge').first()).toBeHidden();
+  await page.emulateMedia({ media: 'screen' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.student-role-badge').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/admin-role-tags-mobile.png' });
+});
+
+test('admin: chưa xếp đủ Mới thì kết quả cảnh báo rõ người còn thiếu', async ({ page }) => {
+  const students = fixtures.students.slice(0, 3).map(s => ({ ...s,
+    availableShifts: ['T4_S'], monthlyAvailableShifts: { 1: ['T4_S'], 2: [], 3: [], 4: [] }
+  }));
+  await seed(page, { local: { ...fixtures.adminLocal,
+    ts_scheduler_students: JSON.stringify(students),
+    ts_scheduler_shift_capacity_v1: JSON.stringify({ '2026-10': { peoplePerShift: 1, schedulingMode: 'new-first' } })
+  }, session: fixtures.adminSession });
+  await page.goto('/admin.html');
+  await page.click('#btn-admin-auto-schedule');
+  await expect(page.locator('#btn-admin-auto-schedule')).toBeEnabled();
+  await expect(page.locator('#schedule-coverage-summary')).toContainText('Mới: 1/3');
+  await expect(page.locator('#schedule-coverage-summary')).toContainText('Chưa xếp đủ người Mới có đăng ký');
+  await expect(page.locator('#toast-container')).toContainText('Chưa xếp đủ người Mới: 1/3');
+});

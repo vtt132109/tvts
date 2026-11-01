@@ -2,6 +2,10 @@
    Design System & Modern Styling: Hệ Thống Đăng Ký & Xếp Lịch Trực Tuyển Sinh
    ========================================================================== */
 
+@media print {
+  .student-role-badge, #schedule-coverage-summary { display: none !important; }
+}
+
 :root {
   /* Color Palette */
   --primary: #4f46e5;

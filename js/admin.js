@@ -2458,6 +2458,13 @@
   };
 
   function saveSchedule(syncImmediate = true, options) {
+    const coverage = getMonthCoverage(state.monthSchedule);
+    if (coverage) {
+      state.monthSchedule.combinedStats = coverage.combinedStats;
+      state.monthSchedule.uniqueAssignedCount = coverage.uniqueAssignedCount;
+      state.monthSchedule.totalStudents = coverage.totalStudents;
+      state.monthSchedule.unassignedMonthMembers = coverage.unassignedMembers;
+    }
     captureMonthSnapshot(state.monthSchedule);
     if (state.currentSchedule) {
       localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(state.currentSchedule));
@@ -3869,10 +3876,14 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
         renderAll();
         const mode = getMonthCapacity(state.currentMonth, state.currentYear).schedulingMode;
         const label = mode === 'random' ? 'ngẫu nhiên' : mode === 'new-first' ? 'ưu tiên người Mới' : 'tự động';
-        const msg = state.monthSchedule
-          ? `Đã xếp lịch ${label} 4 tuần: ${state.monthSchedule.uniqueAssignedCount}/${state.monthSchedule.totalStudents} bạn có ca!`
+        const coverage = getMonthCoverage();
+        const missingNew = mode === 'new-first' && coverage && coverage.missingNew.length > 0;
+        const msg = coverage
+          ? (mode === 'new-first'
+            ? `${missingNew ? 'Chưa xếp đủ người Mới' : 'Đã xếp đủ người Mới'}: ${coverage.newAssignedCount}/${coverage.newRegisteredCount} người Mới đăng ký có ca. Tổng ${coverage.assignedRegisteredCount}/${coverage.registeredCount} CTV đăng ký có ca.`
+            : `Đã xếp lịch ${label}: ${coverage.assignedRegisteredCount}/${coverage.registeredCount} CTV đăng ký có ca.`)
           : 'Đã hoàn tất phân bổ ca trực!';
-        showToast(msg, 'success');
+        showToast(msg, missingNew ? 'warning' : 'success');
         auditLog('SCHEDULE_RUN', `Xếp lịch tự động cho ${state.students.length} CTV`);
       }, 350);
     } else {
@@ -3884,6 +3895,7 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
 
   function renderAll() {
     renderSummary();
+    renderScheduleCoverage();
     renderStudentTable();
     renderNeedsAction();
     updateMonthNavigatorUI();
@@ -3894,6 +3906,68 @@ elements.btnBulkDeleteStudents?.addEventListener('click', async () => {
     }
     renderFairness();
     updateStickyHeroStats();
+  }
+
+  function getMonthCoverage(schedule = state.monthSchedule) {
+    if (!schedule || !Array.isArray(schedule.weeks)) return null;
+    const key = `${schedule.year || state.currentYear}-${String(schedule.month || state.currentMonth).padStart(2, '0')}`;
+    const sourceKey = readAvailabilityMonthKey();
+    const historical = sourceKey && sourceKey !== key;
+    const students = historical ? schedule.monthSnapshot?.students : state.students;
+    if (!Array.isArray(students)) return null;
+    const perWeek = students.map(() => schedule.weeks.map(() => 0));
+    const byId = new Map(students.map((s, i) => [s.id, i]));
+    const assigned = new Set();
+    let basePlaces = 0;
+    schedule.weeks.forEach((week, w) => {
+      Object.values(week.scheduleTable || {}).forEach(slot => {
+        if (!slot) return;
+        basePlaces += slot.capacity === 1 ? 1 : 2;
+        const ids = new Set([slot.oldMember, slot.newMember, slot.thirdMember].filter(Boolean).map(m => m.id));
+        ids.forEach(id => {
+          assigned.add(id);
+          if (byId.has(id)) perWeek[byId.get(id)][w]++;
+        });
+      });
+    });
+    const registered = students.filter(s => getRegisteredShiftCount(s) > 0);
+    const news = registered.filter(s => s.role === 'new');
+    const olds = registered.filter(s => s.role === 'old');
+    const combinedStats = {};
+    students.forEach((s, i) => {
+      const counts = perWeek[i], total = counts.reduce((sum, n) => sum + n, 0);
+      combinedStats[s.id] = {
+        studentId: s.id, fullName: s.fullName, role: s.role, countsPerWeek: counts,
+        week1Count: counts[0] || 0, week2Count: counts[1] || 0,
+        week3Count: counts[2] || 0, week4Count: counts[3] || 0,
+        totalTwoWeeks: (counts[0] || 0) + (counts[1] || 0), totalCount: total, totalMonthCount: total
+      };
+    });
+    return {
+      totalStudents: students.length, registeredCount: registered.length,
+      assignedRegisteredCount: registered.filter(s => assigned.has(s.id)).length,
+      uniqueAssignedCount: assigned.size, basePlaces, combinedStats,
+      newRegisteredCount: news.length, newAssignedCount: news.filter(s => assigned.has(s.id)).length,
+      oldRegisteredCount: olds.length, oldAssignedCount: olds.filter(s => assigned.has(s.id)).length,
+      missingNew: news.filter(s => !assigned.has(s.id)),
+      unassignedMembers: students.filter(s => !assigned.has(s.id))
+    };
+  }
+
+  function renderScheduleCoverage() {
+    const box = document.getElementById('schedule-coverage-summary');
+    if (!box) return;
+    const coverage = getMonthCoverage();
+    box.hidden = !coverage;
+    if (!coverage) return;
+    const priority = getMonthCapacity(state.currentMonth, state.currentYear).schedulingMode === 'new-first';
+    const missing = priority && coverage.missingNew.length > 0;
+    box.innerHTML = `
+      <strong>Kết quả phân bổ: ${coverage.assignedRegisteredCount}/${coverage.registeredCount} CTV đăng ký đã có ca</strong>
+      <p style="margin:0.35rem 0;">Mới: <strong>${coverage.newAssignedCount}/${coverage.newRegisteredCount}</strong> · Cũ: <strong>${coverage.oldAssignedCount}/${coverage.oldRegisteredCount}</strong> người đăng ký đã có ca.</p>
+      <p style="margin:0.35rem 0;">Tháng này có ${coverage.basePlaces} chỗ trực cơ bản cho ${coverage.registeredCount} người đăng ký.${coverage.registeredCount > coverage.basePlaces ? ' Số người đăng ký vượt số chỗ trực cơ bản.' : ''}</p>
+      ${priority ? `<p style="margin:0.35rem 0;"><strong>${missing ? '⚠️ Chưa xếp đủ người Mới có đăng ký.' : '✓ Đã xếp đủ người Mới có đăng ký.'}</strong> Người Cũ chỉ nhận chỗ còn lại và có thể chưa có ca.</p>` : ''}
+      ${missing ? `<p style="margin:0.35rem 0;">Cần xử lý: ${coverage.missingNew.map(s => `${escapeHtml(s.fullName)} (${escapeHtml(s.studentId)})`).join(', ')}. Kiểm tra ca rảnh, các ô đang gán tay hoặc tăng số người/ca; hệ thống không xếp ngoài ca đã đăng ký.</p>` : ''}`;
   }
 
   function renderSummary() {
@@ -4375,7 +4449,7 @@ function renderStudentTable() {
           <td style="text-align: center;"><input type="checkbox" class="cb-student-row" data-id="${escapeHtml(s.id)}"></td>
           <td style="font-weight: 600; color: #94a3b8;">#${index + 1}</td>
           <td>
-            <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(s.fullName)}</div>
+            <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(s.fullName)} <span class="badge ${s.role === 'old' ? 'badge-old' : 'badge-new'} student-role-badge" data-student-role="${s.role === 'old' ? 'old' : 'new'}">${s.role === 'old' ? 'Cũ' : 'Mới'}</span></div>
             <div style="font-size: 0.75rem; color: var(--text-muted);">${s.phone ? 'SĐT: ' + escapeHtml(s.phone) : 'Chưa có SĐT'}</div>
           </td>
           <td><code style="font-weight: 700; color: var(--primary);">${escapeHtml(s.studentId)}</code></td>
@@ -8987,6 +9061,7 @@ async function handleDeleteEvent(id) {
     switchAdminMonth,
     getMonthCapacity,
     getMonthSnapshotReport,
+    getMonthCoverage,
     saveMonthCapacity,
     setMonthCapacityQuick,
     // Dùng cho kiểm thử giao diện: dựng lại lưới tháng / lưới tuần.

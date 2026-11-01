@@ -1225,6 +1225,49 @@ runTest('Xóa tuần: chỉ xóa người trong tuần đang xem, giữ tuần k
     'Sổ tay tuần 2 phải còn');
 });
 
+runTest('Ưu tiên Mới: 42 đăng ký, 40 chỗ vẫn phải xếp đủ 28 người Mới trước, đếm sau gán tay', () => {
+  seed();
+  const all = window.SchedulerEngine.SHIFTS.map(s => s.id);
+  const students = Array.from({ length: 58 }, (_, i) => {
+    const registered = i < 14 || (i >= 28 && i < 56);
+    const shifts = registered ? all : [];
+    return { id: `priority_${i}`, studentId: `29${String(i).padStart(6, '0')}`, fullName: `CTV ${i}`,
+      role: i < 28 ? 'old' : 'new', availableShifts: shifts,
+      monthlyAvailableShifts: { 1: shifts, 2: shifts, 3: shifts, 4: shifts } };
+  });
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  H.loadData();
+  H.saveMonthCapacity(10, 2026, { peoplePerShift: 1, schedulingMode: 'new-first' });
+  all.slice(0, 9).forEach((id, i) => H.recordManualSlot(1, id, { oldMember: students[i % 8] }, 10, 2026));
+  H.runFullSchedule();
+  const coverage = H.getMonthCoverage();
+  assert.strictEqual(coverage.registeredCount, 42);
+  assert.strictEqual(coverage.basePlaces, 40);
+  assert.strictEqual(coverage.newRegisteredCount, 28);
+  assert.strictEqual(coverage.newAssignedCount, 28);
+  assert.strictEqual(coverage.missingNew.length, 0);
+  assert.strictEqual(coverage.oldRegisteredCount, 14);
+  assert.ok(coverage.oldAssignedCount < 14, 'Cũ có thể chưa có ca để ưu tiên Mới');
+  assert.strictEqual(H.getState().monthSchedule.uniqueAssignedCount, coverage.uniqueAssignedCount,
+    'Tổng phải dựa trên lịch cuối sau khi áp lại ca gán tay');
+});
+
+runTest('Ưu tiên Mới: báo chính xác người Mới chưa có ca khi ca rảnh bị trùng hết', () => {
+  seed();
+  const students = Array.from({ length: 3 }, (_, i) => ({
+    id: `short_new_${i}`, studentId: `299990${i}`, fullName: `Mới ${i}`, role: 'new',
+    availableShifts: ['T4_S'], monthlyAvailableShifts: { 1: ['T4_S'], 2: [], 3: [], 4: [] }
+  }));
+  LS.setItem('ts_scheduler_students', JSON.stringify(students));
+  H.loadData();
+  H.saveMonthCapacity(10, 2026, { peoplePerShift: 1, schedulingMode: 'new-first' });
+  H.runFullSchedule();
+  const coverage = H.getMonthCoverage();
+  assert.strictEqual(coverage.newRegisteredCount, 3);
+  assert.strictEqual(coverage.newAssignedCount, 1);
+  assert.strictEqual(coverage.missingNew.length, 2);
+});
+
 runTest('Giao diện: có nút Xóa Tuần Này', () => {
   const html = fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
   assert.ok(html.includes('id="btn-clear-week"'), 'Phải có nút Xóa Tuần Này');
