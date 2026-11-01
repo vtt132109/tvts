@@ -4762,6 +4762,7 @@ function renderStudentTable() {
             <div class="fairness-item-left">
               <div class="fairness-item-person">
                 <span class="fairness-name">${escapeHtml(m.fullName)}</span>
+                <span class="badge ${m.role === 'old' ? 'badge-old' : 'badge-new'} student-role-badge" data-student-role="${m.role === 'old' ? 'old' : 'new'}">${m.role === 'old' ? 'Cũ' : 'Mới'}</span>
                 <span class="fairness-id">(${escapeHtml(m.studentId)})</span>
               </div>
               <div class="fairness-item-meta">

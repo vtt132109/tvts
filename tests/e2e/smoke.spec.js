@@ -418,7 +418,7 @@ test('admin: hồ sơ tháng cũ giữ danh sách đăng ký và số ca từng 
   await page.screenshot({ path: 'test-results/month-snapshot-mobile.png' });
 });
 
-test('admin: tag vai trò chỉ ở bảng CTV, kết quả ưu tiên báo đúng người Mới và giới hạn chỗ', async ({ page }) => {
+test('admin: tag vai trò ở quản lý/thống kê CTV, kết quả ưu tiên báo đúng người Mới và giới hạn chỗ', async ({ page }) => {
   const students = Array.from({ length: 58 }, (_, i) => {
     const shifts = i < 14 || (i >= 28 && i < 56) ? fixtures.allShifts : [];
     return { id: `s_${i + 1}`, studentId: `29${String(i).padStart(6, '0')}`, fullName: `CTV ${i + 1}`,
@@ -439,16 +439,21 @@ test('admin: tag vai trò chỉ ở bảng CTV, kết quả ưu tiên báo đún
   await summary.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/priority-coverage-summary.png' });
   await expect(page.locator('#admin-timetable-grid .student-role-badge')).toHaveCount(0);
+  await expect(page.locator('#fairness-list-old [data-student-role="old"]')).toHaveCount(28);
+  await expect(page.locator('#fairness-list-old [data-student-role="new"]')).toHaveCount(30);
+  await page.locator('#fairness-list-old .student-role-badge').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/fairness-role-tags-desktop.png' });
   await page.click('#btn-tab-students');
   await expect(page.locator('#admin-student-table-body [data-student-role="old"]')).toHaveCount(28);
   await expect(page.locator('#admin-student-table-body [data-student-role="new"]')).toHaveCount(30);
-  await page.locator('.student-role-badge').first().scrollIntoViewIfNeeded();
+  const studentTags = page.locator('#admin-student-table-body .student-role-badge');
+  await studentTags.first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/admin-role-tags-desktop.png' });
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.student-role-badge').first()).toBeHidden();
+  await expect(studentTags.first()).toBeHidden();
   await page.emulateMedia({ media: 'screen' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('.student-role-badge').first().scrollIntoViewIfNeeded();
+  await studentTags.first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/admin-role-tags-mobile.png' });
 });
 
