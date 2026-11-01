@@ -1,62 +1,72 @@
 # 🏛️ Hệ Thống Quản Lý & Xếp Lịch Trực Ban Tuyển Sinh HCM-UTE
 
-### Chế độ xếp lịch theo tháng (cập nhật 01/11/2026)
-
-Kết quả phân bổ hiển thị riêng số CTV Mới/Cũ có ca trên số người từng nhóm đã đăng ký, cùng số chỗ trực cơ bản của tháng. Chế độ **Ưu tiên người Mới** dành ít nhất 1 ca/tháng cho mỗi người Mới có ca rảnh phù hợp trước, rồi mới xếp người Cũ; người Cũ có thể không có ca. Nếu còn thiếu người Mới, giao diện cảnh báo và nêu rõ danh sách cần xử lý. Mức 1 người/ca × 10 ca/tuần × 4 tuần có 40 chỗ cơ bản, không thể tự xếp đủ 42 người khác nhau nếu không tăng số người/ca hoặc gán thêm người. Tag **Cũ/Mới** hiển thị trong bảng Quản lý sinh viên và Thống kê số ca của admin, không nằm trong ô lịch trực hay bản in.
-
-**Hồ sơ tháng:** cạnh thanh chuyển tháng có nút **📋 Hồ sơ tháng** để xem danh sách CTV, số người đã/chưa đăng ký ca và số ca trực từng người. Trước khi sang tháng mới, hệ thống lưu cả danh sách và ca rảnh của tháng cũ, kể cả tháng chưa xếp lịch. Bảng chấm công và sao lưu của tháng cũ dùng danh sách đã chốt. Dữ liệu đi cùng kho lịch lên Cloud và được lưu dự phòng trong IndexedDB. Nếu không lưu được, hệ thống dừng chuyển tháng để giữ đăng ký cũ. Những tháng trước đây chưa lưu danh sách sẽ báo thiếu hồ sơ, không suy đoán người chưa đăng ký.
-
-Trong **Quản lý sinh viên**, khối thống kê đăng ký có bộ lọc **Tất cả / Đã đăng ký ca / Chưa đăng ký ca** kèm số lượng. Bộ lọc tính theo ca rảnh của tháng đang xem (0 ca là chưa đăng ký ca), kết hợp với tìm kiếm tên/MSSV.
-
-Trong Quản trị, chọn **Chế độ xếp lịch của tháng** rồi bấm **Tự động phân bổ lịch**:
-
-| Số người/ca | Chế độ |
-|---|---|
-| 1 người | Không phân biệt Cũ/Mới; Ưu tiên người Mới; Random |
-| 2 người | 1 Mới + 1 Cũ (mặc định); Không phân biệt Cũ/Mới; Random |
-
-- **Không phân biệt:** cân bằng số ca, không xét vai trò.
-- **Ưu tiên người Mới:** dành mỗi người Mới ít nhất 1 ca trong tháng nếu có đủ ca rảnh phù hợp, rồi ưu tiên người Cũ. Ghép ca trên cả tháng, không lặp quota mỗi tuần; ca đã gán tay được tính khi dành suất.
-- **Random:** chọn ngẫu nhiên trong những người đăng ký rảnh, không ưu tiên vai trò hay số ca đã có.
-- Các chế độ giữ nguyên ô gán tay. Khi thiếu người phù hợp, lịch hiển thị ô thiếu và cảnh báo. Lựa chọn được lưu theo tháng cùng cấu hình 1/2 người/ca và đồng bộ Cloud.
-
-
-[![CI Tests](https://img.shields.io/badge/CI%20Tests-549%2F549%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![CI Tests](https://img.shields.io/badge/CI%20Tests-706%2F706%20PASS-brightgreen.svg)](tests/run_all_tests.js)
+[![Browser E2E](https://img.shields.io/badge/Browser%20E2E-15%2F15%20PASS-brightgreen.svg)](tests/e2e/smoke.spec.js)
 [![Architecture](https://img.shields.io/badge/Multi--Agent-Autonomous%20Level%205-blue.svg)](.antigravity/rules.md)
 [![Deployment](https://img.shields.io/badge/Deploy-GitHub%20Pages-success.svg)](https://vtt132109.github.io/tvts/)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](#)
 
-Ứng dụng web chuyên nghiệp dành cho **Văn phòng Tư Vấn Tuyển Sinh HCM-UTE**, tích hợp thuật toán phân bổ ca trực tối ưu (Bipartite Matching kết hợp luân phiên 4 tuần) và được bảo trợ bởi hệ thống **Multi-Agent Tự Trị Cao Cấp (Autonomous Multi-Agent Architecture)**.
+Ứng dụng web tĩnh dành cho **Văn phòng Tư Vấn Tuyển Sinh HCM-UTE**: cộng tác viên (CTV) tự đăng ký ca rảnh theo tháng, cán bộ xếp lịch trực 4 tuần bằng thuật toán ghép cặp cực đại (Bipartite Matching) có cân bằng số ca, rồi xuất bảng chấm công. Dữ liệu đồng bộ qua Firebase Realtime Database; mã nguồn được bảo trì bởi hệ **Multi-Agent tự trị** (`.antigravity/`).
+
+> Tài liệu liên quan: [SECURITY.md](SECURITY.md) (hồ sơ sự cố & kiểm tra bảo mật) · [.antigravity/memory/](.antigravity/memory/) (bộ nhớ kiến trúc, hợp đồng dữ liệu, nhật ký bài học).
 
 ---
 
-## 🏗️ 1. Sơ Đồ Kiến Trúc Hệ Thống (System Architecture)
+## 🗓️ 1. Chế Độ Xếp Lịch Theo Tháng (cập nhật 01/11/2026)
+
+Trong Quản trị, chọn **Chế độ xếp lịch của tháng** (cạnh nút xếp lịch) rồi bấm **Tự động phân bổ lịch**. Lựa chọn được lưu theo tháng cùng cấu hình số người/ca và đồng bộ Cloud.
+
+| Số người/ca | Chế độ |
+|---|---|
+| 1 người | Không phân biệt Cũ/Mới · Ưu tiên người Mới · Random |
+| 2 người | **1 Mới + 1 Cũ (mặc định)** · Không phân biệt Cũ/Mới · Random |
+
+- **1 Mới + 1 Cũ:** mỗi ca ghép một người Cũ với một người Mới (chỉ có ở mức 2 người/ca).
+- **Không phân biệt:** cân bằng số ca giữa các CTV, không xét vai trò.
+- **Ưu tiên người Mới (chỉ 1 người/ca):** dành ít nhất 1 ca/tháng cho mỗi người Mới có ca rảnh phù hợp trước, rồi mới xếp người Cũ; người Cũ có thể không có ca. Ghép ca trên cả tháng (không lặp quota mỗi tuần); ca đã gán tay được tính khi dành suất. Nếu còn thiếu người Mới, giao diện cảnh báo và nêu rõ danh sách cần xử lý.
+- **Random:** chọn ngẫu nhiên trong những người đăng ký rảnh, không ưu tiên vai trò hay số ca.
+- Mọi chế độ **chỉ xếp vào đúng ca rảnh của đúng tuần** (tuần Firebase trả `null`/thiếu key = 0 ca), **giữ nguyên ô gán tay**, tránh xếp một người 2 ca cùng ngày khi còn lựa chọn khác, và hiển thị ô thiếu kèm cảnh báo khi không đủ người.
+
+**Kết quả phân bổ** hiển thị riêng số CTV Mới/Cũ có ca trên số người từng nhóm đã đăng ký, cùng số chỗ trực cơ bản của tháng (đếm từ lịch thực tế sau gán tay). Ví dụ: 1 người/ca × 10 ca/tuần × 4 tuần = 40 chỗ, không thể tự xếp đủ 42 người khác nhau nếu không tăng số người/ca hoặc gán thêm người.
+
+**Tag Cũ/Mới** hiển thị trong bảng *Quản lý sinh viên* và *Thống kê số ca* của admin; **không** xuất hiện trong ô lịch trực, bản in hay cổng sinh viên.
+
+**Hồ sơ tháng:** cạnh thanh chuyển tháng có nút **📋 Hồ sơ tháng** để xem danh sách CTV, số người đã/chưa đăng ký ca và số ca trực từng người. Trước khi sang tháng mới, hệ thống lưu cả danh sách và ca rảnh của tháng cũ (kể cả tháng chưa xếp lịch). Bảng chấm công và sao lưu của tháng cũ dùng danh sách đã chốt. Dữ liệu đi cùng kho lịch lên Cloud và được lưu dự phòng trong IndexedDB; nếu không lưu được, hệ thống dừng chuyển tháng để giữ đăng ký cũ. Tháng trước đây chưa lưu danh sách sẽ báo thiếu hồ sơ, không suy đoán người chưa đăng ký.
+
+**Lọc đăng ký:** trong *Quản lý sinh viên*, khối thống kê có bộ lọc **Tất cả / Đã đăng ký ca / Chưa đăng ký ca** kèm số lượng, tính theo ca rảnh của tháng đang xem (0 ca = chưa đăng ký) và kết hợp với tìm kiếm tên/MSSV.
+
+---
+
+## 🏗️ 2. Sơ Đồ Kiến Trúc Hệ Thống
 
 ```mermaid
 flowchart TD
-    subgraph ClientUI ["Giao Diện Người Dùng (HTML5 / CSS3 / IIFE JS)"]
+    subgraph ClientUI ["Giao Diện (HTML5 / CSS3 / JS thuần bọc IIFE)"]
         SP["👤 Cổng Sinh Viên (index.html)"]
         AP["🛡️ Bảng Quản Trị (admin.html)"]
     end
 
-    subgraph CoreEngines ["Các Module Xử Lý Đóng Gói IIFE ('use strict')"]
-        AuthModule["🔑 Auth Guard Module\n(js/admin.js)"]
-        StudentModule["📝 Student Registration & Lookup\n(js/student.js)"]
+    subgraph CoreEngines ["Mô-đun xử lý (IIFE 'use strict')"]
+        AuthModule["🔑 Google Login + mã khôi phục thiết bị\n(js/admin.js, js/cloud_sync.js)"]
+        StudentModule["📝 Đăng ký ca & tra cứu\n(js/student.js)"]
         SchedulerModule["⚙️ Bipartite Matching Scheduler\n(js/scheduler.js)"]
-        ExportModule["📊 Excel XML & Clipboard RFC 4180\n(js/admin.js)"]
+        ExportModule["📊 Excel XML, CSV, Clipboard RFC 4180\n(js/admin.js)"]
+        CloudModule["☁️ Cloud Sync, Auth, Rules guard\n(js/cloud_sync.js)"]
     end
 
-    subgraph StorageLayer ["Tầng Lưu Trữ Trình Duyệt (Web Storage API)"]
-        LS[("💾 LocalStorage\n- hcmute_students_reg\n- hcmute_schedule_month\n- hcmute_reg_config")]
-        SS[("🔒 SessionStorage\n- admin_logged_in\n- admin_user_role")]
+    subgraph StorageLayer ["Lưu trữ"]
+        LS[("💾 localStorage (ts_scheduler_*)")]
+        IDB[("🗄️ IndexedDB (js/store.js)\nbản dự phòng kho lịch")]
+        SS[("🔒 sessionStorage\nphiên admin 12 giờ")]
+        FB[("☁️ Firebase Realtime DB\ntvts_production_data / tvts_public / tvts_requests")]
     end
 
-    subgraph MultiAgentSystem ["Hệ Thống Multi-Agent Tự Trị (.antigravity/)"]
-        ParentAgent["🤖 Parent Agent (Điều phối trung tâm)"]
-        BackendAgent["⚙️ @backend-agent (Scheduler, Data)"]
-        FrontendAgent["🎨 @frontend-agent (UI, CSS, DOM)"]
-        QAAgent["🧪 @qa-agent (CI Tests, Linter)"]
-        SharedMemory[("🧠 Shared Memory\n- project-context.md\n- api-contracts.md\n- taskboard.md\n- lessons-learned.md\n- handover-state.md")]
+    subgraph MultiAgentSystem ["Multi-Agent Tự Trị (.antigravity/)"]
+        ParentAgent["🤖 Parent Agent"]
+        BackendAgent["⚙️ @backend-agent"]
+        FrontendAgent["🎨 @frontend-agent"]
+        QAAgent["🧪 @qa-agent"]
+        SharedMemory[("🧠 Shared Memory\nproject-context · api-contracts · taskboard\nlessons-learned · handover-state")]
     end
 
     SP --> StudentModule
@@ -65,7 +75,11 @@ flowchart TD
     AP --> ExportModule
     StudentModule <--> LS
     SchedulerModule <--> LS
+    LS <--> IDB
     AuthModule <--> SS
+    StudentModule <--> CloudModule
+    AP <--> CloudModule
+    CloudModule <--> FB
     MultiAgentSystem -.-> CoreEngines
     ParentAgent --> BackendAgent & FrontendAgent & QAAgent
     BackendAgent & FrontendAgent & QAAgent <--> SharedMemory
@@ -73,297 +87,222 @@ flowchart TD
 
 ---
 
-## 📂 2. Cấu Trúc Thư Mục Dự Án (Directory Tree)
+## 📂 3. Cấu Trúc Thư Mục
 
 ```
 tvts/
-├── index.html                           # Cổng Sinh Viên: Đăng ký ca rảnh & tra cứu lịch trực
-├── admin.html                           # Cổng Quản Trị: Xác thực bảo mật, xếp lịch, cấu hình cổng
-├── README.md                            # Tài liệu kỹ thuật dự án
-├── SECURITY.md                          # Sự cố bảo mật, cách khắc phục & kiểm tra định kỳ
-├── package.json                         # npm test / npm run check (không có dependency)
-├── database.rules.json                  # Firebase Rules 3 nhánh dữ liệu + /staff và /staff_emails
-├── skills-lock.json                     # Khóa định danh kỹ năng Agent
+├── index.html                  # Cổng Sinh Viên: đăng ký ca rảnh, tra cứu lịch, đổi ca
+├── admin.html                  # Cổng Quản Trị: xếp lịch, CTV, chấm công, sao lưu, Cloud
+├── README.md · SECURITY.md     # Tài liệu kỹ thuật · hồ sơ & kiểm tra bảo mật
+├── package.json                # npm test / check / test:e2e (devDependency duy nhất: Playwright)
+├── playwright.config.js        # Cấu hình test trình duyệt (server tĩnh cổng 8137)
+├── database.rules.json         # Firebase Rules: 3 nhánh dữ liệu + /staff, /staff_emails
+├── firebase.json · .firebaserc # Cấu hình Firebase CLI (project vtt123-76e07)
 │
-├── css/
-│   └── style.css                        # Toàn bộ kiểu dáng, biến màu HCM-UTE, responsive layout
+├── css/style.css               # Toàn bộ kiểu dáng, biến màu HCM-UTE, dark/light, responsive
 │
 ├── js/
-│   ├── scheduler.js                     # Thuật toán ghép cặp Bipartite Matching & luân phiên 4 tuần
-│   ├── month_calendar.js                # Tính lịch 4 tuần hành chính theo tháng/năm bất kỳ
-│   ├── cloud_sync.js                    # Firebase: Google/Anonymous Auth, 3 nhánh dữ liệu, yêu cầu sinh viên
-│   ├── roster.js                        # Nạp danh sách CTV từ CSV (thay cho sample30.js đã xoá)
-│   ├── a11y_modal.js                    # Focus trap, phục hồi focus, Esc đóng modal (accessibility)
-│   ├── student.js                       # Logic cổng sinh viên (MSSV-first, lưu ca, tra cứu lịch)
-│   └── admin.js                         # Logic quản trị (xác thực, xếp ca, bulk, sự kiện, xuất Excel)
+│   ├── scheduler.js            # Bipartite Matching, chế độ xếp lịch, luân phiên 4 tuần
+│   ├── month_calendar.js       # Lịch 4 tuần hành chính (T2–T6) theo tháng/năm bất kỳ
+│   ├── cloud_sync.js           # Firebase REST: Google/Anonymous Auth, App Check, 3 nhánh, yêu cầu SV
+│   ├── store.js                # IndexedDB: bản dự phòng kho lịch & khôi phục khi localStorage mất
+│   ├── audit.js                # Nhật ký thao tác quản trị (tối đa 200 bản ghi)
+│   ├── common.js               # Tiện ích dùng chung (định dạng ngày, đếm ngược)
+│   ├── roster.js               # Danh sách CTV nạp từ CSV (không còn dữ liệu mẫu nhúng sẵn)
+│   ├── a11y_modal.js           # Focus trap, phục hồi focus, Esc đóng modal
+│   ├── student.js              # Logic cổng sinh viên (MSSV-first, lưu ca, tra cứu, đổi ca)
+│   └── admin.js                # Logic quản trị (đăng nhập, xếp ca, gán tay, bulk, hồ sơ tháng, xuất file)
 │
-├── data/
-│   └── ds-ctv.csv                       # Danh sách 58 CTV thật (cục bộ, KHÔNG commit vì chứa PII)
-│   # default_students.json & mock_seed_data.json ĐÃ XOÁ: dữ liệu mẫu cũ,
-│   # danh sách chuẩn giờ nhập từ CSV qua Admin → Sinh Viên → Nhập CSV
-│   # data/admin_accounts.json ĐÃ XOÁ: không mã nào đọc, từng bị deploy công khai
+├── data/ds-ctv.csv             # Danh sách CTV thật — cục bộ, KHÔNG commit (chứa PII)
 │
-├── tests/                               # 18 bộ kiểm thử tự động — 549 test cases
-│   ├── run_all_tests.js                 # Runner kiểm thử tự động toàn diện (CI Harness)
-│   ├── scheduler.test.js                # Thuật toán xếp ca & luân phiên 4 tuần
-│   ├── auth.test.js                     # Xác thực Admin, thiết lập lần đầu & mã PIN
-│   ├── portal.test.js                   # Đóng/mở cổng & tra cứu MSSV
-│   ├── shift_history.test.js            # Lịch sử ca trực nhiều tháng
-│   ├── audit.test.js                    # Nhật ký thao tác quản trị
-│   ├── store.test.js                    # IndexedDB & khôi phục localStorage
-│   ├── common.test.js                   # Tiện ích dùng chung
-│   ├── backup.test.js                   # Sao lưu web 6 tháng & auto-pruning
-│   ├── payroll_events.test.js           # Bảng chấm công tháng & quản lý sự kiện
-│   ├── monthly_registration.test.js     # Đăng ký ca rảnh trọn tháng
-│   ├── cloud_sync.test.js               # Cloud guard, dữ liệu công khai, yêu cầu ẩn danh & Rules
-│   ├── student_strict_validation.test.js# Xác thực MSSV nghiêm ngặt
-│   ├── cloud_persistence.test.js        # Chống ghi đè dữ liệu khi tải lại trang
-│   ├── admin_month_navigation.test.js   # Điều hướng tháng & tự động sao lưu
-│   ├── credential_sync_e2e.test.js      # E2E: cấp quyền máy A, đăng nhập máy B (hash)
-│   ├── csv_import.test.js               # Validate CSV, trùng MSSV, vai trò
-│   ├── student_portal_bugs.test.js      # Năm tuần 4, lịch tháng trước, a11y modal
-│   ├── regression_guard.test.js         # Hồi quy: khóa lại các bug đã sửa
-│   └── fixtures/roster_sample.csv       # CSV tổng hợp cho test (không PII)
+├── tests/                      # 21 bộ kiểm thử — 706 test cases
+│   ├── run_all_tests.js        # Runner tổng (CI harness)
+│   ├── *.test.js               # scheduler, auth, portal, shift_history, audit, store, common,
+│   │                           # app_check, local_lockout, manual_assignment, backup, payroll_events,
+│   │                           # monthly_registration, cloud_sync, student_strict_validation,
+│   │                           # cloud_persistence, admin_month_navigation, credential_sync_e2e,
+│   │                           # csv_import, student_portal_bugs, regression_guard
+│   ├── e2e/                    # Playwright: smoke.spec.js (15 test), server.js, fixtures.js
+│   └── fixtures/               # roster_sample.csv (tổng hợp, không PII), test_students.js
 │
 ├── scripts/
-│   └── clean_code.js                    # Kiểm tra cú pháp, cân bằng thẻ HTML & chạy test
+│   ├── clean_code.js           # Kiểm tra cú pháp, cân bằng thẻ HTML, chạy toàn bộ test
+│   └── khoi_phuc_58.js         # Khôi phục danh sách CTV trên Firebase (có kiểm tra, không ghi danh sách rỗng)
 │
-├── tasks/                               # Kế hoạch & danh sách nhiệm vụ
-│   ├── plan.md
-│   └── todo.md
+├── tasks/                      # plan.md, todo.md — kế hoạch giai đoạn thiết kế lại admin (đã hoàn tất)
 │
-├── .antigravity/                        # HỆ THỐNG MULTI-AGENT TỰ TRỊ CAO CẤP
-│   ├── rules.md                         # 9 giao thức cốt lõi: Memory, Contract-First, Safety Guard...
-│   ├── settings.json                    # Cấu hình Auto-approve, Circuit Breaker, Secret Shield, Firewall
-│   ├── agents/
-│   │   ├── backend-agent.md             # Subagent phụ trách thuật toán, dữ liệu
-│   │   ├── frontend-agent.md            # Subagent phụ trách UI/UX, CSS, DOM
-│   │   └── qa-agent.md                  # Subagent phụ trách kiểm thử, rà soát chất lượng
-│   ├── memory/
-│   │   ├── project-context.md           # Tóm tắt kiến trúc hệ thống, tech stack, conventions
-│   │   ├── api-contracts.md             # Hợp đồng dữ liệu TypeScript interfaces
-│   │   ├── taskboard.md                 # Bảng theo dõi tiến độ công việc trực tiếp (Kanban)
-│   │   ├── lessons-learned.md           # Nhật ký tự học hỏi từ lỗi sai (Root Cause -> Action)
-│   │   └── handover-state.md            # Bản bàn giao trạng thái phiên làm việc khi chuyển chat
-│   └── workflows/
-│       ├── rollback.md                  # /rollback: Hủy thay đổi, quay về nhánh cũ an toàn
-│       ├── code-review.md               # /code-review: Thẩm định 5 chiều trước khi merge
-│       ├── merge-clean.md               # /merge-clean: Chạy test, merge --no-ff, xóa nhánh tạm
-│       ├── benchmark.md                 # /benchmark: Đo Big-O Time/Space, phát hiện điểm nghẽn
-│       ├── handover.md                  # /handover: Đóng gói trạng thái sang handover-state.md
-│       └── init-docs.md                 # /init-docs: Quét hệ thống và tái tạo README.md
+├── .antigravity/               # HỆ THỐNG MULTI-AGENT TỰ TRỊ
+│   ├── rules.md                # 10 giao thức: Memory, Taskboard, Lessons, Contract-First, Git guard, Circuit breaker...
+│   ├── settings.json · ignore  # Auto-approve, Secret Shield, Dependency Firewall, bộ lọc ngữ cảnh
+│   ├── agents/                 # backend-agent · frontend-agent · qa-agent
+│   ├── memory/                 # project-context · api-contracts · taskboard · lessons-learned · handover-state
+│   └── workflows/              # rollback · code-review · merge-clean · benchmark · handover ·
+│                               # init-docs · seed-data · clean-project
 │
 └── .github/workflows/
-    └── static.yml                       # GitHub Actions tự động deploy lên GitHub Pages
+    ├── ci.yml                  # Test (Node 20/22) + E2E Playwright trên mỗi push/PR
+    └── static.yml              # Test + E2E → quét bí mật → deploy GitHub Pages
 ```
+
+> `.agents/` (kỹ năng agent bên thứ ba), `full-stack-preset/` và mọi file `*.csv`/`*.xlsx` (trừ `tests/fixtures/roster_sample.csv`) đã bị chặn trong `.gitignore`.
 
 ---
 
-## 🚀 3. Hướng Dẫn Cài Đặt & Sử Dụng Nhanh
+## 🚀 4. Cài Đặt & Chạy
 
-### Cách 1: Mở Trực Tiếp Trên Trình Duyệt (Zero Configuration)
-Do toàn bộ mã nguồn sử dụng JavaScript thuần bọc IIFE không phụ thuộc bundler hay Node.js server khi chạy:
-- Nhấp đúp chuột vào `index.html` để vào **Cổng Sinh Viên**.
-- Nhấp đúp chuột vào `admin.html` để vào **Bảng Quản Trị**.
-*(Hỗ trợ mọi trình duyệt Chrome, Edge, Firefox, Safari mà không gặp lỗi CORS).*
+**Mở trực tiếp:** nhấp đúp `index.html` (Cổng Sinh Viên) hoặc `admin.html` (Quản Trị) — chạy được qua `file:///`, nhưng đăng nhập Google/Cloud cần chạy qua server hoặc bản đã deploy.
 
-### Cách 2: Chạy Qua Local Server
+**Local server:**
 ```powershell
-# Chạy với Python 3
-python -m http.server 8000
-
-# Hoặc chạy với Node.js npx serve
-npx serve .
+python -m http.server 8000      # hoặc: npx serve .
+# http://localhost:8000/index.html   |   http://localhost:8000/admin.html
 ```
-- Truy cập Cổng Sinh Viên: `http://localhost:8000/index.html`
-- Truy cập Cổng Quản Trị: `http://localhost:8000/admin.html`
 
-### Cách 3: Trải Nghiệm Trực Tuyến
-- Đã triển khai tự động qua GitHub Pages: **[https://vtt132109.github.io/tvts/](https://vtt132109.github.io/tvts/)**
+**Bản trực tuyến:** [https://vtt132109.github.io/tvts/](https://vtt132109.github.io/tvts/) (tự deploy qua GitHub Actions sau khi qua test).
 
----
-
-## 🌟 4. Tính Năng Nổi Bật Của Hệ Thống
-
-### 👤 A. Phân Hệ Cổng Sinh Viên (`index.html`)
-- **Tự động nhận diện trùng MSSV:** Khi sinh viên nhập MSSV, hệ thống lập tức kiểm tra và tự động nạp lại thông tin Họ tên, SĐT, Phân loại và các ca rảnh đã đăng ký trước đó.
-- **Khóa đăng ký an toàn khi cổng đóng:** Khi Ban điều phối khóa cổng hoặc hết thời hạn, form đăng ký sẽ tự động khóa và hiển thị đồng hồ đếm ngược. Sinh viên vẫn tra cứu được thông tin cá nhân và ca trực của mình.
-- **Tra cứu ca trực cá nhân:** Nhập MSSV để xem danh sách toàn bộ các ca trực trong tuần kèm tên bạn trực cùng.
-- **Đổi ca trực linh hoạt:** Chọn ca muốn nhường và ca mong muốn đổi, hệ thống lưu yêu cầu vào danh sách chờ quản trị viên phê duyệt.
-- **Lịch trực dạng agenda trên điện thoại:** Ở màn hình ≤768px, bảng lịch 11 cột được thay bằng danh sách theo ngày (mỗi ngày 2 ca Sáng/Chiều kèm tên + MSSV), đọc dọc bằng một ngón tay thay vì vuốt ngang ~3 màn hình.
-
-### 🛡️ B. Phân Hệ Bảng Quản Trị (`admin.html`)
-- **Xác thực bảo mật 2 lớp:**
-  - **Thiết lập lần đầu:** máy chưa có tài khoản cán bộ sẽ hiện form tạo **Trưởng ban** (mật khẩu ≥ 8 ký tự, PIN 6 số). Không còn mật khẩu/PIN mặc định trong mã nguồn.
-  - **Chống dò mật khẩu/PIN:** sai 5 lần liên tiếp (đúng định dạng) sẽ tạm khoá 60 giây; gõ nhầm/rỗng không bị tính.
-  - **Phiên đăng nhập tự hết hạn sau 12 giờ**, phù hợp máy dùng chung ở văn phòng.
-  - Phím tắt mở bí mật từ trang sinh viên: `Ctrl + Shift + A` (hoặc `Cmd + Shift + A`).
-- **Xếp ca thủ công toàn quyền:** nút **🧩 XẾP THỦ CÔNG** tạo khung lịch trống 4 tuần × 10 ca nếu tháng chưa có lịch; bấm vào bất kỳ ô ca trống nào để gán **mọi CTV**, kể cả người chưa đăng ký ca rảnh. Nếu danh sách CTV đang rỗng, app hướng dẫn **Nhập CSV** hoặc đăng nhập Google để kéo 58 CTV trước. Hệ thống cảnh báo nếu chưa đăng ký, trái vai trò, trùng ca cùng ngày hoặc trùng người trong cùng ca; admin vẫn xác nhận để gán. Ca trái vai trò được đánh dấu ⚠️ trên bảng.
-- **Thuật toán luân phiên 4 tuần cho 58 CTV (100% Đều Có Ca):**
-  - Đảm bảo mỗi ca trực luôn có đúng **2 bạn (1 Cũ + 1 Mới)**.
-  - Phân bổ công bằng luân phiên cả 4 tuần, không một sinh viên nào bị bỏ sót.
-- **Quản lý thời gian mở cổng đăng ký:** Mở tự do, khóa ngay lập tức, hoặc cài đặt đếm ngược theo thời gian thực (+3 ngày, +5 ngày, +7 ngày).
-- **Xuất bảng tính chuẩn mẫu Google Sheets HCM-UTE 2026:**
-  - Nút **"📋 Sao Chép Bảng (Ctrl+V vào Google Sheets)"**: Sao chép đồng thời Rich HTML và TSV RFC 4180, chỉ cần bấm `Ctrl + V` vào Google Sheets là giữ nguyên màu sắc, định dạng ô gộp và xuống dòng.
-  - Hỗ trợ xuất file `.xls` tương thích Microsoft Excel và `.csv`.
-
----
-
-## 🤖 5. Hệ Thống Multi-Agent Tự Trị Antigravity (`.antigravity/`)
-
-Dự án được điều phối và bảo trì bởi hệ sinh thái Multi-Agent tự trị với 9 giao thức an toàn:
-
-| Thành Phần | Đường Dẫn / Ký Hiệu | Chức Năng Cốt Lõi |
-|---|---|---|
-| **Parent Agent** | Điều phối trung tâm | Phân tích ngữ cảnh, kích hoạt Contract-First, bảo hiểm Git trước khi spawn |
-| **Backend Agent** | `.antigravity/agents/backend-agent.md` | Chuyên sâu logic Bipartite Matching, cấu trúc JSON/CSV, thư mục `data/` |
-| **Frontend Agent** | `.antigravity/agents/frontend-agent.md` | Chuyên sâu giao diện HTML5, CSS3, DOM, Responsive và Dark/Light mode |
-| **QA Agent** | `.antigravity/agents/qa-agent.md` | Chuyên sâu kiểm thử tự động, linter, CI test runner, bắt lỗi hồi quy |
-| **Shared Memory** | `.antigravity/memory/` | Chứa `project-context.md`, `api-contracts.md`, `taskboard.md`, `lessons-learned.md`, `handover-state.md` |
-| **Circuit Breaker** | `settings.json` | Ngắt tự động khi gặp 3 lỗi liên tiếp (Max Retry = 3), chống kẹt vô tận |
-| **Secret Shield** | `settings.json` | Khóa cứng quyền truy cập file bí mật: `.env*`, `*.pem`, `*.key`, `.git/**` |
-| **Dependency Firewall** | `settings.json` & `rules.md` | Cấm tự ý chạy `npm install *`, ưu tiên tuyệt đối thư viện sẵn có |
-
-### ⚡ Bảng Tra Cứu Lệnh Tắt Workflow (Slash Commands)
-
-| Lệnh Tắt | File Cấu Hình | Tác Vụ Tự Động |
-|---|---|---|
-| `/rollback` | `.antigravity/workflows/rollback.md` | Hủy thay đổi lỗi, khôi phục working tree và xóa nhánh `agent/*` |
-| `/code-review` | `.antigravity/workflows/code-review.md` | Thẩm định 5 chiều (Diff, Cú pháp, XSS, Perf, CI Test) trước khi gộp |
-| `/merge-clean` | `.antigravity/workflows/merge-clean.md` | Chạy test lần cuối, merge `--no-ff` vào `main`, tự động xóa nhánh tạm |
-| `/benchmark` | `.antigravity/workflows/benchmark.md` | Phân tích Big-O Time & Space, phát hiện điểm nghẽn DOM & LocalStorage |
-| `/handover` | `.antigravity/workflows/handover.md` | Đóng gói toàn bộ trạng thái vào `handover-state.md` khi đổi chat |
-| `/init-docs` | `.antigravity/workflows/init-docs.md` | Quét toàn bộ mã nguồn và tái tạo `README.md` chuẩn kỹ thuật |
-
----
-
-## 🧪 6. Bộ Kiểm Thử Tự Động (CI Harness)
-
-Hệ thống tích hợp sẵn bộ kiểm thử hồi quy không phụ thuộc bên ngoài:
-
+**Kiểm thử:**
 ```powershell
-node tests/run_all_tests.js   # hoặc: npm test
+npm test            # node tests/run_all_tests.js  — 706 test, không cần cài thêm gì
+npm run check       # node scripts/clean_code.js   — cú pháp + thẻ HTML + toàn bộ test
+npm ci ; npx playwright install chromium ; npm run test:e2e   # 15 test trình duyệt
 ```
-
-### Kết Quả Kiểm Thử (549/549 Tests PASS — 18 bộ, 100%)
-
-| # | Bộ Kiểm Thử | Kết Quả |
-|---|---|---|
-| 1 | Thuật Toán Xếp Ca & Luân Phiên (Scheduler) | 8/8 |
-| 2 | Xác Thực, Thiết Lập Lần Đầu & Bảo Mật XSS (Auth) | 25/25 |
-| 3 | Cổng Sinh Viên: Đóng/Mở & Tra Cứu MSSV (Portal) | 11/11 |
-| 4 | Lịch Sử Ca Trực Nhiều Tháng (Shift History) | 12/12 |
-| 5 | Nhật Ký Thao Tác Quản Trị (Audit Log) | 23/23 |
-| 6 | IndexedDB & Khôi Phục Dữ Liệu (Store) | 19/19 |
-| 7 | Tiện Ích Dùng Chung (Common) | 13/13 |
-| 8 | Quản Lý Sao Lưu Web 6 Tháng (Backup) | 7/7 |
-| 9 | Quản Lý Sự Kiện & Bảng Chấm Công (Payroll) | 31/31 |
-| 10 | Đăng Ký Ca Rảnh Trọn Tháng (Monthly Reg.) | 30/30 |
-| 11 | Cloud Sync, Guard, Dữ Liệu Công Khai & Rules | 253/253 |
-| 12 | Xác Thực MSSV Nghiêm Ngặt (Strict Validation) | 7/7 |
-| 13 | Lưu Trữ Đám Mây & Chống Ghi Đè | 5/5 |
-| 14 | Điều Hướng Tháng & Tự Động Sao Lưu | 11/11 |
-| 15 | Đồng Bộ Tài Khoản Cán Bộ Giữa Hai Máy (E2E) | 4/4 |
-| 16 | Nhập CSV, Trùng MSSV & Vai Trò (CSV Import) | 8/8 |
-| 17 | Năm Tuần 4, Lịch Tháng Trước & A11y Modal | 7/7 |
-| 18 | **Hồi Quy: Chống Tái Phát Bug Đã Sửa** | **75/75** |
-
-**Cloud Sync (Suite 11)** khóa các hành vi an toàn mới:
-- Preflight `updatedAt` trước khi PATCH; chặn xung đột từ thiết bị khác và chặn danh sách CTV/tài khoản cán bộ teo bất thường (có `force` sau khi xác nhận).
-- Chỉ PATCH các key thực sự đổi; không bao giờ gửi `students`/`adminUsers` rỗng.
-- Nếu push Cloud thất bại (401/mất mạng), app **cảnh báo rõ** thay vì im lặng; `localUpdatedAt` được giữ lại để lần kéo sau **hỏi trước khi ghi đè** dữ liệu local.
-- `tvts_requests/swaps` chỉ staff hoặc chủ sở hữu đọc; trạng thái đổi ca công khai nằm ở `tvts_public.swapStatuses` (không lý do, không tên, không uid).
-- Trang sinh viên chỉ kéo trạng thái đổi ca từ nhánh công khai, không tải toàn bộ yêu cầu.
-
-**Suite 16 (CSV)** chặn trùng MSSV, thiếu cột Họ tên/MSSV, cảnh báo thiếu cột vai trò/mã ca lạ; fixture tổng hợp nằm trong `tests/fixtures/roster_sample.csv`.
-
-**Suite 18 (Regression Guard)** khóa lại các lỗi đã phát hiện và sửa:
-- Cổng Sinh Viên **không còn hardcode tháng** — đọc `ACTIVE_MONTH` và sinh ngày tháng động qua `MonthCalendarHelper`.
-- `showToast()` **escape HTML** bắt buộc (chống XSS qua tên/MSSV người dùng nhập).
-- Cloud Sync phát `ts:data-changed` kèm danh sách key, bắt `QuotaExceededError`, phát hiện xung đột dữ liệu hai chiều.
-- Payload lịch tháng **giảm từ 336 KB → 108 KB (-68%)** nhờ bỏ alias trùng lặp và không nhân bản hồ sơ sinh viên.
-- Không còn selector chết, `.substr()`, hay định nghĩa trùng `window.*`.
-- Không còn tài khoản/mật khẩu thật hay file chứa thông tin cá nhân (PII) trong mã nguồn công khai.
-
-### Kiểm Tra Chất Lượng
-```powershell
-node scripts/clean_code.js   # Cú pháp + cân bằng thẻ HTML + toàn bộ test
-```
-
-> Workflow deploy `static.yml` có job `test` và `deploy.needs: test`: test hoặc
-> `clean_code` thất bại thì GitHub Pages **không** nhận bản deploy mới. Ngoài ra
-> bước quét bí mật chặn PIN/mật khẩu hardcode ở cả 3 dạng key (`"pin":`, `'pin':`,
-> `pin:`) trong JS được publish.
+> Test `6.10` (Regression Guard) gọi `git ls-files`; chạy trong thư mục không phải kho git sẽ báo lỗi 1 test dù code đúng.
 
 ---
 
-## 🔐 7. Kiến Trúc Dữ Liệu & Bảo Mật
+## 🌟 5. Tính Năng
 
-### 7.1 Ba nhánh Firebase
+### 👤 A. Cổng Sinh Viên (`index.html`)
+- **MSSV-first:** chưa nhập MSSV thì khoá chọn ca; nhập MSSV hợp lệ trong danh sách thì mở khoá và nạp lại ca đã đăng ký. MSSV lạ bị từ chối.
+- **Đăng ký ca rảnh trọn tháng:** 4 tuần × 10 ca, hiển thị ngày dương lịch cụ thể; cho phép đăng ký **0 ca**, có nút xoá ca tuần này/cả tháng và sao chép tuần ra cả tháng.
+- **Khoá an toàn khi cổng đóng:** form tự khoá và đếm ngược; vẫn tra cứu được lịch và ca của mình.
+- **Tra cứu & lịch sử ca:** xem ca trực của bản thân, kèm tên người trực cùng; xem lịch tháng trước và lịch sử nhiều tháng. Trên điện thoại (≤768px) lịch hiển thị dạng agenda theo ngày thay cho bảng 11 cột.
+- **Đổi ca / nhờ trực hộ:** gửi yêu cầu vào hàng chờ để cán bộ duyệt; trạng thái công khai không chứa lý do hay tên.
+- **Không hiển thị vai trò:** cổng sinh viên tuyệt đối không có nhãn Cũ/Mới (chỉ admin thấy).
 
-| Nhánh | Quyền đọc | Quyền ghi | Nội dung |
+### 🛡️ B. Bảng Quản Trị (`admin.html`)
+- **Đăng nhập:** chỉ **Google** (tài khoản phải có UID trong `/staff` hoặc email trong `/staff_emails`). Đăng nhập bằng username/mật khẩu/PIN cục bộ **đã bị gỡ khỏi sản phẩm**; hash còn sót của bản cũ được xoá một lần. Khi Google lỗi hoặc mất mạng có **mã khôi phục thiết bị** (12 ký tự, lưu hash + salt, chỉ dùng được trên máy đã tạo, tạo sau khi đã đăng nhập; phiên này chỉ làm việc với dữ liệu cục bộ và **không đẩy Cloud**). Sai 5 lần liên tiếp tạm khoá 60 giây; phiên hết hạn sau 12 giờ; cờ `sessionStorage` giả không mở được dashboard. Phím tắt mở trang quản trị từ trang sinh viên: `Ctrl + Shift + A` (`Cmd + Shift + A`).
+- **Xếp lịch:** xem mục 1. Có thể **gán tay** bất kỳ ô nào cho mọi CTV (kể cả người chưa đăng ký); hệ thống cảnh báo khi chưa đăng ký, trái vai trò, trùng ca cùng ngày — admin xác nhận thì vẫn gán. Gán tay thực hiện ngay trên lưới lịch (không có nút riêng); nếu tháng chưa có lịch, app tự tạo khung 4 tuần × 10 ca trống.
+- **Quản lý CTV:** bảng có tag Cũ/Mới, chọn nhiều và thao tác hàng loạt (đổi vai trò, xoá ca, xoá khỏi hệ thống), xoá ca từng người, bộ lọc đăng ký, duyệt yêu cầu MSSV mới.
+- **Nhập CSV:** CSV danh sách CTV (kiểm tra thiếu cột, trùng MSSV, vai trò lạ) **và** CSV phản hồi Google Form (ánh xạ lựa chọn "dd/mm (Thứ X) — Sáng/Chiều" vào đúng tuần/ca của tháng đang mở; ngày của tháng khác bị bỏ qua).
+- **Hồ sơ tháng, chấm công, sao lưu:** bảng chấm công tháng (công trực văn phòng 4 tuần), sao lưu web tối đa 6 bản/180 ngày với tự dọn, xuất/nhập sao lưu JSON, nhật ký thao tác.
+- **Cổng đăng ký:** mở tự do, khoá ngay, hoặc hẹn giờ (+3/+5/+7 ngày) kèm đếm ngược.
+- **Xuất bảng tính chuẩn mẫu HCM-UTE:** *Sao chép bảng* (Rich HTML + TSV RFC 4180, dán thẳng vào Google Sheets giữ màu và ô gộp), xuất `.xls` và `.csv`, in.
+- **Trung tâm đồng bộ Cloud:** đăng nhập Google, kéo/đẩy dữ liệu, cấp/thu hồi quyền cán bộ theo email, **Giải phóng MSSV** khỏi phiên ẩn danh cũ, nhập App Check site key.
+
+---
+
+## 🤖 6. Hệ Thống Multi-Agent Antigravity (`.antigravity/`)
+
+| Thành phần | Đường dẫn | Chức năng |
+|---|---|---|
+| **Parent Agent** | — | Điều phối, Contract-First, bảo hiểm Git trước khi spawn |
+| **Backend Agent** | `agents/backend-agent.md` | Thuật toán xếp ca, cấu trúc dữ liệu |
+| **Frontend Agent** | `agents/frontend-agent.md` | HTML/CSS/DOM, responsive, dark/light |
+| **QA Agent** | `agents/qa-agent.md` | Kiểm thử, linter, bắt hồi quy |
+| **Shared Memory** | `memory/` | `project-context`, `api-contracts`, `taskboard`, `lessons-learned`, `handover-state` |
+| **Circuit Breaker** | `settings.json` | Ngắt sau 3 lần lỗi liên tiếp |
+| **Secret Shield** | `settings.json` | Cấm đọc/sửa `.env*`, `*.pem`, `*.key`, `.git/**` |
+| **Dependency Firewall** | `settings.json`, `rules.md` | Cấm tự `npm install` |
+
+| Lệnh | Tác vụ |
+|---|---|
+| `/rollback` | Huỷ thay đổi lỗi, khôi phục working tree, xoá nhánh `agent/*` |
+| `/code-review` | Thẩm định 5 chiều (diff, cú pháp, XSS, hiệu năng, test) |
+| `/merge-clean` | Test lần cuối, merge `--no-ff` vào `main`, xoá nhánh tạm |
+| `/benchmark` | Phân tích Big-O, điểm nghẽn DOM & localStorage |
+| `/handover` | Đóng gói trạng thái vào `handover-state.md` khi đổi phiên |
+| `/init-docs` | Quét mã nguồn, tái tạo README |
+| `/seed-data` | Nạp danh sách CTV thật từ `data/ds-ctv.csv` (cục bộ) để thử trên localhost |
+| `/clean-project` | Dọn biến thừa, dead code, `console.log` tạm và chuẩn hoá mã nguồn |
+
+---
+
+## 🧪 7. Bộ Kiểm Thử (706/706 PASS — 21 bộ)
+
+| # | Bộ kiểm thử | Test |
+|---|---|:---:|
+| 1 | Thuật toán xếp ca & luân phiên (Scheduler) | 21 |
+| 2 | Xác thực, phân quyền & bảo mật XSS (Auth) | 25 |
+| 3 | Cổng sinh viên: đóng/mở & tra cứu MSSV (Portal) | 11 |
+| 4 | Lịch sử ca trực nhiều tháng (Shift History) | 12 |
+| 5 | Nhật ký thao tác quản trị (Audit Log) | 23 |
+| 6 | IndexedDB & khôi phục dữ liệu (Store) | 23 |
+| 7 | Tiện ích dùng chung & chống lệch module (Common) | 13 |
+| 8 | Firebase App Check & header bảo vệ REST | 6 |
+| 9 | Bỏ login cục bộ & mã khôi phục thiết bị (Local Lockout) | 12 |
+| 10 | Gán ca thủ công & xếp tự động phải né (Manual Assignment) | 46 |
+| 11 | Sao lưu web 6 tháng (Backup) | 7 |
+| 12 | Sự kiện & bảng chấm công tháng (Payroll) | 31 |
+| 13 | Đăng ký ca rảnh trọn tháng & hiển thị ngày (Monthly Registration) | 30 |
+| 14 | Đồng bộ đám mây, guard, dữ liệu công khai & Rules (Cloud Sync) | 315 |
+| 15 | Xác thực MSSV nghiêm ngặt (Strict Validation) | 7 |
+| 16 | Lưu trữ đám mây & chống ghi đè khi tải lại (Cloud Persistence) | 5 |
+| 17 | Điều hướng tháng & tự động sao lưu (Admin Month Navigation) | 14 |
+| 18 | Đồng bộ tài khoản cán bộ giữa hai máy (Credential Sync E2E) | 4 |
+| 19 | Nhập CSV, trùng MSSV & cảnh báo vai trò (CSV Import) | 14 |
+| 20 | Năm tuần 4, lịch tháng trước & a11y modal (Portal Bug Guards) | 11 |
+| 21 | **Hồi quy: chống tái phát bug đã sửa (Regression Guard)** | **76** |
+
+Cộng thêm **15 test trình duyệt** (Playwright, `tests/e2e/smoke.spec.js`): cờ phiên giả không mở được dashboard, duyệt yêu cầu MSSV, đổi 1 người/ca, xoá người khỏi ca, nhập CSV, khoá tháng, sửa ca rảnh theo tuần, mobile không tràn ngang, chọn chế độ xếp lịch, ưu tiên người Mới, lọc đăng ký, tuần `null` từ Cloud, hồ sơ tháng cũ, tag vai trò và cảnh báo thiếu người Mới.
+
+**Những gì các bộ test khoá lại:**
+- **Cloud Sync:** preflight `updatedAt` trước khi PATCH; chặn xung đột và danh sách CTV teo bất thường (có `force` sau khi xác nhận); chỉ PATCH key thay đổi, không bao giờ gửi `students`/`adminUsers` rỗng; push thất bại thì cảnh báo rõ và giữ `localUpdatedAt` để lần kéo sau hỏi trước khi ghi đè; `tvts_requests/swaps` chỉ staff hoặc chủ sở hữu đọc, trạng thái đổi ca công khai ở `tvts_public.swapStatuses`.
+- **CSV:** chặn trùng MSSV, thiếu cột Họ tên/MSSV, cảnh báo thiếu cột vai trò hoặc mã ca lạ.
+- **Regression Guard:** cổng sinh viên không hardcode tháng; `showToast()` escape HTML; Cloud Sync bắt `QuotaExceededError` và phát hiện xung đột hai chiều; payload lịch tháng giảm 336 KB → 108 KB; không còn selector chết/`.substr()`/định nghĩa `window.*` trùng; không có tài khoản, mật khẩu hay PII trong mã nguồn công khai.
+
+**CI/CD:** `ci.yml` chạy test (Node 20, 22) + `clean_code` + E2E trên mỗi push/PR. `static.yml` có job `test` và `e2e` với `deploy.needs`, nên test đỏ thì GitHub Pages **không** nhận bản mới; trước khi publish còn kiểm mọi `<script src="js/…">` tồn tại và quét chặn PIN/mật khẩu hardcode (`"pin":`, `'pin':`, `pin:`) trong JS được xuất bản.
+
+---
+
+## 🔐 8. Kiến Trúc Dữ Liệu & Bảo Mật
+
+### 8.1 Ba nhánh Firebase
+
+| Nhánh | Đọc | Ghi | Nội dung |
 |---|---|---|---|
-| `tvts_production_data` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Danh sách đầy đủ, lịch, tài khoản (hash), sao lưu |
-| `tvts_public` | Mọi người (kể cả chưa đăng nhập) | Cán bộ có UID trong `/staff` hoặc email trong `/staff_emails` | Bản rút gọn **không PII** + lịch công khai |
-| `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc đúng yêu cầu của mình theo `uid`; trạng thái đổi ca công khai ở `tvts_public.swapStatuses` | Sinh viên tạo/sửa yêu cầu gắn `uid`; cán bộ nhận ca rảnh tự động, duyệt đổi ca | Đăng ký ca & đề xuất đổi ca |
+| `tvts_production_data` | Cán bộ (UID trong `/staff` hoặc email trong `/staff_emails`) | Cán bộ | Danh sách CTV đầy đủ, lịch, sự kiện, sao lưu |
+| `tvts_public` | Mọi người (kể cả chưa đăng nhập) | Cán bộ | Bản rút gọn **không PII** + lịch công khai + trạng thái đổi ca + `clientConfig` |
+| `tvts_requests` | Cán bộ (toàn bộ); sinh viên đọc đúng yêu cầu của mình theo `uid` | Sinh viên ghi yêu cầu gắn `uid` của mình; cán bộ duyệt | `registrations`, `swaps`, `mssv_owner` (giữ chỗ MSSV theo phiên ẩn danh) |
 
-> `/staff` chỉ ghi được trong Firebase Console (`.write: false`). `/staff_emails` do **cán bộ đã có quyền** ghi ngay trong app (nút Cấp Quyền), giá trị phải là boolean `true`.
-> Email key phải viết thường và thay **tất cả** dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`.
+> `/staff` chỉ ghi được trong Firebase Console (`.write: false`). `/staff_emails` chỉ **email chủ sở hữu** (Trưởng ban, hardcode trong Rules) mới ghi được — cấp quyền bằng nút trong app; giá trị phải là boolean `true`, key là email viết thường với **mọi** dấu chấm thay bằng `%2E` (ví dụ `ten@gmail%2Ecom`).
 > Rules chỉ chấp nhận tài khoản Google đã xác thực email (`email_verified === true`, `sign_in_provider === 'google.com'`).
-> `database.rules.json` đã điền sẵn email Google của Trưởng ban. Nếu đổi người giữ quyền khởi động, sửa **cả 10 chỗ** trong file trước khi Publish. Sau đó cấp quyền cho người khác ngay trong app.
+> Email chủ sở hữu xuất hiện ở **13 chỗ** trong `database.rules.json`; nếu đổi người giữ quyền khởi động hãy tìm–thay toàn bộ trước khi Publish.
+> Điều khoản "bootstrap" từng cho bất kỳ tài khoản Google nào tự cấp quyền khi `/staff_emails` trống đã bị gỡ (28/10).
 
-### 7.2 Đăng nhập
+### 8.2 Đăng nhập & quyền
 
-- **Cán bộ:** đăng nhập **Google** ngay trên màn hình xác thực admin (nút **Đăng nhập bằng Google**, luôn mở bảng chọn tài khoản). Tài khoản phải có **UID trong `/staff`** hoặc **email trong `/staff_emails`** mới đọc/ghi được dữ liệu riêng tư. Không còn tài khoản Firebase Email/Password dùng chung trên UI.
-- **Cấp quyền trong app (không cần Console):** `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email` → nhập email → **Cấp Quyền**. App ghi `staff_emails/<email đã mã hoá> = true`; người đó chỉ cần đăng nhập Google bằng đúng email ấy, không cần lấy UID. Danh sách bên dưới cho phép **thu hồi** (🗑️) bất cứ lúc nào.
-- **Sinh viên:** **không có trang đăng nhập**. Chỉ nhập MSSV; app tự tạo phiên **Anonymous** để gửi yêu cầu. Sinh viên không cần tài khoản Google/email.
-- **Ca rảnh không chờ duyệt:** sau khi cán bộ đăng nhập Google, app tự kéo `tvts_requests/registrations` và gộp ngay vào danh sách CTV; **không tự xếp lịch**. Cán bộ xem tổng **Lượt ca rảnh đã đăng ký** trên dashboard rồi bấm xếp ca khi sẵn sàng. Đề xuất đổi ca vẫn chờ cán bộ duyệt.
-- **Tài khoản nội bộ (username/PIN)** dùng để mở bảng quản trị trên máy trực. Máy chưa có tài khoản sẽ hiện **Thiết lập lần đầu**; không còn tài khoản/mật khẩu/PIN mặc định. Nếu quên mật khẩu, đăng nhập **Google cán bộ** (nếu Cloud đã cấu hình) rồi cấp lại quyền, hoặc khôi phục từ bản sao lưu JSON. Google là lớp kiểm soát dữ liệu Cloud.
-- **Role theo từng trang:** `admin.html` khai báo `tvts-cloud-role=admin`, `index.html` khai báo `student`. Role **không được lưu** vào config Cloud dùng chung localStorage — tránh việc mở trang sinh viên làm admin bị chặn đẩy dữ liệu. Sau khi đăng nhập Google, admin tự kéo dữ liệu riêng tư từ Cloud.
-- **Web API Key** là mã công khai phía client. Cán bộ nhập một lần trong modal Cloud; app công bố nó trong `tvts_public/clientConfig` để máy sinh viên tạo được phiên ẩn danh.
+- **Cán bộ:** nút **Đăng nhập bằng Google** ở màn hình xác thực admin (luôn mở bảng chọn tài khoản). Không còn tài khoản Firebase Email/Password dùng chung và không còn mật khẩu/PIN cục bộ.
+- **Cấp quyền trong app (không cần Console):** `Admin → ☁️ Trung tâm đồng bộ → 👥 Cấp Quyền Cán Bộ Theo Email` → nhập email → **Cấp Quyền** (chỉ chủ sở hữu thực hiện được). Danh sách bên dưới cho phép thu hồi (🗑️).
+- **Mã khôi phục thiết bị:** xem mục 5B; dùng khi Google lỗi, không phải kênh đăng nhập thường ngày.
+- **Sinh viên:** không có trang đăng nhập, chỉ nhập MSSV; app tự tạo phiên **Anonymous**, lưu refresh token ở `ts_anon_session_v1` để giữ nguyên `uid` khi tải lại. Nếu MSSV bị khoá vào phiên cũ (đổi máy, xoá dữ liệu trình duyệt), cán bộ bấm **🔓 Giải Phóng MSSV**; cán bộ Google đăng ký hộ vẫn không bị chặn.
+- **Role theo trang:** `admin.html` khai báo `tvts-cloud-role=admin`, `index.html` khai báo `student`; role không lưu vào config Cloud dùng chung.
+- **Web API Key** là mã công khai phía client; cán bộ nhập một lần trong modal Cloud và app công bố vào `tvts_public/clientConfig`. **Firebase App Check** (reCAPTCHA v3) là tuỳ chọn — dán site key trong modal Cloud, xem [SECURITY.md](SECURITY.md) mục 9.
 
 #### Quy trình ca rảnh (không chờ duyệt)
+1. Sinh viên nhập MSSV, chọn ca, lưu → ghi `tvts_requests/registrations/<mssv>` với `status: "registered"`.
+2. Cán bộ đăng nhập Google → app kiểm tra quyền và tự kéo yêu cầu (nút **📥 Kéo Ca Rảnh & Yêu Cầu** khi cần kéo tay).
+3. Ca rảnh được gộp ngay vào danh sách CTV; dashboard cập nhật **Lượt ca rảnh đã đăng ký**.
+4. Cán bộ chủ động bấm xếp lịch. App **không tự xếp, không tự ghi đè** lịch đã có.
+5. Đề xuất **đổi ca** vẫn chờ cán bộ duyệt vì ảnh hưởng lịch đã công bố.
 
-1. Sinh viên nhập MSSV, chọn ca rảnh và bấm lưu. App ghi yêu cầu vào `tvts_requests/registrations/<mssv>` với `status: "registered"`.
-2. Cán bộ bấm **Đăng nhập bằng Google** ở màn hình admin. App kiểm tra UID trong `/staff/<uid>` hoặc email trong `/staff_emails/<email đã mã hóa>`, sau đó tự kéo yêu cầu.
-3. Ca rảnh được **gộp ngay** vào danh sách CTV; dashboard cập nhật thẻ **Lượt ca rảnh đã đăng ký** và cột **Rảnh N ca** của từng người.
-4. Cán bộ xem dữ liệu rồi chủ động bấm **⚡ Xếp Ca Nhanh** (hoặc nút xếp lịch tháng). App **không tự xếp lịch, không tự ghi đè** lịch đã có.
-5. Đề xuất **đổi ca** vẫn nằm trong hàng chờ để cán bộ duyệt riêng vì ảnh hưởng lịch đã công bố.
-
----
-
-### 7.3 Cấu hình Firebase bắt buộc (một lần)
+### 8.3 Cấu hình Firebase bắt buộc (một lần)
 
 1. **Authentication → Sign-in method:** bật **Google** và **Anonymous**.
 2. **Authentication → Settings → Authorized domains:** thêm tên miền GitHub Pages (ví dụ `vtt132109.github.io`).
-3. **Realtime Database → Data:** thêm `staff/<UID Google của quản trị chính>: true`. Để cấp quyền trước cho người khác, thêm `staff_emails/<email đã mã hóa>: true` (email viết thường, thay dấu chấm bằng `%2E`, ví dụ `ten@gmail%2Ecom`). Chỉ dùng boolean `true`, không dùng chuỗi `"true"` hay object.
-4. **Realtime Database → Rules:** dán toàn bộ `database.rules.json` (3 nhánh dữ liệu + `/staff`, `/staff_emails`) rồi **Publish**. Rules cho phép mỗi tài khoản đã đăng nhập chỉ đọc đúng UID hoặc email của mình để app xác minh quyền cán bộ. **Trạng thái 2026-10-24: đã Publish** — chỉ làm lại khi đổi rules hoặc chủ sở hữu.
-5. **Project settings → General → Web API Key:** dán vào modal Cloud của admin → **Lưu Cấu Hình**. Sau đó có thể bấm **Đăng nhập bằng Google** ngay ở màn hình xác thực admin (hoặc trong modal Cloud).
+3. **Realtime Database → Data:** thêm `staff/<UID Google của quản trị chính>: true`. Có thể cấp trước cho người khác bằng `staff_emails/<email đã mã hoá>: true` (chỉ giá trị boolean).
+4. **Realtime Database → Rules:** dán toàn bộ `database.rules.json` rồi **Publish** (hoặc `firebase deploy --only database`). Rules đã Publish lần đầu 2026-10-24; các đợt sửa 28/10 (gỡ bootstrap) và 29/10 (`mssv_owner`) **cần Publish lại nếu chưa làm**.
+5. **Project settings → General → Web API Key:** dán vào modal Cloud của admin → **Lưu Cấu Hình**, đăng nhập Google.
 6. Bấm **Đẩy Lên Cloud** một lần để tạo `tvts_public` cho trang sinh viên.
 
-> ⚠️ Nếu chưa Publish rules mới, sinh viên sẽ không gửi được yêu cầu và trang sinh viên không có dữ liệu công khai. Rules hiện tại đã được Publish ngày 2026-10-24; probe xác nhận dữ liệu riêng tư và `swaps` trả 401 khi chưa đăng nhập.
+> ⚠️ Chưa Publish Rules đúng bản thì sinh viên không gửi được yêu cầu, hoặc dữ liệu riêng tư có thể bị lộ. Kiểm tra định kỳ bằng các lệnh trong [SECURITY.md](SECURITY.md) mục 6.
 
-> ⚠️ **Quan trọng:** Đây là ứng dụng web tĩnh, phần mở bảng quản trị chạy phía trình duyệt.
-> Mật khẩu/PIN nội bộ mặc định nằm trong mã nguồn công khai, chỉ phù hợp cho môi trường
-> nội bộ của Ban Tuyển Sinh.
+### 8.4 Quy tắc dữ liệu cá nhân
 
-- **Thiết lập lần đầu** tài khoản `Trưởng ban` ngay trên máy trống: mật khẩu ≥ 8 ký tự, PIN 6 số, không dùng mật khẩu mặc định.
-- **Không commit** file CSV/XLSX chứa Họ tên, MSSV, SĐT, số tài khoản ngân hàng — đã chặn trong `.gitignore`.
-- **Firebase:** dữ liệu công khai chỉ chứa MSSV/họ tên/vai trò/ca rảnh; SĐT, email, ngân hàng và hash mật khẩu chỉ nằm trong `tvts_production_data` (cán bộ).
-- Phím tắt mở trang quản trị từ Cổng Sinh Viên: `Ctrl + Shift + A` (`Cmd + Shift + A` trên macOS).
-
-### 🔑 Cấp quyền & dùng tài khoản trên máy khác
-
-Cán bộ được cấp quyền ở **máy A** đăng nhập được ngay ở **máy B** — không cần thao tác thêm.
-
-- **Tạo tài khoản:** `Admin → 🔑 Cấp Quyền & Đổi MK → Thêm Cán Bộ` (Họ tên, Username, Vai trò, Mật khẩu, PIN).
-- **Máy B:** mở `admin.html`, nhập đúng username + mật khẩu (hoặc PIN) vừa cấp. Không cần tạo lại.
-- **Đổi mật khẩu/PIN** ở máy nào cũng có hiệu lực ở các máy khác sau lần đồng bộ kế tiếp.
-- **Bảo mật:** mật khẩu/PIN chỉ rời máy dưới dạng **hash có muối** (SHA-256 + salt ngẫu nhiên, 3.000 vòng lặp). Database lộ cũng không đọc được mật khẩu. Tài khoản cũ còn lưu plaintext sẽ tự được băm ngay sau lần đăng nhập đầu tiên.
-
-> ⚠️ **Điều kiện bắt buộc:** Firebase Rules phải **chặn ghi từ người lạ**. Nếu database còn mở, kẻ tấn công có thể chèn tài khoản vào `tvts_production_data/adminUsers` hoặc sửa dữ liệu công khai. Luôn Publish `database.rules.json` trước khi dùng. Xem [SECURITY.md](SECURITY.md).
->
-> ⚠️ File sao lưu JSON vẫn chứa mật khẩu/PIN dạng thô (dùng để khôi phục khẩn cấp). Giữ trên USB/Drive riêng, không để trong thư mục dự án. `.gitignore` đã chặn `*-sao-luu-*.json` và `backup-*.json`.
+- **Không commit** CSV/XLSX chứa Họ tên, MSSV, SĐT, email, số tài khoản (đã chặn trong `.gitignore`).
+- Nhánh công khai chỉ chứa MSSV, họ tên, vai trò, ca rảnh, lịch; SĐT, email, ngân hàng chỉ nằm ở `tvts_production_data`. Lịch/sự kiện được quét sạch PII ở mọi cấp, và đã bỏ `deviceId` cùng bản trùng `allMonths` khỏi payload công khai.
+- File sao lưu JSON chứa toàn bộ danh sách CTV kèm thông tin liên hệ: giữ trên USB/Drive riêng, không để trong thư mục dự án (`.gitignore` đã chặn `*-sao-luu-*.json`, `backup-*.json`).
+- Việc còn treo (đổi mật khẩu/PIN từng lộ trong lịch sử git, thu hồi email staff cũ, có/không viết lại lịch sử git): xem [SECURITY.md](SECURITY.md) mục 11 "P0 credential rotation".
 
 ---
 
